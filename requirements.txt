@@ -1,0 +1,28 @@
+# Force pip to prioritize the official PyTorch CUDA 12.4 repository directly
+--index-url https://download.pytorch.org/whl/cu124
+--extra-index-url https://pypi.org/simple
+
+# Core Deep Learning Weights (Pulled securely from cu124)
+torch
+torchvision
+torchaudio
+
+# Computer Vision Architecture & Tools
+ultralytics
+roboflow
+fiftyone
+opencv-python
+
+# Text Extraction Frameworks
+easyocr
+pytesseract
+
+# Web Application UI
+gradio
+
+# Data Analytics & Mathematical Foundations
+numpy
+matplotlib
+pandas
+scikit-learn
+pyyaml

@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALPR & Vehicle Classification Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+        }
+        /* Custom scrollbar styling for a cleaner dashboard look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen flex flex-col">
+
+    <!-- Header Section -->
+    <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m1-4h12m-5 4h5a1 1 0 001-1v-4a1 1 0 00-1-1h-3m-6 0H7m1-4h3m5 0h3" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-white tracking-tight">ALPR System</h1>
+                    <p class="text-xs text-slate-400">Automated License Plate Recognition & Classification</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="connection-status" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Connected
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">
+
+        <!-- Top Metrics Cards -->
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Frames Processed</div>
+                <div id="stat-frames" class="text-2xl font-bold text-white mt-1">--</div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vehicles Logged</div>
+                <div id="stat-vehicles" class="text-2xl font-bold text-white mt-1">0</div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Elapsed Time</div>
+                <div id="stat-elapsed" class="text-2xl font-bold text-white mt-1">0s</div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Processing Speed</div>
+                <div id="stat-fps" class="text-2xl font-bold text-white mt-1">--</div>
+            </div>
+        </section>
+
+        <!-- Main Panels Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left Side: Live Preview Panel -->
+            <div class="lg:col-span-2 flex flex-col gap-4">
+                <div class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4 flex flex-col grow min-h-[450px] relative overflow-hidden">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm font-semibold text-white">Stream Preview</span>
+                        <span id="video-info" class="text-xs text-slate-400">No active video source</span>
+                    </div>
+                    
+                    <!-- Media Display Window -->
+                    <div class="relative w-full grow bg-slate-950/80 rounded-lg flex items-center justify-center overflow-hidden border border-slate-900">
+                        
+                        <!-- Upload Target Container -->
+                        <div id="upload-zone" class="absolute inset-0 flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-800 hover:border-blue-500/50 hover:bg-blue-950/5 transition-all duration-200 cursor-pointer rounded-lg">
+                            <input type="file" id="video-file-input" accept="video/*" class="hidden">
+                            <svg class="h-10 w-10 text-slate-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <span class="text-sm font-medium text-slate-300">Drag and drop traffic video, or <span class="text-blue-500 underline">browse</span></span>
+                            <span class="text-xs text-slate-500 mt-1">Supports common video formats</span>
+                        </div>
+
+                        <!-- Canvas for Real-Time Streaming -->
+                        <canvas id="stream-canvas" class="hidden max-h-[500px] w-full object-contain"></canvas>
+
+                        <!-- HTML5 Video Player for processed output -->
+                        <video id="output-video" class="hidden w-full max-h-[500px] object-contain" controls></video>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Control & Progress Panel -->
+            <div class="flex flex-col gap-6">
+                
+                <!-- Controller Box -->
+                <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-4">
+                    <h3 class="text-sm font-semibold text-white border-b border-slate-800 pb-2">Control Panel</h3>
+                    
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs text-slate-400 font-medium">OCR Engine</label>
+                        <select id="ocr-engine-select" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors">
+                            <option value="EasyOCR">EasyOCR (Accurate - Recommended)</option>
+                            <option value="PyTesseract">PyTesseract (Fast Baseline)</option>
+                        </select>
+                    </div>
+
+                    <button id="process-btn" disabled class="w-full bg-blue-600/50 hover:bg-blue-600 disabled:bg-slate-800 text-white disabled:text-slate-500 font-medium rounded-lg py-2.5 text-sm transition-all duration-200 cursor-not-allowed disabled:cursor-not-allowed shadow-md shadow-blue-500/5">
+                        Process Video
+                    </button>
+                </div>
+
+                <!-- Progress Tracker Box -->
+                <div id="progress-box" class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-4 opacity-50 transition-all duration-200">
+                    <h3 class="text-sm font-semibold text-white border-b border-slate-800 pb-2">Pipeline Status</h3>
+                    
+                    <div class="flex flex-col gap-2">
+                        <div class="flex justify-between text-xs font-medium">
+                            <span id="progress-status" class="text-slate-400">System Idle</span>
+                            <span id="progress-percent" class="text-slate-200">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-900">
+                            <div id="progress-bar-fill" class="bg-blue-500 h-full w-0 rounded-full transition-all duration-100"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-xs pt-1 border-t border-slate-800/50">
+                        <div>
+                            <span class="text-slate-500 block">ETA</span>
+                            <span id="progress-eta" class="font-medium text-slate-300">--</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Detections</span>
+                            <span id="progress-detections" class="font-medium text-slate-300">0</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Bottom Log and Crops Gallery -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Bottom Left: Log Panel -->
+            <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-3 min-h-[350px]">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h3 class="text-sm font-semibold text-white">Detection Records</h3>
+                    <span id="log-count" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-medium">0 Total</span>
+                </div>
+                
+                <div class="grow overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-800/80 text-slate-400">
+                                <th class="py-3 px-2 font-semibold">ID</th>
+                                <th class="py-3 px-2 font-semibold">Timestamp</th>
+                                <th class="py-3 px-2 font-semibold">Type</th>
+                                <th class="py-3 px-2 font-semibold">Color</th>
+                                <th class="py-3 px-2 font-semibold">Plate Number</th>
+                                <th class="py-3 px-2 font-semibold">Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+                            <!-- Populated Dynamically -->
+                            <tr id="empty-log-row">
+                                <td colspan="6" class="text-center py-10 text-slate-500">No vehicle records populated. Run a process to begin logging.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Bottom Right: Plate Crops Gallery -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-3 min-h-[350px]">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h3 class="text-sm font-semibold text-white">Detected Plates Gallery</h3>
+                </div>
+                
+                <div id="crop-gallery" class="grow grid grid-cols-3 gap-2 overflow-y-auto max-h-[300px] content-start">
+                    <!-- Images added dynamically -->
+                    <div id="empty-gallery-msg" class="col-span-3 text-center py-16 text-slate-500 text-xs">
+                        No cropped plates currently parsed.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500 mt-auto">
+        ALPR Dashboard App
+    </footer>
+
+    <!-- Logic Script -->
+    <script>
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('video-file-input');
+        const processBtn = document.getElementById('process-btn');
+        const ocrSelect = document.getElementById('ocr-engine-select');
+        const streamCanvas = document.getElementById('stream-canvas');
+        const outputVideo = document.getElementById('output-video');
+        const progressBox = document.getElementById('progress-box');
+        const progressStatus = document.getElementById('progress-status');
+        const progressPercent = document.getElementById('progress-percent');
+        const progressFill = document.getElementById('progress-bar-fill');
+        const progressEta = document.getElementById('progress-eta');
+        const progressDetections = document.getElementById('progress-detections');
+        const logTableBody = document.getElementById('log-table-body');
+        const emptyLogRow = document.getElementById('empty-log-row');
+        const cropGallery = document.getElementById('crop-gallery');
+        const emptyGalleryMsg = document.getElementById('empty-gallery-msg');
+        const videoInfo = document.getElementById('video-info');
+        const logCount = document.getElementById('log-count');
+
+        // Global stats
+        const statFrames = document.getElementById('stat-frames');
+        const statVehicles = document.getElementById('stat-vehicles');
+        const statElapsed = document.getElementById('stat-elapsed');
+        const statFps = document.getElementById('stat-fps');
+
+        let selectedVideoPath = null;
+        let loggedPlates = new Set();
+        let uniqueVehicles = new Set();
+
+        // ── Upload Event Handlers ─────────────────────────────────────
+        uploadZone.addEventListener('click', () => fileInput.click());
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('border-blue-500', 'bg-blue-950/10');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('border-blue-500', 'bg-blue-950/10');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('border-blue-500', 'bg-blue-950/10');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        async function handleFileSelect(file) {
+            // Update UI to uploading state
+            uploadZone.innerHTML = `
+                <div class="flex flex-col items-center gap-3">
+                    <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="text-sm font-medium text-slate-300">Uploading video file to server...</span>
+                </div>
+            `;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error('Upload failed');
+                
+                const data = await response.json();
+                selectedVideoPath = data.filepath;
+
+                // Configure UI to ready state
+                videoInfo.textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
+                uploadZone.innerHTML = `
+                    <svg class="h-10 w-10 text-emerald-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="text-sm font-semibold text-white">Video upload complete!</span>
+                    <span class="text-xs text-slate-400 mt-1 click-change underline cursor-pointer">Choose another file</span>
+                `;
+                
+                // Allow another file select by stopping propagation on clicking the inner link
+                uploadZone.querySelector('.click-change').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    fileInput.click();
+                });
+
+                processBtn.disabled = false;
+                processBtn.classList.remove('bg-blue-600/50', 'cursor-not-allowed');
+                processBtn.classList.add('bg-blue-600', 'hover:bg-blue-500');
+
+            } catch (err) {
+                console.error(err);
+                uploadZone.innerHTML = `
+                    <svg class="h-10 w-10 text-rose-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span class="text-sm font-semibold text-rose-400">Failed to upload video</span>
+                    <span class="text-xs text-slate-400 underline mt-1">Try again</span>
+                `;
+            }
+        }
+
+        // ── Pipeline processing execution ────────────────────────────
+        processBtn.addEventListener('click', () => {
+            if (!selectedVideoPath) return;
+
+            // Reset UI lists
+            loggedPlates.clear();
+            uniqueVehicles.clear();
+            logTableBody.innerHTML = '';
+            cropGallery.innerHTML = '';
+            emptyGalleryMsg.classList.add('hidden');
+            statVehicles.textContent = '0';
+            progressDetections.textContent = '0';
+            logCount.textContent = '0 Total';
+
+            // Show stream elements, hide upload indicators
+            uploadZone.classList.add('hidden');
+            outputVideo.classList.add('hidden');
+            streamCanvas.classList.remove('hidden');
+
+            // Activate progress card visual
+            progressBox.classList.remove('opacity-50');
+            processBtn.disabled = true;
+            processBtn.textContent = 'Processing...';
+
+            const engine = ocrSelect.value;
+            const eventSource = new EventSource(`/api/stream-process?video_path=${encodeURIComponent(selectedVideoPath)}&ocr_engine=${engine}`);
+
+            const canvasCtx = streamCanvas.getContext('2d');
+            const frameImg = new Image();
+
+            eventSource.addEventListener('frame', (e) => {
+                const data = JSON.parse(e.data);
+                
+                // Initialize canvas sizing on first frame
+                if (streamCanvas.width === 0) {
+                    streamCanvas.width = 640;
+                    streamCanvas.height = 360;
+                }
+
+                frameImg.onload = () => {
+                    canvasCtx.drawImage(frameImg, 0, 0, streamCanvas.width, streamCanvas.height);
+                };
+                frameImg.src = 'data:image/jpeg;base64,' + data.image;
+            });
+
+            eventSource.addEventListener('progress', (e) => {
+                const data = JSON.parse(e.data);
+                progressStatus.textContent = `Processing frame ${data.frame_idx} / ${data.total_frames}`;
+                progressPercent.textContent = `${data.percent}%`;
+                progressFill.style.width = `${data.percent}%`;
+                progressEta.textContent = data.eta;
+                
+                // Update top statistics cards
+                statFrames.textContent = `${data.frame_idx} / ${data.total_frames}`;
+                statElapsed.textContent = data.elapsed_str;
+                statFps.textContent = `${data.fps} FPS`;
+            });
+
+            eventSource.addEventListener('log', (e) => {
+                const rowData = JSON.parse(e.data);
+                
+                // Deduplicate locally so UI matches the database state
+                const rowId = `log-row-${rowData.track_id}`;
+                let existingRow = document.getElementById(rowId);
+
+                const cleanPlate = rowData.plate_number.replace(/\s+/g, '').toUpperCase();
+                
+                // Format timestamp string cleanly
+                const ts = new Date(rowData.timestamp).toLocaleTimeString();
+
+                const rowHtml = `
+                    <td class="py-2.5 px-2 font-semibold text-slate-400">#${rowData.track_id}</td>
+                    <td class="py-2.5 px-2 text-slate-500">${ts}</td>
+                    <td class="py-2.5 px-2 font-medium capitalize">${rowData.vehicle_type}</td>
+                    <td class="py-2.5 px-2 capitalize">${rowData.color || '--'}</td>
+                    <td class="py-2.5 px-2 font-bold tracking-wider text-blue-400">${rowData.plate_number}</td>
+                    <td class="py-2.5 px-2">
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            rowData.confidence > 0.8 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                            rowData.confidence > 0.5 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                            'bg-slate-800 text-slate-400'
+                        }">
+                            ${(rowData.confidence * 100).toFixed(0)}%
+                        </span>
+                    </td>
+                `;
+
+                if (existingRow) {
+                    existingRow.innerHTML = rowHtml;
+                } else {
+                    const tr = document.createElement('tr');
+                    tr.id = rowId;
+                    tr.className = "border-b border-slate-800/20 hover:bg-slate-900/10 transition-colors";
+                    tr.innerHTML = rowHtml;
+                    logTableBody.appendChild(tr);
+                }
+
+                // Update unique list sizes
+                uniqueVehicles.add(rowData.track_id);
+                statVehicles.textContent = uniqueVehicles.size;
+                progressDetections.textContent = uniqueVehicles.size;
+                logCount.textContent = `${uniqueVehicles.size} Total`;
+            });
+
+            eventSource.addEventListener('crop', (e) => {
+                const data = JSON.parse(e.data);
+                
+                // Avoid visual duplication of similar plate snapshots
+                const cropId = `crop-img-${data.filename.replace(/\.[^/.]+$/, "")}`;
+                if (document.getElementById(cropId)) return;
+
+                // Load plate crop cards into scroll container
+                const card = document.createElement('div');
+                card.id = cropId;
+                card.className = "bg-slate-950 p-1 border border-slate-800 rounded-lg flex flex-col items-center shadow-sm overflow-hidden";
+                card.innerHTML = `
+                    <img src="${data.url}" class="h-10 w-full object-contain filter contrast-125 select-none" draggable="false" />
+                    <span class="text-[9px] font-bold text-slate-500 mt-1 uppercase tracking-tight">${data.text}</span>
+                `;
+                
+                // Insert at front of grid
+                cropGallery.insertBefore(card, cropGallery.firstChild);
+            });
+
+            eventSource.addEventListener('complete', (e) => {
+                const data = JSON.parse(e.data);
+                eventSource.close();
+
+                // Swap live canvas stream to final H.264 mp4 video player
+                streamCanvas.classList.add('hidden');
+                outputVideo.src = data.video_url;
+                outputVideo.classList.remove('hidden');
+                outputVideo.play();
+
+                // Finish status configurations
+                progressStatus.textContent = 'Processing Finished';
+                progressPercent.textContent = '100%';
+                progressFill.style.width = '100%';
+                progressEta.textContent = 'Done';
+
+                processBtn.disabled = false;
+                processBtn.textContent = 'Process Video';
+            });
+
+            eventSource.onerror = (err) => {
+                console.error("SSE Connection Error", err);
+                eventSource.close();
+                
+                progressStatus.textContent = 'Error during processing';
+                processBtn.disabled = false;
+                processBtn.textContent = 'Process Video';
+            };
+        });
+
+    </script>
+</body>
+</html>
