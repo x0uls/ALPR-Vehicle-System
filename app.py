@@ -41,7 +41,8 @@ except Exception:
 sys.stdout = LogMirror(sys.stdout, server_log_path)
 sys.stderr = LogMirror(sys.stderr, server_log_path)
 
-from src.pipeline import FRAME_SKIP, detection_tracker, process_frame, drain_pending_ocr
+import torch
+from src.pipeline import FRAME_SKIP, detection_tracker, process_frame, process_batch, drain_pending_ocr
 from src.logging.logger import init_log
 
 def _format_elapsed(seconds):
@@ -63,6 +64,7 @@ async def process_video_sse(video_path, ocr_engine):
         yield f"event: error\ndata: {json.dumps({'error': 'Cannot open video file'})}\n\n"
         return
 
+    # Extract video metadata
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps == 0 or fps is None:
@@ -74,9 +76,18 @@ async def process_video_sse(video_path, ocr_engine):
         scale = 1920 / width
         width, height = 1920, int(height * scale)
 
+    # Initialize session-dedicated ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor
+    if ocr_engine == "PyTesseract":
+        workers = min(os.cpu_count() or 2, 6)
+    else:
+        workers = 2
+    ocr_pool = ThreadPoolExecutor(max_workers=workers)
+    pending_futures = []
+
     os.makedirs("outputs/results", exist_ok=True)
     out_path = "outputs/results/processed_output.mp4"
-    output_fps = fps / FRAME_SKIP
+    output_fps = fps / 3.0
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(out_path, fourcc, output_fps, (width, height))
 
@@ -87,134 +98,185 @@ async def process_video_sse(video_path, ocr_engine):
     sent_logs = set()
     sent_crops = {}  # track_id -> best confidence sent so far
 
+    # Set micro-batching parameters
+    batch_size = 4 if torch.cuda.is_available() else 1
+    current_skip = 1  # Spacing skip between processed frames (starts at 1)
+
     while True:
-        if frame_idx % FRAME_SKIP == 0:
+        batch_frames = []
+        batch_indices = []
+
+        # Read frames with current spacing skip in micro-batch
+        for _ in range(batch_size):
+            # Skip current_skip - 1 frames using grab()
+            for _ in range(current_skip - 1):
+                cap.grab()
+                frame_idx += 1
+
             ret, frame = cap.read()
             if not ret:
                 break
+            batch_frames.append(frame)
+            batch_indices.append(frame_idx)
+            frame_idx += 1
 
-            # Run ALPR pipeline frame processing
-            frame = process_frame(frame, frame_idx, ocr_engine, fps=fps)
-            out.write(frame)
+        if not batch_frames:
+            break
+
+        # Process the micro-batch and measure elapsed time
+        batch_start_time = time.time()
+        processed_frames = process_batch(
+            batch_frames,
+            batch_indices,
+            ocr_engine,
+            ocr_pool,
+            pending_futures,
+            fps=fps
+        )
+
+        for p_frame in processed_frames:
+            out.write(p_frame)
             processed_count += 1
 
-            # Send state updates every 2 processed frames (which is 6 actual frames)
-            if processed_count % 2 == 0:
-                elapsed = time.time() - start_time
-                elapsed_str = _format_elapsed(elapsed)
-                progress_val = int((frame_idx / total_frames) * 100) if total_frames else 0
+        # Calculate time taken per frame in this batch
+        batch_elapsed = time.time() - batch_start_time
+        t_frame = batch_elapsed / len(batch_frames)
 
-                eta_str = "--"
-                if progress_val > 0:
-                    eta_seconds = (elapsed / progress_val) * (100 - progress_val)
-                    eta_str = _format_elapsed(eta_seconds)
+        # Dynamic Skip Factor 1: speed-based target close to real-time
+        t_native = 1.0 / fps
+        speed_skip = max(1, int(t_frame / t_native))
 
-                fps_val = round(processed_count / elapsed, 1) if elapsed > 0 else 0
-
-                # Yield progress stats
-                progress_data = {
-                    "frame_idx": frame_idx,
-                    "total_frames": total_frames,
-                    "percent": progress_val,
-                    "elapsed_str": elapsed_str,
-                    "eta": eta_str,
-                    "fps": fps_val
-                }
-                yield f"event: progress\ndata: {json.dumps(progress_data)}\n\n"
-
-                # Downscale & encode frame base64 to stream preview to canvas
-                h_img, w_img = frame.shape[:2]
-                scale_img = 480.0 / w_img if w_img > 480 else 1.0
-                preview_frame = frame
-                if scale_img < 1.0:
-                    preview_frame = cv2.resize(frame, (int(w_img * scale_img), int(h_img * scale_img)))
-
-                _, buffer = cv2.imencode('.jpg', preview_frame)
-                img_b64 = base64.b64encode(buffer).decode('utf-8')
-                yield f"event: frame\ndata: {json.dumps({'image': img_b64})}\n\n"
-
-                # Check and stream new CSV records
-                try:
-                    df = pd.read_csv("outputs/logs/detections.csv")
-                    for _, row in df.iterrows():
-                        track_key = f"{row['track_id']}_{row['confidence']}"
-                        if track_key not in sent_logs:
-                            sent_logs.add(track_key)
-                            row_dict = row.to_dict()
-                            snap_path = row_dict.get("snapshot_path")
-                            crop_path = row_dict.get("plate_crop_path")
-                            row_dict["snapshot_url"] = "/" + str(snap_path) if pd.notna(snap_path) and snap_path else None
-                            row_dict["plate_crop_url"] = "/" + str(crop_path) if pd.notna(crop_path) and crop_path else None
-                            yield f"event: log\ndata: {json.dumps(row_dict)}\n\n"
-                except Exception:
-                    pass
-
-                # Check and stream newly cropped plate images (best per track only)
-                try:
-                    crop_files = glob.glob("outputs/plate_crops/Processed/*.jpg")
-                    for filepath in crop_files:
-                        filename = os.path.basename(filepath)
-                        
-                        # Extract track_id from filename pattern: frame{N}_track{ID}_processed.jpg
-                        try:
-                            track_id = int(filename.split("track")[1].split("_")[0])
-                        except (IndexError, ValueError):
-                            continue
-                        
-                        # Find this track's full details from the CSV
-                        text_read = ""
-                        current_conf = 0.0
-                        snapshot_url = None
-                        vehicle_type = None
-                        color = None
-                        timestamp = None
-                        try:
-                            match = df[df["track_id"] == track_id]
-                            if not match.empty:
-                                row = match.iloc[0]
-                                text_read = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
-                                current_conf = float(row["confidence"])
-                                snap_val = row.get("snapshot_path")
-                                if pd.notna(snap_val) and snap_val:
-                                    snapshot_url = "/" + str(snap_val)
-                                if pd.notna(row.get("vehicle_type")):
-                                    vehicle_type = str(row["vehicle_type"])
-                                if pd.notna(row.get("color")):
-                                    color = str(row["color"])
-                                if pd.notna(row.get("timestamp")):
-                                    timestamp = str(row["timestamp"])
-                        except Exception:
-                            pass
-                        
-                        # Only send if this is the first crop for this track or confidence improved
-                        prev_conf = sent_crops.get(track_id, -1)
-                        if current_conf > prev_conf:
-                            sent_crops[track_id] = current_conf
-                            crop_payload = {
-                                'filename': filename,
-                                'url': f'/outputs/plate_crops/Processed/{filename}',
-                                'text': text_read,
-                                'track_id': track_id,
-                                'snapshot_url': snapshot_url,
-                                'confidence': current_conf,
-                                'vehicle_type': vehicle_type,
-                                'color': color,
-                                'timestamp': timestamp
-                            }
-                            yield f"event: crop\ndata: {json.dumps(crop_payload)}\n\n"
-                except Exception:
-                    pass
+        # Dynamic Skip Factor 2: vehicle velocity based
+        max_d = detection_tracker.get_max_displacement()
+        if not detection_tracker.tracks:
+            velocity_skip = 3
+        elif max_d < 5:
+            velocity_skip = 8  # Static or very slow: skip more frames
+        elif max_d < 15:
+            velocity_skip = 5
+        elif max_d < 30:
+            velocity_skip = 3
         else:
-            ret = cap.grab()
-            if not ret:
-                break
+            velocity_skip = 1  # Fast moving: reduce skip to maintain tracking
 
-        frame_idx += 1
+        # Set dynamic skip spacing for next batch
+        current_skip = max(speed_skip, velocity_skip)
+        current_skip = min(current_skip, int(fps))  # Cap skip to 1 second maximum
+
+        # Send state updates periodically
+        if processed_count > 0:
+            elapsed = time.time() - start_time
+            elapsed_str = _format_elapsed(elapsed)
+            latest_frame_idx = batch_indices[-1]
+            progress_val = int((latest_frame_idx / total_frames) * 100) if total_frames else 0
+
+            eta_str = "--"
+            if progress_val > 0:
+                eta_seconds = (elapsed / progress_val) * (100 - progress_val)
+                eta_str = _format_elapsed(eta_seconds)
+
+            fps_val = round(processed_count / elapsed, 1) if elapsed > 0 else 0
+
+            # Yield progress stats
+            progress_data = {
+                "frame_idx": latest_frame_idx,
+                "total_frames": total_frames,
+                "percent": progress_val,
+                "elapsed_str": elapsed_str,
+                "eta": eta_str,
+                "fps": fps_val
+            }
+            yield f"event: progress\ndata: {json.dumps(progress_data)}\n\n"
+
+            # Stream canvas preview frame
+            last_processed = processed_frames[-1]
+            h_img, w_img = last_processed.shape[:2]
+            scale_img = 480.0 / w_img if w_img > 480 else 1.0
+            preview_frame = last_processed
+            if scale_img < 1.0:
+                preview_frame = cv2.resize(last_processed, (int(w_img * scale_img), int(h_img * scale_img)))
+
+            _, buffer = cv2.imencode('.jpg', preview_frame)
+            img_b64 = base64.b64encode(buffer).decode('utf-8')
+            yield f"event: frame\ndata: {json.dumps({'image': img_b64})}\n\n"
+
+            # Check and stream CSV log changes
+            try:
+                df = pd.read_csv("outputs/logs/detections.csv")
+                for _, row in df.iterrows():
+                    track_key = f"{row['track_id']}_{row['confidence']}"
+                    if track_key not in sent_logs:
+                        sent_logs.add(track_key)
+                        row_dict = row.to_dict()
+                        snap_path = row_dict.get("snapshot_path")
+                        crop_path = row_dict.get("plate_crop_path")
+                        row_dict["snapshot_url"] = "/" + str(snap_path) if pd.notna(snap_path) and snap_path else None
+                        row_dict["plate_crop_url"] = "/" + str(crop_path) if pd.notna(crop_path) and crop_path else None
+                        yield f"event: log\ndata: {json.dumps(row_dict)}\n\n"
+            except Exception:
+                pass
+
+            # Check and stream newly cropped plate images
+            try:
+                crop_files = glob.glob("outputs/plate_crops/Processed/*.jpg")
+                for filepath in crop_files:
+                    filename = os.path.basename(filepath)
+                    try:
+                        track_id = int(filename.split("track")[1].split("_")[0])
+                    except (IndexError, ValueError):
+                        continue
+
+                    text_read = ""
+                    current_conf = 0.0
+                    snapshot_url = None
+                    vehicle_type = None
+                    color = None
+                    timestamp = None
+                    try:
+                        match = df[df["track_id"] == track_id]
+                        if not match.empty:
+                            row = match.iloc[0]
+                            text_read = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
+                            current_conf = float(row["confidence"])
+                            snap_val = row.get("snapshot_path")
+                            if pd.notna(snap_val) and snap_val:
+                                snapshot_url = "/" + str(snap_val)
+                            if pd.notna(row.get("vehicle_type")):
+                                vehicle_type = str(row["vehicle_type"])
+                            if pd.notna(row.get("color")):
+                                color = str(row["color"])
+                            if pd.notna(row.get("timestamp")):
+                                timestamp = str(row["timestamp"])
+                    except Exception:
+                        pass
+
+                    prev_conf = sent_crops.get(track_id, -1)
+                    if current_conf > prev_conf:
+                        sent_crops[track_id] = current_conf
+                        crop_payload = {
+                            'filename': filename,
+                            'url': f'/outputs/plate_crops/Processed/{filename}',
+                            'text': text_read,
+                            'track_id': track_id,
+                            'snapshot_url': snapshot_url,
+                            'confidence': current_conf,
+                            'vehicle_type': vehicle_type,
+                            'color': color,
+                            'timestamp': timestamp
+                        }
+                        yield f"event: crop\ndata: {json.dumps(crop_payload)}\n\n"
+            except Exception:
+                pass
+
         # Relinquish CPU execution control back to asyncio event loop
         await asyncio.sleep(0.001)
 
-    # Drain OCR threads
-    drain_pending_ocr()
+    # Force sweep remaining active tracks and write their final data to the logs
+    detection_tracker.purge_old(frame_idx=frame_idx, fps=fps, force_flush=True)
+
+    # Drain OCR threads and flush logs
+    drain_pending_ocr(pending_futures)
+    ocr_pool.shutdown(wait=True)
     detection_tracker.flush_all()
     cap.release()
     out.release()

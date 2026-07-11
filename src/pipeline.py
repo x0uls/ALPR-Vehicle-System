@@ -1,6 +1,7 @@
 import os
 os.environ["OMP_THREAD_LIMIT"] = "1"
 import itertools
+import math
 from concurrent.futures import ThreadPoolExecutor
 
 import cv2
@@ -13,7 +14,6 @@ from src.ocr.plate_ocr import read_plate
 VEHICLE_CLASSES = {2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
 MIN_VEHICLE_CONFIDENCE = 0.4
 FRAME_SKIP = 3
-
 
 def format_video_timestamp(frame_idx, fps):
     """Convert a frame index and FPS to a video timecode string (MM:SS.s)."""
@@ -33,11 +33,13 @@ plate_model.to(device)
 TRACK_IOU_THRESHOLD = 0.3
 TRACK_MAX_AGE = 30
 
-# ─── Async OCR Configuration ─────────────────────────────────────
-# EasyOCR is GPU-bound (PyTorch CUDA serializes via CUDA streams) → 2 workers.
-# PyTesseract spawns external OS subprocesses (CPU-bound) → scale to vCPU count.
+# Async OCR Configuration Cooldown
+OCR_COOLDOWN_FRAMES = 9  # Don't re-OCR the same track within 9 processed frames
+
+# Legacy Globals for backward compatibility (in case process_frame is used directly)
 _ocr_pool = None
 _ocr_pool_engine = None
+_pending_futures = []
 
 def _get_ocr_pool(engine_name="EasyOCR"):
     global _ocr_pool, _ocr_pool_engine
@@ -46,36 +48,17 @@ def _get_ocr_pool(engine_name="EasyOCR"):
     if _ocr_pool is not None:
         _ocr_pool.shutdown(wait=False)
     if engine_name == "PyTesseract":
-        workers = min(os.cpu_count() or 2, 6)  # Cap at 6 to avoid memory pressure
+        workers = min(os.cpu_count() or 2, 6)
     else:
         workers = 2
     _ocr_pool = ThreadPoolExecutor(max_workers=workers)
     _ocr_pool_engine = engine_name
-    print(f"[Pipeline] OCR thread pool: {workers} workers for {engine_name}")
     return _ocr_pool
-
-# Only ever mutated from the main thread: appended during submission,
-# swept during harvest. OCR threads only touch the Future objects
-# themselves (which are inherently thread-safe).
-_pending_futures = []
-
-OCR_COOLDOWN_FRAMES = 9  # Don't re-OCR the same track within 9 processed frames
-
-init_log()
-os.makedirs("outputs/snapshots", exist_ok=True)
-os.makedirs("outputs/plate_crops/Raw", exist_ok=True)
-os.makedirs("outputs/plate_crops/Processed", exist_ok=True)
-
 
 class DetectionTracker:
     """
-    Academic Rationale (Object Tracking):
-    A simple Intersection over Union (IoU) tracker to maintain vehicle identity across consecutive frames.
-    Instead of running computationally expensive Re-Identification (ReID) CNNs, IoU mathematically 
-    compares the bounding box overlap area between frames. If the overlap ratio exceeds 
-    TRACK_IOU_THRESHOLD, it is confidently classified as the same vehicle.
+    IoU-based object tracker maintaining vehicle identities and best plate states across frames.
     """
-
     _id_counter = itertools.count(1)
 
     def __init__(self):
@@ -96,24 +79,49 @@ class DetectionTracker:
         union = area_a + area_b - inter
         return inter / union if union > 0 else 0.0
 
-    def purge_old(self, frame_idx):
-        self.tracks = [t for t in self.tracks if frame_idx - t["last_seen"] <= TRACK_MAX_AGE]
+    def purge_old(self, frame_idx, fps=30.0, force_flush=False):
+        """Sweeps old tracks that haven't been seen for TRACK_MAX_AGE frames and logs them."""
+        active = []
+        for t in self.tracks:
+            # If track hasn't been seen recently, or we are forcing stream termination flush
+            if force_flush or (frame_idx - t["last_seen"] > TRACK_MAX_AGE):
+                if t["best_plate"] and t["best_score"] > 0:
+                    plate_crop_path = t.get("plate_crop_path")
+                    if not plate_crop_path:
+                        plate_crop_path = f"outputs/plate_crops/Processed/frame{t['last_seen']}_track{t['track_id']}_processed.jpg"
+                    log_detection(
+                        t["track_id"],
+                        t["vehicle_type"],
+                        t["color"],
+                        t["best_plate"],
+                        t["best_ocr_conf"],
+                        t["snapshot_path"],
+                        plate_crop_path=plate_crop_path,
+                        video_timestamp=t.get("video_timestamp", format_video_timestamp(t["last_seen"], fps))
+                    )
+            else:
+                active.append(t)
+        self.tracks = active
 
     def match_or_create(self, bbox, vehicle_type, frame_idx):
-        # Try to match to existing track
+        # Match to existing tracks
         for track in self.tracks:
             if track["vehicle_type"] == vehicle_type and self._iou(track["bbox"], bbox) >= TRACK_IOU_THRESHOLD:
+                track["prev_bbox"] = track["bbox"]
                 track["bbox"] = bbox
                 track["last_seen"] = frame_idx
+                track["age"] += 1
                 return track
 
-        # New vehicle
+        # Create new track
         track = {
             "track_id": next(self._id_counter),
             "bbox": bbox,
+            "prev_bbox": None,
             "vehicle_type": vehicle_type,
             "first_seen": frame_idx,
             "last_seen": frame_idx,
+            "age": 1,
             "color": None,
             "best_plate": None,
             "best_score": 0.0,
@@ -121,14 +129,29 @@ class DetectionTracker:
             "max_plate_area": 0,
             "snapshot_path": None,
             "last_ocr_frame": -999,
+            "global_plate_bbox": None,
+            "video_timestamp": "",
+            "plate_crop_path": "",
+            "structural_state": {}
         }
         self.tracks.append(track)
         return track
 
+    def get_max_displacement(self):
+        """Calculates the maximum displacement center-distance of any active vehicle between frames."""
+        displacements = []
+        for track in self.tracks:
+            if track.get("prev_bbox") is not None:
+                x1, y1, x2, y2 = track["bbox"]
+                px1, py1, px2, py2 = track["prev_bbox"]
+                cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+                pcx, pcy = (px1 + px2) / 2, (py1 + py2) / 2
+                disp = math.sqrt((cx - pcx)**2 + (cy - pcy)**2)
+                displacements.append(disp)
+        return max(displacements) if displacements else 0.0
+
     def update_plate(self, track, plate_text, ocr_conf, plate_area, snapshot_path, frame_idx, video_timestamp=""):
         """Update if the new read is better. Score = plate area * OCR confidence."""
-        
-        # FIX 1: Provide a fallback confidence floor if text was found but conf is 0
         effective_conf = max(ocr_conf, 0.01) if (plate_text and len(plate_text.strip()) > 0) else ocr_conf
         score = plate_area * effective_conf
 
@@ -145,7 +168,7 @@ class DetectionTracker:
         # Decide if we should update:
         is_first_read = track.get("best_plate") is None
         
-        # FIX 2: Check if current text has more alphanumeric characters than the stored best plate
+        # Check if current text has more alphanumeric characters than the stored best plate
         current_alnum_count = sum(c.isalnum() for c in plate_text)
         existing_alnum_count = sum(c.isalnum() for c in (track.get("best_plate") or ""))
         has_more_structural_data = current_alnum_count > existing_alnum_count
@@ -153,31 +176,16 @@ class DetectionTracker:
         has_high_conf_override = (ocr_conf > 0.10 and track.get("best_ocr_conf", 0) <= 0.01)
         has_better_score = score > track.get("best_score", 0)
 
-        # FIX 3: Include structural check in evaluation
+        # Include structural check in evaluation
         if is_first_read or has_high_conf_override or has_better_score or has_more_structural_data:
             track["best_plate"] = plate_text
-            # Retain the higher score if this was purely a structural text update
             track["best_score"] = max(score, track.get("best_score", 0)) 
             track["best_ocr_conf"] = ocr_conf
             track["snapshot_path"] = snapshot_path
-            
-            last_logged_frame = self.global_logged_plates.get(plate_text, -9999)
-            if frame_idx - last_logged_frame > 300:
-                plate_crop_path = f"outputs/plate_crops/Processed/frame{frame_idx}_track{track['track_id']}_processed.jpg"
-                log_detection(
-                    track["track_id"],
-                    track["vehicle_type"],
-                    track["color"],
-                    plate_text,
-                    ocr_conf,
-                    snapshot_path,
-                    plate_crop_path=plate_crop_path,
-                    video_timestamp=video_timestamp,
-                )
-                self.global_logged_plates[plate_text] = frame_idx
+            track["video_timestamp"] = video_timestamp
+            track["plate_crop_path"] = f"outputs/plate_crops/Processed/frame{frame_idx}_track{track['track_id']}_processed.jpg"
 
     def find_by_id(self, track_id):
-        """Lookup a track by its ID. Returns None if the track was purged."""
         for track in self.tracks:
             if track["track_id"] == track_id:
                 return track
@@ -187,39 +195,30 @@ class DetectionTracker:
         self.tracks.clear()
         self.global_logged_plates.clear()
 
-
 detection_tracker = DetectionTracker()
-
 
 # ─── Async OCR Worker & Harvesting ────────────────────────────────
 
 def _ocr_worker(plate_crop, vehicle_crop, ocr_engine, track_id, plate_area, frame_idx, fps=30.0):
-    """Runs OCR + disk I/O in a background thread.
-    
-    All NumPy arrays passed here MUST be .copy()'d by the caller,
-    because the main thread's frame buffer is reused/overwritten.
-    """
+    """Runs OCR + disk I/O in a background thread."""
     plate_text, ocr_conf, engine, processed_crop = read_plate(plate_crop, ocr_engine)
 
-    # Save plate crops (disk I/O offloaded from main thread)
     raw_path = f"outputs/plate_crops/Raw/frame{frame_idx}_track{track_id}_raw.jpg"
     proc_path = f"outputs/plate_crops/Processed/frame{frame_idx}_track{track_id}_processed.jpg"
     cv2.imwrite(raw_path, plate_crop)
     if processed_crop is not None:
         cv2.imwrite(proc_path, processed_crop)
 
-    # Save vehicle snapshot if OCR produced a valid read
     snapshot_path = None
     if plate_text and ocr_conf > 0:
-        snapshot_path = f"outputs/snapshots/frame{frame_idx}_{plate_text}.jpg"
+        snapshot_path = f"outputs/snapshots/frame{frame_idx}_{plate_text.replace(' ', '_')}.jpg"
         cv2.imwrite(snapshot_path, vehicle_crop)
 
     video_timestamp = format_video_timestamp(frame_idx, fps)
     return plate_text, ocr_conf, track_id, plate_area, frame_idx, snapshot_path, video_timestamp
 
-
 def _apply_ocr_result(future):
-    """Process a single completed OCR future and update the corresponding track."""
+    """Process a single completed OCR future."""
     try:
         text, conf, track_id, plate_area, frame_idx_ocr, snapshot_path, video_timestamp = future.result()
         print(f"[OCR Harvest] Track {track_id}: Text='{text}', Conf={conf:.3f}, Snapshot={snapshot_path}")
@@ -228,32 +227,41 @@ def _apply_ocr_result(future):
             if track:
                 track["max_plate_area"] = max(track.get("max_plate_area", 0), plate_area)
                 detection_tracker.update_plate(track, text, conf, plate_area, snapshot_path, frame_idx_ocr, video_timestamp=video_timestamp)
+                
+                # Real-time write mapping so dashboard updates immediately
+                log_detection(
+                    track["track_id"],
+                    track["vehicle_type"],
+                    track["color"],
+                    track["best_plate"],
+                    track["best_ocr_conf"],
+                    track["snapshot_path"],
+                    plate_crop_path=track.get("plate_crop_path", ""),
+                    video_timestamp=track.get("video_timestamp", "")
+                )
     except Exception as e:
-        print(f"[OCR] Worker failed for track: {e}")
+        print(f"[OCR] Worker failed: {e}")
 
-
-def _harvest_ocr_results():
-    """Non-blocking sweep: collect any finished OCR futures.
-    Called at the top of each process_frame() invocation."""
+def _harvest_ocr_results(pending_futures):
+    """Non-blocking sweep of finished OCR futures."""
     still_pending = []
-    for future in _pending_futures:
+    for future in pending_futures:
         if future.done():
             _apply_ocr_result(future)
         else:
             still_pending.append(future)
-    _pending_futures[:] = still_pending
+    pending_futures[:] = still_pending
 
-
-def drain_pending_ocr():
-    """Blocking flush — wait for ALL in-flight OCR futures to complete.
-    MUST be called after the video loop ends, before flush_all()."""
-    for future in _pending_futures:
+def drain_pending_ocr(pending_futures=None):
+    """Wait for all in-flight OCR tasks to finish."""
+    global _pending_futures
+    futures_list = pending_futures if pending_futures is not None else _pending_futures
+    for future in futures_list:
         _apply_ocr_result(future)
-    _pending_futures.clear()
+    futures_list.clear()
     flush_log()
 
-
-# ─── Drawing ──────────────────────────────────────────────────────
+# ─── Drawing overlays ──────────────────────────────────────────────
 
 def _draw_overlay(frame, track):
     x1, y1, x2, y2 = track["bbox"]
@@ -265,117 +273,137 @@ def _draw_overlay(frame, track):
         parts.append(track["best_plate"])
     cv2.putText(frame, " ".join(parts), (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-
-# ─── Main Per-Frame Pipeline ─────────────────────────────────────
-
-def process_frame(frame, frame_idx, ocr_engine="EasyOCR", fps=30.0):
-    # ── Phase 0: Harvest any OCR results that completed since last frame ──
-    _harvest_ocr_results()
-
-    # ── Early downscale: cap resolution at 1080p ─────────────────
-    # 4K frames are 4× more pixels than needed — YOLO resizes to 640px
-    # internally anyway. Only downscales; never upscales smaller inputs.
-    h, w = frame.shape[:2]
-    if w > 1920:
-        scale = 1920 / w
-        frame = cv2.resize(frame, (1920, int(h * scale)))
-
-    detection_tracker.purge_old(frame_idx)
-
-    # ── Phase 1: Detect vehicles (GPU) ────────────────────────────
-    # YOLOv8 CNN for real-time object detection and classification.
-    vehicle_results = vehicle_model(frame, verbose=False, conf=MIN_VEHICLE_CONFIDENCE)[0]
-
-    valid_vehicles = []
     
-    for box in vehicle_results.boxes:
-        cls_id = int(box.cls[0])
-        if cls_id not in VEHICLE_CLASSES:
-            continue
+    # Draw plate global bounding box in red inside the green vehicle box
+    g_plate = track.get("global_plate_bbox")
+    if g_plate:
+        gpx1, gpy1, gpx2, gpy2 = g_plate
+        cv2.rectangle(frame, (gpx1, gpy1), (gpx2, gpy2), (0, 0, 255), 2)
 
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
-        vehicle_crop = frame[y1:y2, x1:x2]
-        if vehicle_crop.size == 0:
-            continue
+# ─── Batch Processing Pipeline ───────────────────────────────────
 
-        vehicle_type = VEHICLE_CLASSES[cls_id]
-        track = detection_tracker.match_or_create((x1, y1, x2, y2), vehicle_type, frame_idx)
+def process_batch(frames_batch, frame_indices, ocr_engine, ocr_pool, pending_futures, fps=30.0):
+    """Processes a micro-batch of frames together using batched vehicle detection."""
+    # 1. Harvest finished OCR tasks
+    _harvest_ocr_results(pending_futures)
 
-        # Color detection (KMeans) — only once per track, stays on main thread.
-        if track["color"] is None:
-            track["color"] = detect_dominant_color(vehicle_crop)
-            
-        # AGGRESSIVE OPTIMIZATION: If we already have a highly confident, full-length plate,
-        # skip plate_model and OCR entirely for this vehicle!
-        best_plate = track.get("best_plate") or ""
-        best_conf = track.get("best_ocr_conf") or 0.0
-        is_confident = (len(best_plate) >= 6 and best_conf > 0.8) or (len(best_plate) >= 4 and best_conf > 0.90)
-        if is_confident:
-            continue
+    # 2. Downscale frames if they exceed 1080p width
+    resized_frames = []
+    for frame in frames_batch:
+        h, w = frame.shape[:2]
+        if w > 1920:
+            scale = 1920 / w
+            resized_frames.append(cv2.resize(frame, (1920, int(h * scale))))
+        else:
+            resized_frames.append(frame)
 
-        valid_vehicles.append((track, vehicle_crop))
+    # 3. Batch vehicle detection
+    vehicle_results_batch = vehicle_model(resized_frames, verbose=False, conf=MIN_VEHICLE_CONFIDENCE)
 
-    # ── Phase 2: Detect plates — single batched GPU pass ──────────
-    # Instead of running the plate CNN sequentially on every crop,
-    # we batch all vehicle crops into a single pass for GPU parallelization.
-    if valid_vehicles:
-        crops = [v[1] for v in valid_vehicles]
-        plate_results_batch = plate_model(crops, verbose=False, conf=0.5)
+    processed_frames = []
 
-        for (track, vehicle_crop), plate_results in zip(valid_vehicles, plate_results_batch):
-            if len(plate_results.boxes) > 0:
-                best_plate_box = max(plate_results.boxes, key=lambda p: float(p.conf[0]))
+    # 4. Sequentially track vehicles and check crops per frame
+    for idx, (frame, frame_idx, vehicle_results) in enumerate(zip(resized_frames, frame_indices, vehicle_results_batch)):
+        detection_tracker.purge_old(frame_idx, fps=fps)
 
-                if float(best_plate_box.conf[0]) >= 0.5:
-                    px1, py1, px2, py2 = map(int, best_plate_box.xyxy[0])
-                    plate_area = (px2 - px1) * (py2 - py1)
+        valid_vehicles = []
+        for box in vehicle_results.boxes:
+            cls_id = int(box.cls[0])
+            if cls_id not in VEHICLE_CLASSES:
+                continue
 
-                    # Gate 1: Only OCR if plate is significantly larger or we lack a good read
-                    plate_grew = plate_area > track.get("max_plate_area", 0) * 1.1
-                    if plate_grew or track.get("best_score", 0) < 5000:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            vehicle_crop = frame[y1:y2, x1:x2]
+            if vehicle_crop.size == 0:
+                continue
 
-                        # Gate 2: Per-track cooldown — skip if recently OCR'd,
-                        # UNLESS the plate grew (closer vehicle = better opportunity)
-                        recently_ocrd = frame_idx - track.get("last_ocr_frame", -999) < OCR_COOLDOWN_FRAMES
-                        if recently_ocrd and not plate_grew:
-                            continue
+            vehicle_type = VEHICLE_CLASSES[cls_id]
+            track = detection_tracker.match_or_create((x1, y1, x2, y2), vehicle_type, frame_idx)
 
-                        # ── Phase 3: Crop the plate with padding ──
-                        pad_x = int((px2 - px1) * 0.08)
-                        pad_y = int((py2 - py1) * 0.15)
-                        px1_pad, py1_pad = max(0, px1 - pad_x), max(0, py1 - pad_y)
-                        px2_pad, py2_pad = min(vehicle_crop.shape[1], px2 + pad_x), min(vehicle_crop.shape[0], py2 + pad_y)
-                        plate_crop = vehicle_crop[py1_pad:py2_pad, px1_pad:px2_pad]
+            # Color analyzer on vehicle crop
+            if track["color"] is None:
+                track["color"] = detect_dominant_color(vehicle_crop)
 
-                        if plate_crop.size > 0 and plate_crop.shape[0] >= 5 and plate_crop.shape[1] >= 10:
-                            # ── Phase 4: Sharpness gate (Laplacian, CPU, fast) ──
-                            gray_crop = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
-                            variance = cv2.Laplacian(gray_crop, cv2.CV_64F).var()
+            # Cooldown / confident plate read skip check
+            best_plate = track.get("best_plate") or ""
+            best_conf = track.get("best_ocr_conf") or 0.0
+            is_confident = (len(best_plate) >= 6 and best_conf > 0.8) or (len(best_plate) >= 4 and best_conf > 0.90)
+            if is_confident:
+                continue
+
+            valid_vehicles.append((track, vehicle_crop, (x1, y1, x2, y2)))
+
+        # 5. Batched license plate detection pass inside vehicle bounding boxes
+        if valid_vehicles:
+            crops = [v[1] for v in valid_vehicles]
+            plate_results_batch = plate_model(crops, verbose=False, conf=0.5)
+
+            for (track, vehicle_crop, vehicle_bbox), plate_results in zip(valid_vehicles, plate_results_batch):
+                if len(plate_results.boxes) > 0:
+                    best_plate_box = max(plate_results.boxes, key=lambda p: float(p.conf[0]))
+
+                    if float(best_plate_box.conf[0]) >= 0.5:
+                        px1, py1, px2, py2 = map(int, best_plate_box.xyxy[0])
+                        plate_area = (px2 - px1) * (py2 - py1)
+
+                        # Project local plate coordinates back to global coordinates
+                        vx1, vy1, _, _ = vehicle_bbox
+                        gpx1 = vx1 + px1
+                        gpy1 = vy1 + py1
+                        gpx2 = vx1 + px2
+                        gpy2 = vy1 + py2
+                        track["global_plate_bbox"] = (gpx1, gpy1, gpx2, gpy2)
+
+                        # Gate 1: Check if plate size is larger or we lack a solid read
+                        plate_grew = plate_area > track.get("max_plate_area", 0) * 1.1
+                        if plate_grew or track.get("best_score", 0) < 5000:
                             
-                            if variance < 50.0:
+                            # Gate 2: Cooldown check
+                            recently_ocrd = frame_idx - track.get("last_ocr_frame", -999) < OCR_COOLDOWN_FRAMES
+                            if recently_ocrd and not plate_grew:
                                 continue
 
-                            # ── Phase 5: Submit OCR to thread pool (non-blocking) ──
-                            track["last_ocr_frame"] = frame_idx
-                            future = _get_ocr_pool(ocr_engine).submit(
-                                _ocr_worker,
-                                plate_crop.copy(),    # MUST copy — frame buffer is reused by main thread
-                                vehicle_crop.copy(),  # MUST copy — same reason
-                                ocr_engine,
-                                track["track_id"],
-                                plate_area,
-                                frame_idx,
-                                fps,
-                            )
-                            _pending_futures.append(future)
+                            # Crop the plate with padding
+                            pad_x = int((px2 - px1) * 0.08)
+                            pad_y = int((py2 - py1) * 0.15)
+                            px1_pad, py1_pad = max(0, px1 - pad_x), max(0, py1 - pad_y)
+                            px2_pad, py2_pad = min(vehicle_crop.shape[1], px2 + pad_x), min(vehicle_crop.shape[0], py2 + pad_y)
+                            plate_crop = vehicle_crop[py1_pad:py2_pad, px1_pad:px2_pad]
 
-    # ── Phase 6: Draw overlays using *last known* plate text ──────
-    # We draw even if YOLO missed the car for a frame or two (up to 5 frames)
-    # to prevent UI flickering. OCR results arrive asynchronously and update
-    # the track dict, so overlays naturally show the latest read.
-    for track in detection_tracker.tracks:
-        if frame_idx - track["last_seen"] <= 5:
-            _draw_overlay(frame, track)
+                            if plate_crop.size > 0 and plate_crop.shape[0] >= 5 and plate_crop.shape[1] >= 10:
+                                # Sharpness check
+                                gray_crop = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
+                                variance = cv2.Laplacian(gray_crop, cv2.CV_64F).var()
+                                
+                                if variance < 50.0:
+                                    continue
 
-    return frame
+                                # Submit OCR task to background ThreadPoolExecutor
+                                track["last_ocr_frame"] = frame_idx
+                                future = ocr_pool.submit(
+                                    _ocr_worker,
+                                    plate_crop.copy(),
+                                    vehicle_crop.copy(),
+                                    ocr_engine,
+                                    track["track_id"],
+                                    plate_area,
+                                    frame_idx,
+                                    fps
+                                )
+                                pending_futures.append(future)
+
+        # Draw overlays
+        for track in detection_tracker.tracks:
+            if frame_idx - track["last_seen"] <= 5:
+                _draw_overlay(frame, track)
+
+        processed_frames.append(frame)
+
+    return processed_frames
+
+# Legacy fallback process_frame
+def process_frame(frame, frame_idx, ocr_engine="EasyOCR", fps=30.0):
+    global _pending_futures
+    pool = _get_ocr_pool(ocr_engine)
+    res = process_batch([frame], [frame_idx], ocr_engine, pool, _pending_futures, fps)
+    return res[0]
