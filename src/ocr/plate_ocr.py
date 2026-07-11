@@ -164,22 +164,26 @@ def _run_ocr(processed, engine_name):
     allowlist = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     
     if engine_name == "PyTesseract":
-        config = f"-c tessedit_char_whitelist={allowlist} --psm 7"
-        text = pytesseract.image_to_string(processed, config=config)
-        
-        d = pytesseract.image_to_data(processed, config=config, output_type=pytesseract.Output.DICT)
-        
-        confidences = []
-        for c in d.get('conf', []):
-            try:
-                val = int(float(c))
-                if val != -1:
-                    confidences.append(val)
-            except (ValueError, TypeError):
-                pass
-        
-        combined_text = PLATE_CHAR_PATTERN.sub('', text.upper())
-        avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
+        try:
+            config = f"-c tessedit_char_whitelist={allowlist} --psm 7"
+            text = pytesseract.image_to_string(processed, config=config)
+            
+            d = pytesseract.image_to_data(processed, config=config, output_type=pytesseract.Output.DICT)
+            
+            confidences = []
+            for c in d.get('conf', []):
+                try:
+                    val = int(float(c))
+                    if val != -1:
+                        confidences.append(val)
+                except (ValueError, TypeError):
+                    pass
+            
+            combined_text = PLATE_CHAR_PATTERN.sub('', text.upper())
+            avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
+        except Exception as e:
+            print(f"[OCR] PyTesseract execution failed: {str(e)}")
+            return '', 0.0
         
     else: # EasyOCR
         results = reader.readtext(

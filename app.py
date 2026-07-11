@@ -12,6 +12,34 @@ import uvicorn
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+import sys
+
+class LogMirror:
+    def __init__(self, original_stream, log_file):
+        self.original_stream = original_stream
+        self.log_file = log_file
+
+    def write(self, data):
+        self.original_stream.write(data)
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(data)
+        except Exception:
+            pass
+
+    def flush(self):
+        self.original_stream.flush()
+
+os.makedirs("outputs/logs", exist_ok=True)
+server_log_path = "outputs/logs/server.log"
+try:
+    with open(server_log_path, "w", encoding="utf-8") as f:
+        f.write("--- Server Log Started ---\n")
+except Exception:
+    pass
+
+sys.stdout = LogMirror(sys.stdout, server_log_path)
+sys.stderr = LogMirror(sys.stderr, server_log_path)
 
 from src.pipeline import FRAME_SKIP, detection_tracker, process_frame, drain_pending_ocr
 from src.logging.logger import init_log
@@ -112,7 +140,12 @@ async def process_video_sse(video_path, ocr_engine):
                         track_key = f"{row['track_id']}_{row['confidence']}"
                         if track_key not in sent_logs:
                             sent_logs.add(track_key)
-                            yield f"event: log\ndata: {json.dumps(row.to_dict())}\n\n"
+                            row_dict = row.to_dict()
+                            snap_path = row_dict.get("snapshot_path")
+                            crop_path = row_dict.get("plate_crop_path")
+                            row_dict["snapshot_url"] = "/" + str(snap_path) if pd.notna(snap_path) and snap_path else None
+                            row_dict["plate_crop_url"] = "/" + str(crop_path) if pd.notna(crop_path) and crop_path else None
+                            yield f"event: log\ndata: {json.dumps(row_dict)}\n\n"
                 except Exception:
                     pass
 
@@ -131,11 +164,15 @@ async def process_video_sse(video_path, ocr_engine):
                         # Find this track's confidence from the CSV
                         text_read = "Plate"
                         current_conf = 0.0
+                        snapshot_url = None
                         try:
                             match = df[df["track_id"] == track_id]
                             if not match.empty:
                                 text_read = match.iloc[0]["plate_number"]
                                 current_conf = float(match.iloc[0]["confidence"])
+                                snap_val = match.iloc[0]["snapshot_path"]
+                                if pd.notna(snap_val) and snap_val:
+                                    snapshot_url = "/" + str(snap_val)
                         except Exception:
                             pass
                         
@@ -143,7 +180,7 @@ async def process_video_sse(video_path, ocr_engine):
                         prev_conf = sent_crops.get(track_id, -1)
                         if current_conf > prev_conf:
                             sent_crops[track_id] = current_conf
-                            yield f"event: crop\ndata: {json.dumps({'filename': filename, 'url': f'/outputs/plate_crops/Processed/{filename}', 'text': text_read, 'track_id': track_id})}\n\n"
+                            yield f"event: crop\ndata: {json.dumps({'filename': filename, 'url': f'/outputs/plate_crops/Processed/{filename}', 'text': text_read, 'track_id': track_id, 'snapshot_url': snapshot_url})}\n\n"
                 except Exception:
                     pass
         else:
@@ -216,6 +253,23 @@ async def stream_process_api(video_path: str, ocr_engine: str):
         media_type="text/event-stream"
     )
 
+# Register Logs API endpoint
+@app.get("/api/logs")
+async def get_logs_api():
+    server_log_path = "outputs/logs/server.log"
+    # Fallback to Colab log if it exists and server.log is empty
+    if not os.path.exists(server_log_path):
+        if os.path.exists("uvicorn.log"):
+            server_log_path = "uvicorn.log"
+        else:
+            return {"logs": "No logs available."}
+    try:
+        with open(server_log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            return {"logs": "".join(lines[-200:])}
+    except Exception as e:
+        return {"logs": f"Error reading logs: {str(e)}"}
+
 # Register Export API endpoint (CSV or XLSX with embedded images)
 @app.get("/api/export")
 async def export_api(format: str = "csv"):
@@ -224,7 +278,56 @@ async def export_api(format: str = "csv"):
         return HTMLResponse(content="<h3>No records available to export yet.</h3>", status_code=400)
     
     if format == "csv":
-        return FileResponse(csv_path, media_type="text/csv", filename="alpr_detections.csv")
+        try:
+            from io import BytesIO
+            df = pd.read_csv(csv_path)
+            # Ensure columns exist, if not create empty ones
+            for col in ["track_id", "timestamp", "vehicle_type", "color", "plate_number", "confidence", "snapshot_path", "plate_crop_path"]:
+                if col not in df.columns:
+                    df[col] = ""
+            
+            # Map paths to relative web URLs
+            def to_url(val):
+                if pd.isna(val) or not val:
+                    return ""
+                val_str = str(val).strip()
+                if val_str.startswith("outputs/"):
+                    return "/" + val_str
+                return val_str
+
+            df["snapshot_url"] = df["snapshot_path"].apply(to_url)
+            df["plate_crop_url"] = df["plate_crop_path"].apply(to_url)
+            
+            # Select and rename columns
+            export_df = df[[
+                "track_id", "timestamp", "vehicle_type", "color", 
+                "plate_number", "confidence", "snapshot_url", "plate_crop_url"
+            ]].copy()
+            
+            export_df.columns = [
+                "ID", "Timestamp", "Type", "Color", 
+                "Plate Number", "Confidence", "Vehicle Image", "Corresponding Plate Image"
+            ]
+            
+            # Format confidence as percentage string or float
+            export_df["Confidence"] = export_df["Confidence"].apply(lambda x: f"{float(x)*100:.0f}%" if pd.notna(x) and x != "" else "")
+            
+            # Capitalize vehicle type and color
+            export_df["Type"] = export_df["Type"].apply(lambda x: str(x).capitalize() if pd.notna(x) else "")
+            export_df["Color"] = export_df["Color"].apply(lambda x: str(x).capitalize() if pd.notna(x) else "")
+            
+            # Write to buffer
+            out_buf = BytesIO()
+            export_df.to_csv(out_buf, index=False)
+            out_buf.seek(0)
+            
+            return StreamingResponse(
+                out_buf,
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=alpr_detections.csv"}
+            )
+        except Exception as e:
+            return HTMLResponse(content=f"<h3>Failed to build CSV export: {str(e)}</h3>", status_code=500)
         
     elif format == "xlsx":
         try:

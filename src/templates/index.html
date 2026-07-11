@@ -259,6 +259,101 @@
         ALPR Dashboard App
     </footer>
 
+    <!-- Image Viewer / Details Modal -->
+    <div id="details-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm transition-all duration-300">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="text-base font-bold text-white">Detection Details</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <div class="p-6 flex flex-col md:flex-row gap-6">
+                <!-- Images Column -->
+                <div class="flex-1 flex flex-col gap-4">
+                    <!-- Plate Crop Box -->
+                    <div class="bg-slate-950 p-3 border border-slate-800 rounded-xl flex flex-col items-center justify-center">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">License Plate</span>
+                        <img id="modal-plate-img" src="" class="max-h-20 object-contain filter contrast-125 select-none" />
+                    </div>
+                    <!-- Vehicle Snapshot Box -->
+                    <div class="bg-slate-950 p-3 border border-slate-800 rounded-xl flex flex-col items-center justify-center min-h-[160px]">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Vehicle / Car Snapshot</span>
+                        <img id="modal-vehicle-img" src="" class="max-h-48 object-contain rounded-lg shadow" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23334155\' stroke-width=\'1.5\'><rect x=\'2\' y=\'2\' width=\'20\' height=\'20\' rx=\'2.18\' ry=\'2.18\'/><line x1=\'7\' y1=\'2\' x2=\'7\' y2=\'22\'/><line x1=\'17\' y1=\'2\' x2=\'17\' y2=\'22\'/><line x1=\'2\' y1=\'12\' x2=\'22\' y2=\'12\'/></svg>';" />
+                    </div>
+                </div>
+                <!-- Details Column -->
+                <div class="flex-1 flex flex-col gap-4 text-sm justify-between">
+                    <div class="flex flex-col gap-3">
+                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                            <span class="text-slate-400 font-medium">Track ID</span>
+                            <span id="modal-track-id" class="text-white font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                            <span class="text-slate-400 font-medium">Plate Number</span>
+                            <span id="modal-plate-number" class="text-blue-400 font-bold tracking-wider">--</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                            <span class="text-slate-400 font-medium">Confidence</span>
+                            <span id="modal-confidence" class="text-white font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                            <span class="text-slate-400 font-medium">Vehicle Type</span>
+                            <span id="modal-vehicle-type" class="text-white capitalize font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                            <span class="text-slate-400 font-medium">Color</span>
+                            <span id="modal-color" class="text-white capitalize font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
+                            <span class="text-slate-400 font-medium">Timestamp</span>
+                            <span id="modal-timestamp" class="text-slate-300 font-semibold">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Console Drawer Button (Bottom Left) -->
+    <div class="fixed bottom-6 left-6 z-[90]">
+        <button id="console-toggle-btn" class="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 font-semibold text-xs rounded-full shadow-lg flex items-center gap-2 transition-all">
+            <span class="h-2 w-2 rounded-full bg-blue-500 animate-pulse" id="console-pulse"></span>
+            <span>Console Logs</span>
+        </button>
+    </div>
+
+    <!-- Console Drawer -->
+    <div id="console-drawer" class="fixed bottom-0 left-0 right-0 h-64 bg-slate-950 border-t border-slate-800 transform translate-y-full transition-transform duration-300 ease-in-out z-[95] flex flex-col font-mono">
+        <!-- Drawer Header -->
+        <div class="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between text-xs text-slate-400 select-none">
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-200">SYSTEM CONSOLE</span>
+                <span id="console-status" class="text-[10px] text-slate-500">Idle</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="fetchLogs()" class="hover:text-white transition-colors" title="Refresh logs">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18" />
+                    </svg>
+                </button>
+                <button onclick="toggleConsole()" class="hover:text-white transition-colors" title="Close console">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <!-- Drawer Content -->
+        <div id="console-content" class="flex-grow p-4 overflow-y-auto text-xs text-emerald-400 select-text bg-slate-950 whitespace-pre-wrap leading-relaxed">
+            Initializing system console...
+        </div>
+    </div>
+
     <!-- Logic Script -->
     <script>
         const uploadZone = document.getElementById('upload-zone');
@@ -290,6 +385,7 @@
         let loggedPlates = new Set();
         let uniqueVehicles = new Set();
         let detectionLogs = []; // In-memory database of all received logs for sorting
+        let trackDetailsMap = {}; // trackId -> full information details
         let currentSortCol = null;
         let currentSortDir = 'asc';
 
@@ -458,7 +554,8 @@
             detectionLogs.forEach(rowData => {
                 const tr = document.createElement('tr');
                 tr.id = `log-row-${rowData.track_id}`;
-                tr.className = "border-b border-slate-800/20 hover:bg-slate-900/10 transition-colors";
+                tr.className = "border-b border-slate-800/20 hover:bg-slate-900/20 transition-colors cursor-pointer select-none";
+                tr.onclick = () => openModal(rowData.track_id);
                 
                 tr.innerHTML = `
                     <td class="py-2.5 px-2 font-semibold text-slate-400">#${rowData.track_id}</td>
@@ -480,6 +577,83 @@
             });
         }
 
+        // ── Details Modal Open/Close functionality ──────────────────
+        function openModal(trackId) {
+            const details = trackDetailsMap[trackId];
+            if (!details) return;
+
+            document.getElementById('modal-track-id').textContent = `#${trackId}`;
+            document.getElementById('modal-plate-number').textContent = details.plate_number || 'UNKNOWN';
+            document.getElementById('modal-confidence').textContent = details.confidence ? `${(parseFloat(details.confidence) * 100).toFixed(0)}%` : '--';
+            document.getElementById('modal-vehicle-type').textContent = details.vehicle_type || 'Unknown';
+            document.getElementById('modal-color').textContent = details.color || '--';
+            document.getElementById('modal-timestamp').textContent = details.timestamp || '--';
+
+            document.getElementById('modal-plate-img').src = details.plate_crop_url || '';
+            document.getElementById('modal-vehicle-img').src = details.snapshot_url || '';
+
+            const modal = document.getElementById('details-modal');
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('details-modal');
+            modal.classList.add('hidden');
+        }
+
+        // Close details modal on Escape key or outside click
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+        document.getElementById('details-modal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('details-modal')) closeModal();
+        });
+
+        // ── Console Log Drawer functionality ────────────────────────
+        const consoleDrawer = document.getElementById('console-drawer');
+        const consoleContent = document.getElementById('console-content');
+        const consoleStatus = document.getElementById('console-status');
+        let consolePollInterval = null;
+
+        function toggleConsole() {
+            const isHidden = consoleDrawer.classList.contains('translate-y-full');
+            if (isHidden) {
+                consoleDrawer.classList.remove('translate-y-full');
+                fetchLogs();
+                // Start polling logs
+                consolePollInterval = setInterval(fetchLogs, 2000);
+                consoleStatus.textContent = 'Streaming Logs';
+                document.getElementById('console-pulse').classList.replace('bg-blue-500', 'bg-emerald-500');
+            } else {
+                consoleDrawer.classList.add('translate-y-full');
+                // Stop polling
+                if (consolePollInterval) clearInterval(consolePollInterval);
+                consoleStatus.textContent = 'Closed';
+                document.getElementById('console-pulse').classList.replace('bg-emerald-500', 'bg-blue-500');
+            }
+        }
+
+        document.getElementById('console-toggle-btn').addEventListener('click', toggleConsole);
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/api/logs');
+                if (!response.ok) throw new Error('Failed to fetch logs');
+                const data = await response.json();
+                
+                // Check if scrolled to bottom before updating content
+                const isAtBottom = consoleContent.scrollHeight - consoleContent.clientHeight <= consoleContent.scrollTop + 50;
+                
+                consoleContent.textContent = data.logs || 'No logs recorded yet.';
+                
+                if (isAtBottom) {
+                    consoleContent.scrollTop = consoleContent.scrollHeight;
+                }
+            } catch (err) {
+                consoleContent.textContent = `Error fetching logs: ${err.message}`;
+            }
+        }
+
         // ── Pipeline processing execution ────────────────────────────
         processBtn.addEventListener('click', () => {
             if (!selectedVideoPath) return;
@@ -488,6 +662,7 @@
             loggedPlates.clear();
             uniqueVehicles.clear();
             detectionLogs = [];
+            trackDetailsMap = {};
             currentSortCol = null;
             currentSortDir = 'asc';
             
@@ -556,6 +731,18 @@
             eventSource.addEventListener('log', (e) => {
                 const rowData = JSON.parse(e.data);
                 
+                // Store/update details
+                if (!trackDetailsMap[rowData.track_id]) {
+                    trackDetailsMap[rowData.track_id] = {};
+                }
+                Object.assign(trackDetailsMap[rowData.track_id], rowData);
+                if (rowData.snapshot_url) {
+                    trackDetailsMap[rowData.track_id].snapshot_url = rowData.snapshot_url;
+                }
+                if (rowData.plate_crop_url) {
+                    trackDetailsMap[rowData.track_id].plate_crop_url = rowData.plate_crop_url;
+                }
+
                 // Insert or update row in memory database
                 const existingIdx = detectionLogs.findIndex(item => item.track_id === rowData.track_id);
                 if (existingIdx !== -1) {
@@ -588,6 +775,24 @@
                 const cropId = `crop-card-track-${trackId}`;
                 let existingCard = document.getElementById(cropId);
 
+                // Store/update track details
+                if (!trackDetailsMap[trackId]) {
+                    trackDetailsMap[trackId] = {
+                        track_id: trackId,
+                        plate_number: data.text,
+                        plate_crop_url: data.url,
+                        snapshot_url: data.snapshot_url
+                    };
+                } else {
+                    trackDetailsMap[trackId].plate_crop_url = data.url;
+                    if (data.snapshot_url) {
+                        trackDetailsMap[trackId].snapshot_url = data.snapshot_url;
+                    }
+                    if (data.text) {
+                        trackDetailsMap[trackId].plate_number = data.text;
+                    }
+                }
+
                 const cardInnerHtml = `
                     <img src="${data.url}" class="h-10 w-full object-contain filter contrast-125 select-none" draggable="false" />
                     <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tight">${data.text}</span>
@@ -599,7 +804,8 @@
                 } else {
                     const card = document.createElement('div');
                     card.id = cropId;
-                    card.className = "bg-slate-950 p-1 border border-slate-800 rounded-lg flex flex-col items-center shadow-sm overflow-hidden transition-all hover:border-slate-700";
+                    card.className = "bg-slate-950 p-1 border border-slate-800 rounded-lg flex flex-col items-center shadow-sm overflow-hidden transition-all hover:border-slate-700 cursor-pointer";
+                    card.onclick = () => openModal(trackId);
                     card.innerHTML = cardInnerHtml;
                     
                     // Insert at front of grid

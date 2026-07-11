@@ -133,6 +133,7 @@ class DetectionTracker:
             
             last_logged_frame = self.global_logged_plates.get(plate_text, -9999)
             if frame_idx - last_logged_frame > 300:
+                plate_crop_path = f"outputs/plate_crops/Processed/frame{frame_idx}_track{track['track_id']}_processed.jpg"
                 log_detection(
                     track["track_id"],
                     track["vehicle_type"],
@@ -140,6 +141,7 @@ class DetectionTracker:
                     plate_text,
                     ocr_conf,
                     snapshot_path,
+                    plate_crop_path=plate_crop_path,
                     video_timestamp=video_timestamp,
                 )
                 self.global_logged_plates[plate_text] = frame_idx

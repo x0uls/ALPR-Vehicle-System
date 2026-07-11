@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 LOG_PATH = "outputs/logs/detections.csv"
-FIELDNAMES = ["track_id", "timestamp", "vehicle_type", "color", "plate_number", "confidence", "snapshot_path"]
+FIELDNAMES = ["track_id", "timestamp", "vehicle_type", "color", "plate_number", "confidence", "snapshot_path", "plate_crop_path"]
 
 _log_buffer = []
 
@@ -46,7 +46,7 @@ def _write_all_rows(rows):
             writer.writerow(row)
 
 
-def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, video_timestamp=""):
+def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, plate_crop_path="", video_timestamp=""):
     """Buffer a detection row. Flushes to disk automatically every 20 entries.
     
     Call flush_log() at end-of-video to ensure all buffered entries are written.
@@ -63,6 +63,7 @@ def log_detection(track_id, vehicle_type, color, plate_number, confidence, snaps
         "plate_number": plate_number,
         "confidence": confidence,
         "snapshot_path": snapshot_path,
+        "plate_crop_path": plate_crop_path,
     })
     # Auto-flush every 20 entries to limit data loss on crash
     if len(_log_buffer) >= 20:
