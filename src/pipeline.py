@@ -141,7 +141,15 @@ class DetectionTracker:
         compact_len = len(plate_text.replace(" ", ""))
         score *= (compact_len / 7.0)
 
-        if score > track.get("best_score", 0):
+        # Decide if we should update:
+        # 1. Update if this is the first plate text recorded for this track (handles zero-conf fallbacks)
+        is_first_read = track.get("best_plate") is None
+        # 2. Update if this read has high confidence (>10%) but the previous best was a zero/low-confidence read (<=1%)
+        has_high_conf_override = (ocr_conf > 0.10 and track.get("best_ocr_conf", 0) <= 0.01)
+        # 3. Update if this read's score is strictly higher than the previous best score
+        has_better_score = score > track.get("best_score", 0)
+
+        if is_first_read or has_high_conf_override or has_better_score:
             track["best_plate"] = plate_text
             track["best_score"] = score
             track["best_ocr_conf"] = ocr_conf
