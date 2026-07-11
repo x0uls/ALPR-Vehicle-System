@@ -156,15 +156,11 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="otsu"):
     # Deskew binary image
     binary = deskew_plate(binary)
 
-    # Invert polarity if necessary (Tesseract requires black characters on a white background)
-    bh, bw = binary.shape
-    border_pixels = np.concatenate([
-        binary[0, :], binary[-1, :], binary[:, 0], binary[:, -1]
-    ])
-    white_count = np.count_nonzero(border_pixels == 255)
-    black_count = len(border_pixels) - white_count
-    
-    if black_count > white_count:
+    # Robust polarity check: background is always the majority color.
+    # If the majority of pixels are black (0), invert to make background white (255) and text black (0).
+    total_pixels = binary.size
+    black_count = total_pixels - cv2.countNonZero(binary)
+    if black_count > total_pixels * 0.5:
         binary = cv2.bitwise_not(binary)
 
     # Morphological cleaning to fill small gaps in strokes
@@ -204,6 +200,7 @@ def _run_ocr(processed, engine_name):
             
             combined_text = PLATE_CHAR_PATTERN.sub('', ' '.join(words))
             avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
+            print(f"[OCR DEBUG] PyTesseract raw='{' '.join(words)}', cleaned='{combined_text}', conf={avg_conf:.3f}")
         except Exception as e:
             print(f"[OCR] PyTesseract execution failed: {str(e)}")
             return '', 0.0
