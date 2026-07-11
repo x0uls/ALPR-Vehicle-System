@@ -92,13 +92,10 @@ def deskew_plate(binary):
     rotated = cv2.warpAffine(binary, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
     return rotated
 
-def preprocess_plate_variant(cropped_plate_img, variant="adaptive"):
+def preprocess_for_easyocr(cropped_plate_img):
     """
-    Prepares an image variant for OCR.
-    Variants:
-    - "grayscale": Resized, CLAHE enhanced, deskewed. Best for deep-learning EasyOCR.
-    - "adaptive": Binarized using local adaptive thresholding (51px window).
-    - "otsu": Binarized using global Otsu thresholding.
+    Preprocessing pipeline optimized for EasyOCR:
+    Grayscale, resized to 300px width, CLAHE enhanced, deskewed.
     """
     if cropped_plate_img is None or cropped_plate_img.size == 0:
         return None
@@ -106,71 +103,76 @@ def preprocess_plate_variant(cropped_plate_img, variant="adaptive"):
     h, w = cropped_plate_img.shape[:2]
     if w == 0 or h == 0:
         return None
-        
-    # 1. Scaling: EasyOCR does best with TARGET_WIDTH=300,
-    # but PyTesseract does best when characters are a standard height (~40-50px).
-    # Thus we scale binarized variants to a fixed height of 70px.
-    if variant == "grayscale":
-        scale = TARGET_WIDTH / float(w)
-        resized = cv2.resize(cropped_plate_img, (TARGET_WIDTH, int(h * scale)), interpolation=cv2.INTER_CUBIC)
-    else:
-        scale = 70.0 / float(h)
-        resized = cv2.resize(cropped_plate_img, (int(w * scale), 70), interpolation=cv2.INTER_CUBIC)
+
+    # Scale to fixed width of 300px (EasyOCR handles text detection/recognition best at this scale)
+    scale = TARGET_WIDTH / float(w)
+    resized = cv2.resize(cropped_plate_img, (TARGET_WIDTH, int(h * scale)), interpolation=cv2.INTER_CUBIC)
+
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    
+    # Apply CLAHE to enhance contrast
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    
+    # Deskew to align characters horizontally
+    processed = deskew_plate(clahe)
+    
+    # Add protective white padding
+    final_img = cv2.copyMakeBorder(processed, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
+    return cv2.cvtColor(final_img, cv2.COLOR_GRAY2BGR)
+
+
+def preprocess_for_tesseract(cropped_plate_img, threshold_method="otsu"):
+    """
+    Preprocessing pipeline optimized for PyTesseract:
+    Grayscale, resized to height of 100px (optimal character size of ~50-60px),
+    noise filtered, binarized (Otsu or small-window Adaptive), inverted to black-on-white.
+    """
+    if cropped_plate_img is None or cropped_plate_img.size == 0:
+        return None
+
+    h, w = cropped_plate_img.shape[:2]
+    if w == 0 or h == 0:
+        return None
+
+    # Scale to fixed height of 100px (brings character heights to Tesseract's optimal ~40-60px range)
+    scale = 100.0 / float(h)
+    resized = cv2.resize(cropped_plate_img, (int(w * scale), 100), interpolation=cv2.INTER_CUBIC)
 
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
     th, tw = gray.shape[:2]
     
-    # Apply CLAHE safely based on size
-    grid_w = min(8, tw // 8)
-    grid_h = min(8, th // 8)
-    if grid_w >= 2 and grid_h >= 2:
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(grid_h, grid_w)).apply(gray)
-    else:
-        clahe = cv2.equalizeHist(gray)
+    # Smooth out compression/sensor noise while retaining edges
+    blurred = cv2.bilateralFilter(gray, 9, 75, 75)
 
-    if variant == "grayscale":
-        # Deskew the grayscale image directly
-        processed = deskew_plate(clahe)
-        # Add white padding around the grayscale plate
-        final_img = cv2.copyMakeBorder(processed, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
-        return cv2.cvtColor(final_img, cv2.COLOR_GRAY2BGR)
-
-    # Apply Thresholding based on variant
-    if variant == "otsu":
-        _, binary = cv2.threshold(clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    else:
-        # Secure block size
-        block_size = 51
-        if block_size >= min(th, tw):
-            block_size = min(th, tw)
-            if block_size % 2 == 0:
-                block_size = max(3, block_size - 1)
+    # Apply Thresholding
+    if threshold_method == "otsu":
+        _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    else: # adaptive fallback with small local neighborhood window (25px) to avoid washing out
         binary = cv2.adaptiveThreshold(
-            clahe, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-            cv2.THRESH_BINARY, block_size, 2
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            cv2.THRESH_BINARY, 25, 2
         )
 
-    # Deskewing
+    # Deskew binary image
     binary = deskew_plate(binary)
 
-    # Background Color Verification
+    # Invert polarity if necessary (Tesseract requires black characters on a white background)
     bh, bw = binary.shape
     border_pixels = np.concatenate([
         binary[0, :], binary[-1, :], binary[:, 0], binary[:, -1]
     ])
-    white_pixels = np.count_nonzero(border_pixels == 255)
-    black_pixels = len(border_pixels) - white_pixels
+    white_count = np.count_nonzero(border_pixels == 255)
+    black_count = len(border_pixels) - white_count
     
-    if black_pixels > white_pixels:
+    if black_count > white_count:
         binary = cv2.bitwise_not(binary)
 
-    # Morphological Closing
+    # Morphological cleaning to fill small gaps in strokes
     kernel = np.ones((2, 2), np.uint8)
     cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-    # Protective padding
+    # Protective white padding
     final_img = cv2.copyMakeBorder(cleaned, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
-    
     return cv2.cvtColor(final_img, cv2.COLOR_GRAY2BGR)
 
 
@@ -249,24 +251,29 @@ def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """
     if engine_name == "PyTesseract":
         # PyTesseract performs poorly on raw grayscale. We go straight to binarized variants.
-        processed_adaptive = preprocess_plate_variant(cropped_plate_img, "adaptive")
-        text_adaptive, conf_adaptive = _run_ocr(processed_adaptive, engine_name)
-        if text_adaptive and conf_adaptive >= 0.60:
-            return text_adaptive, conf_adaptive, engine_name, processed_adaptive
+        # Try Otsu binarization first (clean global thresholding)
+        processed_otsu = preprocess_for_tesseract(cropped_plate_img, "otsu")
+        if processed_otsu is None:
+            return '', 0.0, engine_name, None
 
-        processed_otsu = preprocess_plate_variant(cropped_plate_img, "otsu")
         text_otsu, conf_otsu = _run_ocr(processed_otsu, engine_name)
+        if text_otsu and conf_otsu >= 0.50:
+            return text_otsu, conf_otsu, engine_name, processed_otsu
+
+        # Fallback to local adaptive thresholding with a modest 25px window size
+        processed_adaptive = preprocess_for_tesseract(cropped_plate_img, "adaptive")
+        text_adaptive, conf_adaptive = _run_ocr(processed_adaptive, engine_name)
 
         candidates = [
-            (text_adaptive, conf_adaptive, processed_adaptive),
-            (text_otsu, conf_otsu, processed_otsu)
+            (text_otsu, conf_otsu, processed_otsu),
+            (text_adaptive, conf_adaptive, processed_adaptive)
         ]
         best_text, best_conf, best_processed = max(candidates, key=lambda c: c[1])
         return best_text, best_conf, engine_name, best_processed
 
     # EasyOCR Flow
     # 1. Try Grayscale first (Preserves gradients/edges for CRAFT/CRNN)
-    processed_gray = preprocess_plate_variant(cropped_plate_img, "grayscale")
+    processed_gray = preprocess_for_easyocr(cropped_plate_img)
     if processed_gray is None:
         return '', 0.0, engine_name, None
 
@@ -274,15 +281,14 @@ def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     if text and conf >= 0.40:
         return text, conf, engine_name, processed_gray
 
-    # 2. Try Adaptive Threshold Fallback (Block size 51)
-    processed_adaptive = preprocess_plate_variant(cropped_plate_img, "adaptive")
+    # Fallback variants for EasyOCR using the PyTesseract preprocessor binarized frames
+    processed_adaptive = preprocess_for_tesseract(cropped_plate_img, "adaptive")
     text_adaptive, conf_adaptive = _run_ocr(processed_adaptive, engine_name)
     if text_adaptive and conf_adaptive >= 0.40:
         if conf_adaptive > conf:
             text, conf, processed_gray = text_adaptive, conf_adaptive, processed_adaptive
             
-    # 3. Try Otsu Threshold Fallback
-    processed_otsu = preprocess_plate_variant(cropped_plate_img, "otsu")
+    processed_otsu = preprocess_for_tesseract(cropped_plate_img, "otsu")
     text_otsu, conf_otsu = _run_ocr(processed_otsu, engine_name)
 
     # Return the best performing variant
