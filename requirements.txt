@@ -17,8 +17,6 @@ opencv-python
 easyocr
 pytesseract
 
-# Web Application UI
-gradio
 
 # Data Analytics & Mathematical Foundations
 numpy
@@ -26,3 +24,4 @@ matplotlib
 pandas
 scikit-learn
 pyyaml
+openpyxl

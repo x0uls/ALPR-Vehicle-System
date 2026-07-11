@@ -168,7 +168,15 @@ def _run_ocr(processed, engine_name):
         text = pytesseract.image_to_string(processed, config=config)
         
         d = pytesseract.image_to_data(processed, config=config, output_type=pytesseract.Output.DICT)
-        confidences = [int(c) for c in d['conf'] if int(c) != -1]
+        
+        confidences = []
+        for c in d.get('conf', []):
+            try:
+                val = int(float(c))
+                if val != -1:
+                    confidences.append(val)
+            except (ValueError, TypeError):
+                pass
         
         combined_text = PLATE_CHAR_PATTERN.sub('', text.upper())
         avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0

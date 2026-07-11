@@ -46,15 +46,18 @@ def _write_all_rows(rows):
             writer.writerow(row)
 
 
-def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path):
+def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, video_timestamp=""):
     """Buffer a detection row. Flushes to disk automatically every 20 entries.
     
     Call flush_log() at end-of-video to ensure all buffered entries are written.
     Deduplication by track_id happens at flush time.
+
+    Args:
+        video_timestamp: The video position string (e.g. '01:23.4') computed from frame_idx / fps.
     """
     _log_buffer.append({
         "track_id": str(track_id),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": video_timestamp,
         "vehicle_type": vehicle_type,
         "color": color,
         "plate_number": plate_number,

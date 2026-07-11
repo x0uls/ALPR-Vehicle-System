@@ -14,6 +14,16 @@ VEHICLE_CLASSES = {2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
 MIN_VEHICLE_CONFIDENCE = 0.4
 FRAME_SKIP = 3
 
+
+def format_video_timestamp(frame_idx, fps):
+    """Convert a frame index and FPS to a video timecode string (MM:SS.s)."""
+    if fps <= 0:
+        return "00:00.0"
+    total_seconds = frame_idx / fps
+    minutes = int(total_seconds // 60)
+    seconds = total_seconds % 60
+    return f"{minutes:02d}:{seconds:04.1f}"
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 vehicle_model = YOLO("yolov8n.pt")
 plate_model = YOLO("models/yolo_plate/best.pt")
@@ -99,7 +109,7 @@ class DetectionTracker:
         self.tracks.append(track)
         return track
 
-    def update_plate(self, track, plate_text, ocr_conf, plate_area, snapshot_path, frame_idx):
+    def update_plate(self, track, plate_text, ocr_conf, plate_area, snapshot_path, frame_idx, video_timestamp=""):
         """Update if the new read is better. Score = plate area * OCR confidence.
         This naturally favors closer, larger plates over tiny distant plates with artificially high confidence."""
         score = plate_area * ocr_conf
@@ -130,6 +140,7 @@ class DetectionTracker:
                     plate_text,
                     ocr_conf,
                     snapshot_path,
+                    video_timestamp=video_timestamp,
                 )
                 self.global_logged_plates[plate_text] = frame_idx
 
@@ -150,7 +161,7 @@ detection_tracker = DetectionTracker()
 
 # ─── Async OCR Worker & Harvesting ────────────────────────────────
 
-def _ocr_worker(plate_crop, vehicle_crop, ocr_engine, track_id, plate_area, frame_idx):
+def _ocr_worker(plate_crop, vehicle_crop, ocr_engine, track_id, plate_area, frame_idx, fps=30.0):
     """Runs OCR + disk I/O in a background thread.
     
     All NumPy arrays passed here MUST be .copy()'d by the caller,
@@ -171,19 +182,20 @@ def _ocr_worker(plate_crop, vehicle_crop, ocr_engine, track_id, plate_area, fram
         snapshot_path = f"outputs/snapshots/frame{frame_idx}_{plate_text}.jpg"
         cv2.imwrite(snapshot_path, vehicle_crop)
 
-    return plate_text, ocr_conf, track_id, plate_area, frame_idx, snapshot_path
+    video_timestamp = format_video_timestamp(frame_idx, fps)
+    return plate_text, ocr_conf, track_id, plate_area, frame_idx, snapshot_path, video_timestamp
 
 
 def _apply_ocr_result(future):
     """Process a single completed OCR future and update the corresponding track."""
     try:
-        text, conf, track_id, plate_area, frame_idx_ocr, snapshot_path = future.result()
+        text, conf, track_id, plate_area, frame_idx_ocr, snapshot_path, video_timestamp = future.result()
         print(f"[OCR Harvest] Track {track_id}: Text='{text}', Conf={conf:.3f}, Snapshot={snapshot_path}")
         if text and conf > 0 and snapshot_path:
             track = detection_tracker.find_by_id(track_id)
             if track:
                 track["max_plate_area"] = max(track.get("max_plate_area", 0), plate_area)
-                detection_tracker.update_plate(track, text, conf, plate_area, snapshot_path, frame_idx_ocr)
+                detection_tracker.update_plate(track, text, conf, plate_area, snapshot_path, frame_idx_ocr, video_timestamp=video_timestamp)
     except Exception as e:
         print(f"[OCR] Worker failed for track: {e}")
 
@@ -225,7 +237,7 @@ def _draw_overlay(frame, track):
 
 # ─── Main Per-Frame Pipeline ─────────────────────────────────────
 
-def process_frame(frame, frame_idx, ocr_engine="EasyOCR"):
+def process_frame(frame, frame_idx, ocr_engine="EasyOCR", fps=30.0):
     # ── Phase 0: Harvest any OCR results that completed since last frame ──
     _harvest_ocr_results()
 
@@ -322,6 +334,7 @@ def process_frame(frame, frame_idx, ocr_engine="EasyOCR"):
                                 track["track_id"],
                                 plate_area,
                                 frame_idx,
+                                fps,
                             )
                             _pending_futures.append(future)
 
