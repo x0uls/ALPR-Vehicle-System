@@ -321,8 +321,12 @@
 
     <!-- Console Drawer Button (Bottom Left) -->
     <div class="fixed bottom-6 left-6 z-[90]">
-        <button id="console-toggle-btn" class="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 font-semibold text-xs rounded-full shadow-lg flex items-center gap-2 transition-all">
-            <span class="h-2 w-2 rounded-full bg-blue-500 animate-pulse" id="console-pulse"></span>
+        <button id="console-toggle-btn" class="px-4 py-2.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 text-slate-300 font-semibold text-xs rounded-full shadow-lg flex items-center gap-2 transition-all">
+            <svg id="console-icon" class="h-4 w-4 text-blue-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="18" rx="2" ry="2"></rect>
+                <path d="M7 8l5 4-5 4"></path>
+                <line x1="13" y1="16" x2="17" y2="16"></line>
+            </svg>
             <span>Console Logs</span>
         </button>
     </div>
@@ -337,8 +341,9 @@
             </div>
             <div class="flex items-center gap-3">
                 <button onclick="fetchLogs()" class="hover:text-white transition-colors" title="Refresh logs">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18" />
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                     </svg>
                 </button>
                 <button onclick="toggleConsole()" class="hover:text-white transition-colors" title="Close console">
@@ -617,19 +622,26 @@
 
         function toggleConsole() {
             const isHidden = consoleDrawer.classList.contains('translate-y-full');
+            const icon = document.getElementById('console-icon');
             if (isHidden) {
                 consoleDrawer.classList.remove('translate-y-full');
                 fetchLogs();
                 // Start polling logs
                 consolePollInterval = setInterval(fetchLogs, 2000);
                 consoleStatus.textContent = 'Streaming Logs';
-                document.getElementById('console-pulse').classList.replace('bg-blue-500', 'bg-emerald-500');
+                if (icon) {
+                    icon.classList.remove('text-blue-500');
+                    icon.classList.add('text-emerald-500');
+                }
             } else {
                 consoleDrawer.classList.add('translate-y-full');
                 // Stop polling
                 if (consolePollInterval) clearInterval(consolePollInterval);
                 consoleStatus.textContent = 'Closed';
-                document.getElementById('console-pulse').classList.replace('bg-emerald-500', 'bg-blue-500');
+                if (icon) {
+                    icon.classList.remove('text-emerald-500');
+                    icon.classList.add('text-blue-500');
+                }
             }
         }
 

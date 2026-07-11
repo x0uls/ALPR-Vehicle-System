@@ -30,6 +30,9 @@ class LogMirror:
     def flush(self):
         self.original_stream.flush()
 
+    def __getattr__(self, name):
+        return getattr(self.original_stream, name)
+
 os.makedirs("outputs/logs", exist_ok=True)
 server_log_path = "outputs/logs/server.log"
 try:

@@ -104,17 +104,29 @@ def preprocess_plate_variant(cropped_plate_img, variant="adaptive"):
         return None
 
     h, w = cropped_plate_img.shape[:2]
-    if w == 0:
+    if w == 0 or h == 0:
         return None
         
-    # 1. Target-Width Scaling
-    scale = TARGET_WIDTH / float(w)
-    resized = cv2.resize(cropped_plate_img, (TARGET_WIDTH, int(h * scale)), interpolation=cv2.INTER_CUBIC)
+    # 1. Scaling: EasyOCR does best with TARGET_WIDTH=300,
+    # but PyTesseract does best when characters are a standard height (~40-50px).
+    # Thus we scale binarized variants to a fixed height of 70px.
+    if variant == "grayscale":
+        scale = TARGET_WIDTH / float(w)
+        resized = cv2.resize(cropped_plate_img, (TARGET_WIDTH, int(h * scale)), interpolation=cv2.INTER_CUBIC)
+    else:
+        scale = 70.0 / float(h)
+        resized = cv2.resize(cropped_plate_img, (int(w * scale), 70), interpolation=cv2.INTER_CUBIC)
 
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    th, tw = gray.shape[:2]
     
-    # Apply CLAHE
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(gray)
+    # Apply CLAHE safely based on size
+    grid_w = min(8, tw // 8)
+    grid_h = min(8, th // 8)
+    if grid_w >= 2 and grid_h >= 2:
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(grid_h, grid_w)).apply(gray)
+    else:
+        clahe = cv2.equalizeHist(gray)
 
     if variant == "grayscale":
         # Deskew the grayscale image directly
@@ -127,10 +139,15 @@ def preprocess_plate_variant(cropped_plate_img, variant="adaptive"):
     if variant == "otsu":
         _, binary = cv2.threshold(clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     else:
-        # Fixed Block Size: Increased block size from 11 to 51 to cover character stroke width
+        # Secure block size
+        block_size = 51
+        if block_size >= min(th, tw):
+            block_size = min(th, tw)
+            if block_size % 2 == 0:
+                block_size = max(3, block_size - 1)
         binary = cv2.adaptiveThreshold(
             clahe, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-            cv2.THRESH_BINARY, 51, 2
+            cv2.THRESH_BINARY, block_size, 2
         )
 
     # Deskewing
@@ -146,6 +163,16 @@ def preprocess_plate_variant(cropped_plate_img, variant="adaptive"):
     
     if black_pixels > white_pixels:
         binary = cv2.bitwise_not(binary)
+
+    # --- Border Removal Optimization (Crucial for PyTesseract) ---
+    # Erase black borders/frames touching the image edges
+    temp_binary = cv2.bitwise_not(binary)
+    contours, _ = cv2.findContours(temp_binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    for cnt in contours:
+        x, y, cw, ch = cv2.boundingRect(cnt)
+        if (x <= 5 or y <= 5 or (x + cw) >= bw - 5 or (y + ch) >= bh - 5):
+            if cw > bw * 0.6 or ch > bh * 0.6:
+                cv2.drawContours(binary, [cnt], -1, 255, -1)
 
     # Morphological Closing
     kernel = np.ones((2, 2), np.uint8)
@@ -226,6 +253,24 @@ def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """
     Lazy Multi-Variant OCR execution.
     """
+    if engine_name == "PyTesseract":
+        # PyTesseract performs poorly on raw grayscale. We go straight to binarized variants.
+        processed_adaptive = preprocess_plate_variant(cropped_plate_img, "adaptive")
+        text_adaptive, conf_adaptive = _run_ocr(processed_adaptive, engine_name)
+        if text_adaptive and conf_adaptive >= 0.60:
+            return text_adaptive, conf_adaptive, engine_name, processed_adaptive
+
+        processed_otsu = preprocess_plate_variant(cropped_plate_img, "otsu")
+        text_otsu, conf_otsu = _run_ocr(processed_otsu, engine_name)
+
+        candidates = [
+            (text_adaptive, conf_adaptive, processed_adaptive),
+            (text_otsu, conf_otsu, processed_otsu)
+        ]
+        best_text, best_conf, best_processed = max(candidates, key=lambda c: c[1])
+        return best_text, best_conf, engine_name, best_processed
+
+    # EasyOCR Flow
     # 1. Try Grayscale first (Preserves gradients/edges for CRAFT/CRNN)
     processed_gray = preprocess_plate_variant(cropped_plate_img, "grayscale")
     if processed_gray is None:
