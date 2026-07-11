@@ -12,38 +12,34 @@ import uvicorn
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-import builtins
-import logging
+import sys
 
-# Ensure output logs directories exist
+class LogMirror:
+    def __init__(self, original_stream, log_file):
+        self.original_stream = original_stream
+        self.log_file = log_file
+
+    def write(self, data):
+        self.original_stream.write(data)
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(data)
+        except Exception:
+            pass
+
+    def flush(self):
+        self.original_stream.flush()
+
 os.makedirs("outputs/logs", exist_ok=True)
 server_log_path = "outputs/logs/server.log"
-
 try:
     with open(server_log_path, "w", encoding="utf-8") as f:
         f.write("--- Server Log Started ---\n")
 except Exception:
     pass
 
-# 1. Override standard print globally to capture prints safely without sys.stdout recursion issues
-original_print = builtins.print
-def custom_print(*args, **kwargs):
-    original_print(*args, **kwargs)
-    try:
-        msg = " ".join(str(arg) for arg in args)
-        with open(server_log_path, "a", encoding="utf-8") as f:
-            f.write(msg + "\n")
-    except Exception:
-        pass
-builtins.print = custom_print
-
-# 2. Add FileHandler to python logger to mirror uvicorn logs
-file_handler = logging.FileHandler(server_log_path, mode="a", encoding="utf-8")
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-
-for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
-    logger = logging.getLogger(logger_name)
-    logger.addHandler(file_handler)
+sys.stdout = LogMirror(sys.stdout, server_log_path)
+sys.stderr = LogMirror(sys.stderr, server_log_path)
 
 from src.pipeline import FRAME_SKIP, detection_tracker, process_frame, drain_pending_ocr
 from src.logging.logger import init_log
