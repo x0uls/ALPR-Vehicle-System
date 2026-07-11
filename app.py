@@ -161,18 +161,28 @@ async def process_video_sse(video_path, ocr_engine):
                         except (IndexError, ValueError):
                             continue
                         
-                        # Find this track's confidence from the CSV
-                        text_read = "Plate"
+                        # Find this track's full details from the CSV
+                        text_read = ""
                         current_conf = 0.0
                         snapshot_url = None
+                        vehicle_type = None
+                        color = None
+                        timestamp = None
                         try:
                             match = df[df["track_id"] == track_id]
                             if not match.empty:
-                                text_read = match.iloc[0]["plate_number"]
-                                current_conf = float(match.iloc[0]["confidence"])
-                                snap_val = match.iloc[0]["snapshot_path"]
+                                row = match.iloc[0]
+                                text_read = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
+                                current_conf = float(row["confidence"])
+                                snap_val = row.get("snapshot_path")
                                 if pd.notna(snap_val) and snap_val:
                                     snapshot_url = "/" + str(snap_val)
+                                if pd.notna(row.get("vehicle_type")):
+                                    vehicle_type = str(row["vehicle_type"])
+                                if pd.notna(row.get("color")):
+                                    color = str(row["color"])
+                                if pd.notna(row.get("timestamp")):
+                                    timestamp = str(row["timestamp"])
                         except Exception:
                             pass
                         
@@ -180,7 +190,18 @@ async def process_video_sse(video_path, ocr_engine):
                         prev_conf = sent_crops.get(track_id, -1)
                         if current_conf > prev_conf:
                             sent_crops[track_id] = current_conf
-                            yield f"event: crop\ndata: {json.dumps({'filename': filename, 'url': f'/outputs/plate_crops/Processed/{filename}', 'text': text_read, 'track_id': track_id, 'snapshot_url': snapshot_url})}\n\n"
+                            crop_payload = {
+                                'filename': filename,
+                                'url': f'/outputs/plate_crops/Processed/{filename}',
+                                'text': text_read,
+                                'track_id': track_id,
+                                'snapshot_url': snapshot_url,
+                                'confidence': current_conf,
+                                'vehicle_type': vehicle_type,
+                                'color': color,
+                                'timestamp': timestamp
+                            }
+                            yield f"event: crop\ndata: {json.dumps(crop_payload)}\n\n"
                 except Exception:
                     pass
         else:

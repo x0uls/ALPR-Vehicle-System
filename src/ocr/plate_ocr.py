@@ -164,16 +164,6 @@ def preprocess_plate_variant(cropped_plate_img, variant="adaptive"):
     if black_pixels > white_pixels:
         binary = cv2.bitwise_not(binary)
 
-    # --- Border Removal Optimization (Crucial for PyTesseract) ---
-    # Erase black borders/frames touching the image edges
-    temp_binary = cv2.bitwise_not(binary)
-    contours, _ = cv2.findContours(temp_binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    for cnt in contours:
-        x, y, cw, ch = cv2.boundingRect(cnt)
-        if (x <= 5 or y <= 5 or (x + cw) >= bw - 5 or (y + ch) >= bh - 5):
-            if cw > bw * 0.6 or ch > bh * 0.6:
-                cv2.drawContours(binary, [cnt], -1, 255, -1)
-
     # Morphological Closing
     kernel = np.ones((2, 2), np.uint8)
     cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
@@ -192,21 +182,25 @@ def _run_ocr(processed, engine_name):
     
     if engine_name == "PyTesseract":
         try:
-            config = f"-c tessedit_char_whitelist={allowlist} --psm 7"
-            text = pytesseract.image_to_string(processed, config=config)
-            
+            config = f"-c tessedit_char_whitelist={allowlist} --psm 7 --oem 1"
+            # Single call: image_to_data returns both text and confidence per word.
+            # image_to_string is redundant — it spawns a second subprocess for the same result.
             d = pytesseract.image_to_data(processed, config=config, output_type=pytesseract.Output.DICT)
             
+            words = []
             confidences = []
-            for c in d.get('conf', []):
+            for i, word in enumerate(d.get('text', [])):
+                conf_val = d['conf'][i]
                 try:
-                    val = int(float(c))
-                    if val != -1:
-                        confidences.append(val)
+                    val = int(float(conf_val))
                 except (ValueError, TypeError):
-                    pass
+                    continue
+                if val == -1 or not word.strip():
+                    continue
+                words.append(word.strip().upper())
+                confidences.append(val)
             
-            combined_text = PLATE_CHAR_PATTERN.sub('', text.upper())
+            combined_text = PLATE_CHAR_PATTERN.sub('', ' '.join(words))
             avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
         except Exception as e:
             print(f"[OCR] PyTesseract execution failed: {str(e)}")

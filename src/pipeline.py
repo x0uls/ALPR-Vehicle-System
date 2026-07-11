@@ -34,9 +34,25 @@ TRACK_IOU_THRESHOLD = 0.3
 TRACK_MAX_AGE = 30
 
 # ─── Async OCR Configuration ─────────────────────────────────────
-# 2 workers = GPU path (PyTorch CUDA serializes via CUDA streams).
-# For CPU-only OCR, set to os.cpu_count() instead.
-_ocr_pool = ThreadPoolExecutor(max_workers=2)
+# EasyOCR is GPU-bound (PyTorch CUDA serializes via CUDA streams) → 2 workers.
+# PyTesseract spawns external OS subprocesses (CPU-bound) → scale to vCPU count.
+_ocr_pool = None
+_ocr_pool_engine = None
+
+def _get_ocr_pool(engine_name="EasyOCR"):
+    global _ocr_pool, _ocr_pool_engine
+    if _ocr_pool is not None and _ocr_pool_engine == engine_name:
+        return _ocr_pool
+    if _ocr_pool is not None:
+        _ocr_pool.shutdown(wait=False)
+    if engine_name == "PyTesseract":
+        workers = min(os.cpu_count() or 2, 6)  # Cap at 6 to avoid memory pressure
+    else:
+        workers = 2
+    _ocr_pool = ThreadPoolExecutor(max_workers=workers)
+    _ocr_pool_engine = engine_name
+    print(f"[Pipeline] OCR thread pool: {workers} workers for {engine_name}")
+    return _ocr_pool
 
 # Only ever mutated from the main thread: appended during submission,
 # swept during harvest. OCR threads only touch the Future objects
@@ -328,7 +344,7 @@ def process_frame(frame, frame_idx, ocr_engine="EasyOCR", fps=30.0):
 
                             # ── Phase 5: Submit OCR to thread pool (non-blocking) ──
                             track["last_ocr_frame"] = frame_idx
-                            future = _ocr_pool.submit(
+                            future = _get_ocr_pool(ocr_engine).submit(
                                 _ocr_worker,
                                 plate_crop.copy(),    # MUST copy — frame buffer is reused by main thread
                                 vehicle_crop.copy(),  # MUST copy — same reason
