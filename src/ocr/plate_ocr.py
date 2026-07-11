@@ -105,9 +105,8 @@ def preprocess_for_easyocr(cropped_plate_img):
     
     final_img = cv2.copyMakeBorder(processed, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
     return cv2.cvtColor(final_img, cv2.COLOR_GRAY2BGR)
-
 def preprocess_for_tesseract(cropped_plate_img, threshold_method="otsu"):
-    """Preprocessing pipeline optimized for PyTesseract: fixed height, bilateral filter, binarized."""
+    """Advanced preprocessing pass that targets and removes framing borders."""
     if cropped_plate_img is None or cropped_plate_img.size == 0:
         return None
 
@@ -115,10 +114,12 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="otsu"):
     if w == 0 or h == 0:
         return None
 
+    # Scale to standard processing size
     scale = 100.0 / float(h)
     resized = cv2.resize(cropped_plate_img, (int(w * scale), 100), interpolation=cv2.INTER_CUBIC)
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
     
+    # Smooth background out before binarization
     blurred = cv2.bilateralFilter(gray, 9, 75, 75)
 
     if threshold_method == "otsu":
@@ -131,16 +132,38 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="otsu"):
 
     binary = deskew_plate(binary)
 
+    # Standardize image so text is black and background is white
     total_pixels = binary.size
     black_count = total_pixels - cv2.countNonZero(binary)
     if black_count > total_pixels * 0.5:
         binary = cv2.bitwise_not(binary)
 
+    # ─── BORDER REMOVAL SYSTEM ───
+    # Find all shapes/contours in the binarized plate image
+    contours, _ = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    img_h, img_w = binary.shape[:2]
+    
+    for contour in contours:
+        x, y, cw, ch = cv2.boundingRect(contour)
+        
+        # Check if the contour touches the edges or takes up the whole image area
+        is_touching_edge = (x <= 3 or y <= 3 or (x + cw) >= img_w - 3 or (y + ch) >= img_h - 3)
+        is_too_large = (cw > img_w * 0.85 and ch > img_h * 0.85)
+        
+        if is_touching_edge or is_too_large:
+            # Mask out the border line elements by painting them white
+            cv2.drawContours(binary, [contour], -1, 255, thickness=-1)
+            # Paint an outer rectangle boundary to make sure the border line is gone
+            cv2.rectangle(binary, (x, y), (x + cw, y + ch), 255, 2)
+
+    # Smooth any rough character edges left over from border cleaning
     kernel = np.ones((2, 2), np.uint8)
     cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-    final_img = cv2.copyMakeBorder(cleaned, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
+    # Add a generous 20px white margin so characters don't touch the image borders
+    final_img = cv2.copyMakeBorder(cleaned, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
     return cv2.cvtColor(final_img, cv2.COLOR_GRAY2BGR)
+
 
 def _run_ocr(processed, engine_name):
     """Runs the selected OCR engine and applies spatial sorting and text cleaning."""

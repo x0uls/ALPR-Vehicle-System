@@ -8,7 +8,7 @@ import cv2
 import torch
 from ultralytics import YOLO
 from src.color.color_detector import detect_dominant_color
-from src.logging.logger import init_log, log_detection, flush_log
+from src.logging.logger import log_detection, flush_log
 from src.ocr.plate_ocr import read_plate
 
 VEHICLE_CLASSES = {2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}

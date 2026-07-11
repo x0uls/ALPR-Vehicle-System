@@ -10,7 +10,7 @@ import cv2
 import pandas as pd
 import uvicorn
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import sys
 
@@ -42,7 +42,7 @@ sys.stdout = LogMirror(sys.stdout, server_log_path)
 sys.stderr = LogMirror(sys.stderr, server_log_path)
 
 import torch
-from src.pipeline import FRAME_SKIP, detection_tracker, process_frame, process_batch, drain_pending_ocr
+from src.pipeline import detection_tracker, process_batch, drain_pending_ocr
 from src.logging.logger import init_log
 
 def _format_elapsed(seconds):
@@ -216,55 +216,39 @@ async def process_video_sse(video_path, ocr_engine):
             except Exception:
                 pass
 
-            # Check and stream newly cropped plate images
+            # Check and stream newly cropped plate images (best per track only, directly from CSV logs)
             try:
-                crop_files = glob.glob("outputs/plate_crops/Processed/*.jpg")
-                for filepath in crop_files:
-                    filename = os.path.basename(filepath)
-                    try:
-                        track_id = int(filename.split("track")[1].split("_")[0])
-                    except (IndexError, ValueError):
-                        continue
-
-                    text_read = ""
-                    current_conf = 0.0
-                    snapshot_url = None
-                    vehicle_type = None
-                    color = None
-                    timestamp = None
-                    try:
-                        match = df[df["track_id"] == track_id]
-                        if not match.empty:
-                            row = match.iloc[0]
-                            text_read = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
-                            current_conf = float(row["confidence"])
-                            snap_val = row.get("snapshot_path")
-                            if pd.notna(snap_val) and snap_val:
-                                snapshot_url = "/" + str(snap_val)
-                            if pd.notna(row.get("vehicle_type")):
-                                vehicle_type = str(row["vehicle_type"])
-                            if pd.notna(row.get("color")):
-                                color = str(row["color"])
-                            if pd.notna(row.get("timestamp")):
-                                timestamp = str(row["timestamp"])
-                    except Exception:
-                        pass
-
-                    prev_conf = sent_crops.get(track_id, -1)
+                df = pd.read_csv("outputs/logs/detections.csv")
+                for _, row in df.iterrows():
+                    track_id = int(row["track_id"])
+                    current_conf = float(row["confidence"])
+                    
+                    # Only send if first crop for this track or confidence improved
+                    prev_conf = sent_crops.get(track_id, -1.0)
                     if current_conf > prev_conf:
                         sent_crops[track_id] = current_conf
-                        crop_payload = {
-                            'filename': filename,
-                            'url': f'/outputs/plate_crops/Processed/{filename}',
-                            'text': text_read,
-                            'track_id': track_id,
-                            'snapshot_url': snapshot_url,
-                            'confidence': current_conf,
-                            'vehicle_type': vehicle_type,
-                            'color': color,
-                            'timestamp': timestamp
-                        }
-                        yield f"event: crop\ndata: {json.dumps(crop_payload)}\n\n"
+                        
+                        crop_path = row.get("plate_crop_path")
+                        if pd.notna(crop_path) and crop_path:
+                            # Standardize path
+                            crop_url = "/" + str(crop_path).replace("\\", "/")
+                            filename = os.path.basename(str(crop_path))
+                            
+                            snap_path = row.get("snapshot_path")
+                            snapshot_url = "/" + str(snap_path).replace("\\", "/") if pd.notna(snap_path) and snap_path else None
+                            
+                            crop_payload = {
+                                'filename': filename,
+                                'url': crop_url,
+                                'text': str(row["plate_number"]) if pd.notna(row["plate_number"]) else "",
+                                'track_id': track_id,
+                                'snapshot_url': snapshot_url,
+                                'confidence': current_conf,
+                                'vehicle_type': str(row["vehicle_type"]) if pd.notna(row["vehicle_type"]) else None,
+                                'color': str(row["color"]) if pd.notna(row["color"]) else None,
+                                'timestamp': str(row["timestamp"]) if pd.notna(row["timestamp"]) else None
+                            }
+                            yield f"event: crop\ndata: {json.dumps(crop_payload)}\n\n"
             except Exception:
                 pass
 
