@@ -153,20 +153,32 @@ def _run_ocr(processed, engine_name):
             
             words = []
             confidences = []
-            for i, word in enumerate(d.get('text', [])):
+            
+            for i in range(len(d.get('text', []))):
+                word = str(d['text'][i]).strip()
+                cleaned_word = PLATE_CHAR_PATTERN.sub('', word.upper())
+                
+                # Skip layout tokens that contain no usable alphanumeric info
+                if not cleaned_word:
+                    continue
+                    
                 conf_val = d['conf'][i]
                 try:
                     val = int(float(conf_val))
                 except (ValueError, TypeError):
-                    continue
-                if val == -1 or not word.strip():
-                    continue
-                words.append(word.strip().upper())
+                    val = -1
+                
+                # FIX: If clean text was read but Tesseract returned -1 layout confidence,
+                # assign a 50% baseline score so the valid read isn't thrown away.
+                if val == -1:
+                    val = 50 
+                    
+                words.append(cleaned_word)
                 confidences.append(val)
             
-            combined_text = PLATE_CHAR_PATTERN.sub('', ' '.join(words))
+            combined_text = " ".join(words)
             avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
-            print(f"[OCR DEBUG] PyTesseract raw='{' '.join(words)}', cleaned='{combined_text}', conf={avg_conf:.3f}")
+            print(f"[OCR DEBUG] PyTesseract raw='{' '.join(d.get('text', []))}', cleaned='{combined_text}', conf={avg_conf:.3f}")
         except Exception as e:
             print(f"[OCR] PyTesseract execution failed: {str(e)}")
             return '', 0.0
@@ -201,7 +213,6 @@ def _run_ocr(processed, engine_name):
     # Length-Weighted Confidence
     adjusted_conf = avg_conf * min(1.0, len(compact) / 7.0)
     
-    # Secure the tracker positive fallback directly at generation phase
     if combined_text.strip():
         adjusted_conf = max(0.01, adjusted_conf)
 
@@ -211,18 +222,16 @@ def _run_ocr(processed, engine_name):
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """Lazy Multi-Variant OCR execution wrapper."""
     if engine_name == "PyTesseract":
-        # 1. Try Grayscale first (Gradients for LSTM)
+        # Pass 1: Try Grayscale first (Best for raw LSTM gradients)
         processed_gray = preprocess_for_easyocr(cropped_plate_img)
         if processed_gray is not None:
             text_gray, conf_gray = _run_ocr(processed_gray, engine_name)
-            # If true, confident reading found, exit early. 
-            # If conf_gray fell back to 0.01 but read text successfully, we store it and check alternative passes instead of dropping completely.
             if text_gray and conf_gray >= 0.50:
                 return text_gray, conf_gray, engine_name, processed_gray
         else:
             text_gray, conf_gray = '', 0.0
 
-        # 2. Try Otsu binarization
+        # Pass 2: Try Otsu binarization
         processed_otsu = preprocess_for_tesseract(cropped_plate_img, "otsu")
         if processed_otsu is not None:
             text_otsu, conf_otsu = _run_ocr(processed_otsu, engine_name)
@@ -231,48 +240,33 @@ def read_plate(cropped_plate_img, engine_name="EasyOCR"):
         else:
             text_otsu, conf_otsu = '', 0.0
 
-        # 3. Fallback to local adaptive thresholding
-        processed_adaptive = preprocess_for_tesseract(cropped_plate_img, "adaptive")
-        if processed_adaptive is not None:
-            text_adaptive, conf_adaptive = _run_ocr(processed_adaptive, engine_name)
+        # Pass 3: Try Adaptive Gaussian thresholding
+        processed_adapt = preprocess_for_tesseract(cropped_plate_img, "adaptive")
+        if processed_adapt is not None:
+            text_adapt, conf_adapt = _run_ocr(processed_adapt, engine_name)
+            if text_adapt and conf_adapt >= 0.50:
+                return text_adapt, conf_adapt, engine_name, processed_adapt
         else:
-            text_adaptive, conf_adaptive = '', 0.0
+            text_adapt, conf_adapt = '', 0.0
 
+        # FIX: Complete the fallback strategy if no image variant beats the 0.50 threshold.
+        # Pick the variant that yielded text and has the highest confidence.
         candidates = [
             (text_gray, conf_gray, processed_gray),
             (text_otsu, conf_otsu, processed_otsu),
-            (text_adaptive, conf_adaptive, processed_adaptive)
+            (text_adapt, conf_adapt, processed_adapt)
         ]
-        
-        valid = [c for c in candidates if c[0]]
-        if not valid:
-            return '', 0.0, engine_name, None
+        valid_candidates = [c for c in candidates if c[0].strip()]
+        if valid_candidates:
+            best_candidate = max(valid_candidates, key=lambda x: x[1])
+            return best_candidate[0], best_candidate[1], engine_name, best_candidate[2]
             
-        best_text, best_conf, best_processed = max(valid, key=lambda c: c[1])
-        return best_text, best_conf, engine_name, best_processed
-
-    # EasyOCR Flow
-    processed_gray = preprocess_for_easyocr(cropped_plate_img)
-    if processed_gray is None:
         return '', 0.0, engine_name, None
 
-    text, conf = _run_ocr(processed_gray, engine_name)
-    if text and conf >= 0.40:
-        return text, conf, engine_name, processed_gray
-
-    processed_adaptive = preprocess_for_tesseract(cropped_plate_img, "adaptive")
-    text_adaptive, conf_adaptive = _run_ocr(processed_adaptive, engine_name)
-    if text_adaptive and conf_adaptive >= 0.40:
-        if conf_adaptive > conf:
-            text, conf, processed_gray = text_adaptive, conf_adaptive, processed_adaptive
-            
-    processed_otsu = preprocess_for_tesseract(cropped_plate_img, "otsu")
-    text_otsu, conf_otsu = _run_ocr(processed_otsu, engine_name)
-
-    candidates = [
-        (text, conf, processed_gray),
-        (text_adaptive, conf_adaptive, processed_adaptive),
-        (text_otsu, conf_otsu, processed_otsu)
-    ]
-    best_text, best_conf, best_processed = max(candidates, key=lambda c: c[1])
-    return best_text, best_conf, engine_name, best_processed
+    else:
+        # Standard Engine execution flow (EasyOCR)
+        processed = preprocess_for_easyocr(cropped_plate_img)
+        if processed is None:
+            return '', 0.0, engine_name, None
+        text, conf = _run_ocr(processed, engine_name)
+        return text, conf, engine_name, processed

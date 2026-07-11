@@ -126,12 +126,13 @@ class DetectionTracker:
         return track
 
     def update_plate(self, track, plate_text, ocr_conf, plate_area, snapshot_path, frame_idx, video_timestamp=""):
-        """Update if the new read is better. Score = plate area * OCR confidence.
-        This naturally favors closer, larger plates over tiny distant plates with artificially high confidence."""
-        score = plate_area * ocr_conf
+        """Update if the new read is better. Score = plate area * OCR confidence."""
+        
+        # FIX 1: Provide a fallback confidence floor if text was found but conf is 0
+        effective_conf = max(ocr_conf, 0.01) if (plate_text and len(plate_text.strip()) > 0) else ocr_conf
+        score = plate_area * effective_conf
 
         # Heuristic 1: Malaysian plates almost always have both letters and numbers.
-        # If one is missing, it's likely a partial edge-crop. Penalize heavily.
         has_letters = any(c.isalpha() for c in plate_text)
         has_numbers = any(c.isdigit() for c in plate_text)
         if not (has_letters and has_numbers):
@@ -142,16 +143,21 @@ class DetectionTracker:
         score *= (compact_len / 7.0)
 
         # Decide if we should update:
-        # 1. Update if this is the first plate text recorded for this track (handles zero-conf fallbacks)
         is_first_read = track.get("best_plate") is None
-        # 2. Update if this read has high confidence (>10%) but the previous best was a zero/low-confidence read (<=1%)
+        
+        # FIX 2: Check if current text has more alphanumeric characters than the stored best plate
+        current_alnum_count = sum(c.isalnum() for c in plate_text)
+        existing_alnum_count = sum(c.isalnum() for c in (track.get("best_plate") or ""))
+        has_more_structural_data = current_alnum_count > existing_alnum_count
+
         has_high_conf_override = (ocr_conf > 0.10 and track.get("best_ocr_conf", 0) <= 0.01)
-        # 3. Update if this read's score is strictly higher than the previous best score
         has_better_score = score > track.get("best_score", 0)
 
-        if is_first_read or has_high_conf_override or has_better_score:
+        # FIX 3: Include structural check in evaluation
+        if is_first_read or has_high_conf_override or has_better_score or has_more_structural_data:
             track["best_plate"] = plate_text
-            track["best_score"] = score
+            # Retain the higher score if this was purely a structural text update
+            track["best_score"] = max(score, track.get("best_score", 0)) 
             track["best_ocr_conf"] = ocr_conf
             track["snapshot_path"] = snapshot_path
             
