@@ -97,6 +97,7 @@ async def process_video_sse(video_path, ocr_engine):
 
     sent_logs = set()
     sent_crops = {}  # track_id -> best confidence sent so far
+    sent_texts = {}  # track_id -> best text sent so far
 
     # Set micro-batching parameters
     batch_size = 4 if torch.cuda.is_available() else 1
@@ -223,10 +224,14 @@ async def process_video_sse(video_path, ocr_engine):
                     track_id = int(row["track_id"])
                     current_conf = float(row["confidence"])
                     
-                    # Only send if first crop for this track or confidence improved
+                    # Only send if first crop for this track, confidence improved, or text changed
                     prev_conf = sent_crops.get(track_id, -1.0)
-                    if current_conf > prev_conf:
+                    prev_text = sent_texts.get(track_id, "")
+                    current_text = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
+                    
+                    if current_conf > prev_conf or current_text != prev_text:
                         sent_crops[track_id] = current_conf
+                        sent_texts[track_id] = current_text
                         
                         crop_path = row.get("plate_crop_path")
                         if pd.notna(crop_path) and crop_path:

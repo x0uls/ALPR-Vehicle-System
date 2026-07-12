@@ -119,20 +119,11 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
     filtered = cv2.bilateralFilter(deskewed_gray, 9, 75, 75)
 
     # ─── Step 4: Polarity Detection & Inversion ───
-    # Measure average intensity of pixels near the image boundaries.
-    # If the border region is dark (intensity < 120), it's a light-on-dark plate.
-    # We invert it before thresholding so it is treated as dark-on-light (black on white).
-    bh_f, bw_f = filtered.shape[:2]
-    border_mask = np.zeros_like(filtered, dtype=np.uint8)
-    border_width = max(1, int(min(bh_f, bw_f) * 0.08))  # 8% border width
-    border_mask[:border_width, :] = 255
-    border_mask[-border_width:, :] = 255
-    border_mask[:, :border_width] = 255
-    border_mask[:, -border_width:] = 255
-    avg_border = cv2.mean(filtered, mask=border_mask)[0]
-
-    is_light_on_dark = avg_border < 120
-    if is_light_on_dark:
+    # Perform a quick Otsu thresholding to count black vs white pixels.
+    # The plate background dominates the crop area. If the majority of pixels are black (0),
+    # it is a dark background plate. We invert it to black-on-white.
+    _, test_bin = cv2.threshold(filtered, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    if np.sum(test_bin == 0) > np.sum(test_bin == 255):
         filtered = cv2.bitwise_not(filtered)
 
     # ─── Step 5: Binarization (results in white background [255], black text/borders [0]) ───
@@ -208,31 +199,18 @@ def _run_ocr(processed, engine_name):
             config = "--psm 7 --oem 1"
             d = pytesseract.image_to_data(processed, config=config, output_type=pytesseract.Output.DICT)
             
-            words = []
-            confidences = []
+            words_confs = []
+            for w, c in zip(d.get('text', []), d.get('conf', [])):
+                cleaned = PLATE_CHAR_PATTERN.sub('', str(w).strip().upper())
+                if cleaned:
+                    try:
+                        val = int(float(c))
+                    except (ValueError, TypeError):
+                        val = -1
+                    words_confs.append((cleaned, 50 if val == -1 else val))
             
-            for i in range(len(d.get('text', []))):
-                word = str(d['text'][i]).strip()
-                cleaned_word = PLATE_CHAR_PATTERN.sub('', word.upper())
-                
-                # Skip layout tokens that contain no usable alphanumeric info
-                if not cleaned_word:
-                    continue
-                    
-                conf_val = d['conf'][i]
-                try:
-                    val = int(float(conf_val))
-                except (ValueError, TypeError):
-                    val = -1
-                
-                # FIX: If clean text was read but Tesseract returned -1 layout confidence,
-                # assign a 50% baseline score so the valid read isn't thrown away.
-                if val == -1:
-                    val = 50 
-                    
-                words.append(cleaned_word)
-                confidences.append(val)
-            
+            words = [wc[0] for wc in words_confs]
+            confidences = [wc[1] for wc in words_confs]
             combined_text = " ".join(words)
             avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
             print(f"[OCR DEBUG] PyTesseract raw='{' '.join(d.get('text', []))}', cleaned='{combined_text}', conf={avg_conf:.3f}")
@@ -241,97 +219,55 @@ def _run_ocr(processed, engine_name):
             return '', 0.0
         
     else: # EasyOCR Flow
-        results = reader.readtext(
-            processed, 
-            allowlist=allowlist, 
-            paragraph=False,
-            text_threshold=0.5, 
-            low_text=0.3, 
-            mag_ratio=1.0
-        )
-
+        results = reader.readtext(processed, allowlist=allowlist, paragraph=False, text_threshold=0.5, low_text=0.3, mag_ratio=1.0)
         if not results:
             return '', 0.0
 
         results_sorted = sorted(results, key=lambda r: (round(r[0][0][1] / 20), r[0][0][0]))
-        raw_texts = [r[1].upper().strip() for r in results_sorted]
+        combined_text = PLATE_CHAR_PATTERN.sub('', " ".join([r[1].upper().strip() for r in results_sorted]))
         confidences = [float(r[2]) for r in results_sorted if len(r) > 2]
-        
-        combined_text = " ".join(raw_texts)
-        combined_text = PLATE_CHAR_PATTERN.sub('', combined_text)
-        avg_conf = (sum(confidences) / len(confidences)) if confidences else 0.0
+        avg_conf = np.mean(confidences) if confidences else 0.0
 
-    combined_text = ' '.join(combined_text.split())
-    compact = combined_text.replace(' ', '')
-    
+    compact = ' '.join(combined_text.split()).replace(' ', '')
     if len(compact) < MIN_PLATE_LENGTH or len(compact) > MAX_PLATE_LENGTH:
         return '', 0.0
 
-    # Length-Weighted Confidence
-    adjusted_conf = avg_conf * min(1.0, len(compact) / 7.0)
-    
-    if combined_text.strip():
-        adjusted_conf = max(0.01, adjusted_conf)
-
+    adjusted_conf = max(0.01, avg_conf * min(1.0, len(compact) / 7.0)) if combined_text.strip() else 0.0
     text = _fix_plate_format(combined_text)
 
-    # Format validation: boost if valid, penalize if structural garbage
-    compact_text = text.replace(' ', '')
-    if MALAYSIAN_PLATE_REGEX.match(compact_text):
-        adjusted_conf = min(1.0, adjusted_conf * 1.15)
-    else:
-        # Drop the score of non-standard formats so they lose out in the fallback selection
-        adjusted_conf *= 0.5
+    # Strictly enforce Malaysian plate format (prefix letters + digits + optional suffix letter)
+    if not MALAYSIAN_PLATE_REGEX.match(text.replace(' ', '')):
+        return '', 0.0
 
+    adjusted_conf = min(1.0, adjusted_conf * 1.15)
     return text, adjusted_conf
 
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """Lazy Multi-Variant OCR execution wrapper."""
-    if engine_name == "PyTesseract":
-        # Pass 1: Try Adaptive Gaussian thresholding (Best for typical lighting variation)
-        processed_adapt = preprocess_for_tesseract(cropped_plate_img, "adaptive")
-        if processed_adapt is not None:
-            text_adapt, conf_adapt = _run_ocr(processed_adapt, engine_name)
-            if text_adapt and conf_adapt >= 0.50:
-                return text_adapt, conf_adapt, engine_name, processed_adapt
-        else:
-            text_adapt, conf_adapt = '', 0.0
-
-        # Pass 2: Try Otsu binarization
-        processed_otsu = preprocess_for_tesseract(cropped_plate_img, "otsu")
-        if processed_otsu is not None:
-            text_otsu, conf_otsu = _run_ocr(processed_otsu, engine_name)
-            if text_otsu and conf_otsu >= 0.50:
-                return text_otsu, conf_otsu, engine_name, processed_otsu
-        else:
-            text_otsu, conf_otsu = '', 0.0
-
-        # Pass 3: Try Grayscale CLAHE (as final fallback)
-        processed_gray = preprocess_for_easyocr(cropped_plate_img)
-        if processed_gray is not None:
-            text_gray, conf_gray = _run_ocr(processed_gray, engine_name)
-            if text_gray and conf_gray >= 0.50:
-                return text_gray, conf_gray, engine_name, processed_gray
-        else:
-            text_gray, conf_gray = '', 0.0
-
-        # Pick the variant that yielded text and has the highest confidence.
-        candidates = [
-            (text_adapt, conf_adapt, processed_adapt),
-            (text_otsu, conf_otsu, processed_otsu),
-            (text_gray, conf_gray, processed_gray)
-        ]
-        valid_candidates = [c for c in candidates if c[0].strip()]
-        if valid_candidates:
-            best_candidate = max(valid_candidates, key=lambda x: x[1])
-            return best_candidate[0], best_candidate[1], engine_name, best_candidate[2]
-            
-        return '', 0.0, engine_name, None
-
-    else:
-        # Standard Engine execution flow (EasyOCR)
+    if engine_name != "PyTesseract":
         processed = preprocess_for_easyocr(cropped_plate_img)
         if processed is None:
             return '', 0.0, engine_name, None
         text, conf = _run_ocr(processed, engine_name)
         return text, conf, engine_name, processed
+
+    passes = [
+        (preprocess_for_tesseract, "adaptive"),
+        (preprocess_for_tesseract, "otsu"),
+        (preprocess_for_easyocr, None)
+    ]
+    candidates = []
+    for prep_fn, thresh in passes:
+        processed = prep_fn(cropped_plate_img) if thresh is None else prep_fn(cropped_plate_img, thresh)
+        if processed is not None:
+            text, conf = _run_ocr(processed, engine_name)
+            if text and conf >= 0.50:
+                return text, conf, engine_name, processed
+            candidates.append((text, conf, processed))
+
+    valid = [c for c in candidates if c[0].strip()]
+    if valid:
+        best = max(valid, key=lambda x: x[1])
+        return best[0], best[1], engine_name, best[2]
+        
+    return '', 0.0, engine_name, None

@@ -71,8 +71,7 @@ def log_detection(track_id, vehicle_type, color, plate_number, confidence, snaps
 
 
 def flush_log():
-    """Flush buffered detections to CSV, deduplicating by plate_number (keeps highest confidence)
-    or by track_id (keeps latest)."""
+    """Flush buffered detections to CSV, deduplicating by track_id (keeps highest confidence)."""
     global _log_buffer
     if not _log_buffer:
         return
@@ -81,12 +80,10 @@ def flush_log():
 
     for new_row in _log_buffer:
         updated = False
-        new_plate = new_row["plate_number"].replace(" ", "").upper()
         
-        # 1. Deduplicate by plate number first
+        # Deduplicate strictly by track_id
         for i, row in enumerate(rows):
-            row_plate = row.get("plate_number", "").replace(" ", "").upper()
-            if row_plate == new_plate:
+            if row.get("track_id") == new_row["track_id"]:
                 try:
                     old_conf = float(row.get("confidence", 0.0))
                     new_conf = float(new_row["confidence"])
@@ -98,14 +95,6 @@ def flush_log():
                     rows[i] = new_row
                 updated = True
                 break
-                
-        # 2. Fallback: Deduplicate by track_id
-        if not updated:
-            for i, row in enumerate(rows):
-                if row.get("track_id") == new_row["track_id"]:
-                    rows[i] = new_row
-                    updated = True
-                    break
                     
         if not updated:
             rows.append(new_row)
