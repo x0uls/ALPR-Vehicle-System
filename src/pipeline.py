@@ -159,7 +159,7 @@ class DetectionTracker:
         return max(displacements) if displacements else 0.0
 
     def update_plate(self, track, plate_text, ocr_conf, plate_area, snapshot_path, frame_idx, video_timestamp=""):
-        """Update if the new read is better. Score = plate area * OCR confidence."""
+        """Update if the new read is better, using temporal voting to prevent single-frame misreads."""
         effective_conf = max(ocr_conf, 0.01) if (plate_text and len(plate_text.strip()) > 0) else ocr_conf
         score = plate_area * effective_conf
 
@@ -173,19 +173,33 @@ class DetectionTracker:
         compact_len = len(plate_text.replace(" ", ""))
         score *= (compact_len / 7.0)
 
+        # ── Temporal Voting ──
+        # Track how many times each unique text has been read across frames.
+        # This prevents a single high-confidence misread from overwriting a correct plate.
+        votes = track.setdefault("plate_votes", {})
+        compact_text = plate_text.replace(" ", "")
+        votes[compact_text] = votes.get(compact_text, 0) + 1
+
         # Decide if we should update:
         is_first_read = track.get("best_plate") is None
-        
-        # Check if current text has more alphanumeric characters than the stored best plate
-        current_alnum_count = sum(c.isalnum() for c in plate_text)
-        existing_alnum_count = sum(c.isalnum() for c in (track.get("best_plate") or ""))
-        has_more_structural_data = current_alnum_count > existing_alnum_count
+        current_best_compact = (track.get("best_plate") or "").replace(" ", "")
 
         has_high_conf_override = (ocr_conf > 0.10 and track.get("best_ocr_conf", 0) <= 0.01)
         has_better_score = score > track.get("best_score", 0)
 
-        # Include structural check in evaluation
-        if is_first_read or has_high_conf_override or has_better_score or has_more_structural_data:
+        # Voting-aware promotion logic:
+        # - First read: always accept
+        # - Same text as current best: update if better score
+        # - Different text: only accept if voted >=2 times OR has significantly better score (2x)
+        if is_first_read or has_high_conf_override:
+            should_update = True
+        elif compact_text == current_best_compact:
+            should_update = has_better_score
+        else:
+            vote_count = votes.get(compact_text, 0)
+            should_update = (vote_count >= 2 and has_better_score) or (score > track.get("best_score", 0) * 2.0)
+
+        if should_update:
             track["best_plate"] = plate_text
             track["best_score"] = max(score, track.get("best_score", 0)) 
             track["best_ocr_conf"] = ocr_conf
@@ -379,11 +393,19 @@ def process_batch(frames_batch, frame_indices, ocr_engine, ocr_pool, pending_fut
                             plate_crop = vehicle_crop[py1_pad:py2_pad, px1_pad:px2_pad]
 
                             if plate_crop.size > 0 and plate_crop.shape[0] >= 5 and plate_crop.shape[1] >= 10:
-                                # Sharpness check
+                                # Aspect ratio gate: Malaysian plates are ~3:1 to 5:1 (width:height)
+                                aspect = plate_crop.shape[1] / plate_crop.shape[0]
+                                if aspect < 1.5 or aspect > 7.0:
+                                    continue
+
+                                # Adaptive sharpness check (scales with crop resolution)
                                 gray_crop = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
                                 variance = cv2.Laplacian(gray_crop, cv2.CV_64F).var()
+                                crop_pixels = plate_crop.shape[0] * plate_crop.shape[1]
+                                adaptive_threshold = 50.0 * (crop_pixels / 3000.0)
+                                adaptive_threshold = max(30.0, min(adaptive_threshold, 200.0))
                                 
-                                if variance < 50.0:
+                                if variance < adaptive_threshold:
                                     continue
 
                                 # Submit OCR task to background ThreadPoolExecutor

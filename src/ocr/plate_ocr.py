@@ -65,7 +65,13 @@ def _fix_plate_format(text):
                 ch = ch.translate(digit_to_letter)
             result.append(ch)
 
-    return ''.join(result)
+    corrected = ''.join(result)
+
+    # Re-insert a single space at the letter→digit boundary for readability
+    for i in range(1, len(corrected)):
+        if corrected[i-1].isalpha() and corrected[i].isdigit():
+            return corrected[:i] + ' ' + corrected[i:]
+    return corrected
 
 def auto_deskew(img):
     """Replaces manual contour and matrix rotation math with Hough transforms."""
@@ -135,6 +141,12 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
             cv2.THRESH_BINARY, 25, 2
         )
 
+    # ─── Step 5b: Morphological noise cleanup ───
+    # Remove salt-and-pepper dots that Tesseract misreads as punctuation.
+    # Applied after polarity+binarization so text is black(0) on white(255).
+    morph_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, morph_kernel, iterations=1)
+
     # ─── Step 6: Border Removal & Cropping via Character Contour Extraction ───
     # Invert binary image so foreground (characters and borders) is white (255) on black (0)
     inv_binary = cv2.bitwise_not(binary)
@@ -196,7 +208,7 @@ def _run_ocr(processed, engine_name):
     
     if engine_name == "PyTesseract":
         try:
-            config = "--psm 7 --oem 1"
+            config = f"--psm 7 --oem 1 -c tessedit_char_whitelist={allowlist}"
             d = pytesseract.image_to_data(processed, config=config, output_type=pytesseract.Output.DICT)
             
             words_confs = []
@@ -219,7 +231,7 @@ def _run_ocr(processed, engine_name):
             return '', 0.0
         
     else: # EasyOCR Flow
-        results = reader.readtext(processed, allowlist=allowlist, paragraph=False, text_threshold=0.5, low_text=0.3, mag_ratio=1.0)
+        results = reader.readtext(processed, allowlist=allowlist, paragraph=False, text_threshold=0.3, low_text=0.2, mag_ratio=1.5)
         if not results:
             return '', 0.0
 
@@ -254,7 +266,6 @@ def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     passes = [
         (preprocess_for_tesseract, "adaptive"),
         (preprocess_for_tesseract, "otsu"),
-        (preprocess_for_easyocr, None)
     ]
     candidates = []
     for prep_fn, thresh in passes:
