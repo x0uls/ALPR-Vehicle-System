@@ -89,7 +89,7 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
 
     # Automatically wipe edge noise
     cleared = clear_border(cv2.bitwise_not(binary)).astype(np.uint8)
-    binary = cv2.bitwise_not(cleared * 255)
+    binary = cv2.bitwise_not(cleared)
 
     binary = auto_deskew(binary)
 

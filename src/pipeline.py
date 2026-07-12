@@ -68,6 +68,16 @@ class DetectionTracker:
                 active[tid] = t
         self.tracks = active
 
+    def get_max_displacement(self):
+        """Calculates the maximum displacement center-distance of any active vehicle between frames."""
+        displacements = []
+        for track in self.tracks.values():
+            if track.get("prev_bbox") is not None:
+                c1 = np.array([track["bbox"][0] + track["bbox"][2], track["bbox"][1] + track["bbox"][3]]) / 2.0
+                c2 = np.array([track["prev_bbox"][0] + track["prev_bbox"][2], track["prev_bbox"][1] + track["prev_bbox"][3]]) / 2.0
+                displacements.append(float(np.linalg.norm(c1 - c2)))
+        return max(displacements) if displacements else 0.0
+
     def get_or_create(self, tracker_id, bbox, vehicle_type, frame_idx):
         if tracker_id in self.tracks:
             t = self.tracks[tracker_id]
