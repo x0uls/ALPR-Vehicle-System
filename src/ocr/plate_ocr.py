@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 import easyocr
 import torch
-import imutils
 from deskew import determine_skew
 from skimage.transform import rotate
 from skimage.segmentation import clear_border
@@ -24,54 +23,64 @@ MALAYSIAN_PLATE_REGEX = re.compile(
 )
 
 def _fix_plate_format(text):
-    """Fix common OCR misreads based on Malaysian plate format."""
-    compact = text.replace(' ', '')
+    """Fix common OCR misreads based on Malaysian plate format by searching partitions."""
+    compact = text.replace(' ', '').upper()
     if len(compact) < MIN_PLATE_LENGTH:
         return text
 
     digit_to_letter = str.maketrans('01258', 'OIZSB')
-    letter_to_digit = str.maketrans('OIZSB', '01258')
-    extra_letter_to_digit = {'G': '6', 'D': '0', 'Q': '0', 'T': '7'}
+    letter_to_digit = str.maketrans('OIZSBGDTQ', '012586007')
 
-    first_digit_pos = None
-    for i, ch in enumerate(compact):
-        if ch.isdigit():
-            first_digit_pos = i
+    special_prefixes = ["PUTRAJAYA", "RIMAU", "1M4U", "PERODUA", "PROTON"]
+    
+    prefix_lengths = [1, 2, 3]
+    for sp in special_prefixes:
+        if compact.startswith(sp):
+            prefix_lengths = [len(sp)]
             break
 
-    if first_digit_pos is None:
-        return text
+    best_corrected = None
+    best_changes = 999
 
-    last_digit_pos = first_digit_pos
-    for i in range(first_digit_pos, len(compact)):
-        if compact[i].isdigit():
-            last_digit_pos = i
+    for p_len in prefix_lengths:
+        for has_suffix in [False, True]:
+            if has_suffix:
+                if len(compact) <= p_len + 1:
+                    continue
+                pref = compact[:p_len]
+                mid = compact[p_len:-1]
+                suff = compact[-1]
+            else:
+                if len(compact) <= p_len:
+                    continue
+                pref = compact[:p_len]
+                mid = compact[p_len:]
+                suff = ""
 
-    result = []
-    for i, ch in enumerate(compact):
-        if i < first_digit_pos:
-            if ch.isdigit():
-                ch = ch.translate(digit_to_letter)
-            result.append(ch)
-        elif i <= last_digit_pos:
-            if ch.isalpha():
-                if ch in extra_letter_to_digit:
-                    ch = extra_letter_to_digit[ch]
-                else:
-                    ch = ch.translate(letter_to_digit)
-            result.append(ch)
-        else:
-            if ch.isdigit():
-                ch = ch.translate(digit_to_letter)
-            result.append(ch)
+            if not (1 <= len(mid) <= 4):
+                continue
 
-    corrected = ''.join(result)
+            pref_corr = pref.translate(digit_to_letter)
+            mid_corr = mid.translate(letter_to_digit)
+            suff_corr = suff.translate(digit_to_letter) if suff else ""
 
-    # Re-insert a single space at the letter→digit boundary for readability
-    for i in range(1, len(corrected)):
-        if corrected[i-1].isalpha() and corrected[i].isdigit():
-            return corrected[:i] + ' ' + corrected[i:]
-    return corrected
+            is_valid_pref = (pref_corr in special_prefixes) or (re.match(r'^[A-Z]{1,3}$', pref_corr) is not None)
+            is_valid_mid = (re.match(r'^\d{1,4}$', mid_corr) is not None)
+            is_valid_suff = (not suff_corr) or (re.match(r'^[A-Z]$', suff_corr) is not None)
+
+            if is_valid_pref and is_valid_mid and is_valid_suff:
+                changes = (
+                    sum(1 for c1, c2 in zip(pref, pref_corr) if c1 != c2) +
+                    sum(1 for c1, c2 in zip(mid, mid_corr) if c1 != c2) +
+                    sum(1 for c1, c2 in zip(suff, suff_corr) if c1 != c2)
+                )
+                if changes < best_changes:
+                    best_changes = changes
+                    best_corrected = pref_corr + " " + mid_corr + suff_corr
+
+    if best_corrected:
+        return best_corrected
+    return text
 
 def auto_deskew(img):
     """Replaces manual contour and matrix rotation math with Hough transforms."""
@@ -89,7 +98,9 @@ def preprocess_for_easyocr(cropped_plate_img):
     if cropped_plate_img is None or cropped_plate_img.size == 0:
         return None
 
-    resized = imutils.resize(cropped_plate_img, width=TARGET_WIDTH)
+    h, w = cropped_plate_img.shape[:2]
+    aspect = w / h
+    resized = cv2.resize(cropped_plate_img, (TARGET_WIDTH, int(TARGET_WIDTH / aspect)))
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
     
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
@@ -107,32 +118,25 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
         return None
 
     # ─── Step 1: DPI Upscale and Grayscale ───
-    # Tesseract prefers images where character height is at least 30-50 pixels.
-    # We resize to a standard target height (150px) using imutils.
     target_h = 150
-    resized = imutils.resize(cropped_plate_img, height=target_h)
+    h, w = cropped_plate_img.shape[:2]
+    aspect = w / h
+    resized = cv2.resize(cropped_plate_img, (int(target_h * aspect), target_h))
     
-    if len(resized.shape) == 3:
-        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = resized
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY) if len(resized.shape) == 3 else resized
 
     # ─── Step 2: Deskew Grayscale ───
-    # Deskewing works best on the raw grayscale image before border removal.
     deskewed_gray = auto_deskew(gray)
 
-    # ─── Step 3: Bilateral Filter (denoise, keep edges sharp) ───
+    # ─── Step 3: Bilateral Filter ───
     filtered = cv2.bilateralFilter(deskewed_gray, 9, 75, 75)
 
     # ─── Step 4: Polarity Detection & Inversion ───
-    # Perform a quick Otsu thresholding to count black vs white pixels.
-    # The plate background dominates the crop area. If the majority of pixels are black (0),
-    # it is a dark background plate. We invert it to black-on-white.
     _, test_bin = cv2.threshold(filtered, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    if np.sum(test_bin == 0) > np.sum(test_bin == 255):
-        filtered = cv2.bitwise_not(filtered)
+    if np.mean(test_bin) < 127:
+        filtered = ~filtered
 
-    # ─── Step 5: Binarization (results in white background [255], black text/borders [0]) ───
+    # ─── Step 5: Binarization ───
     if threshold_method == "otsu":
         _, binary = cv2.threshold(filtered, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     else:
@@ -142,57 +146,34 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
         )
 
     # ─── Step 5b: Morphological noise cleanup ───
-    # Remove salt-and-pepper dots that Tesseract misreads as punctuation.
-    # Applied after polarity+binarization so text is black(0) on white(255).
     morph_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, morph_kernel, iterations=1)
 
-    # ─── Step 6: Border Removal & Cropping via Character Contour Extraction ───
-    # Invert binary image so foreground (characters and borders) is white (255) on black (0)
-    inv_binary = cv2.bitwise_not(binary)
-
-    # Pad with 10px of black background so characters close to edges don't touch padded border
+    # ─── Step 6: Border Removal & Cropping ───
+    inv_binary = ~binary
     padded_inv = cv2.copyMakeBorder(inv_binary, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=0)
     ph, pw = padded_inv.shape[:2]
 
-    # Find contours in the padded image (use RETR_LIST to find nested characters inside the outer border)
     contours, _ = cv2.findContours(padded_inv, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    
-    char_contours = []
-    for cnt in contours:
-        x_c, y_c, w_c, h_c = cv2.boundingRect(cnt)
-        
-        # Filter out noise (too small)
-        if w_c < 2 or h_c < 8:
-            continue
-            
-        # Filter out borders (which span a massive portion of the plate)
-        if w_c > 0.85 * pw or h_c > 0.85 * ph:
-            continue
-            
-        # Keep character candidates (even thin ones like '1' / 'I' and small suffix letters)
-        # Using a conservative contour area check
-        cnt_area = cv2.contourArea(cnt)
-        if cnt_area < 8:
-            continue
-            
-        char_contours.append(cnt)
+    char_bboxes = [cv2.boundingRect(c) for c in contours]
+    valid_bboxes = [
+        (x, y, w, h) for (x, y, w, h) in char_bboxes
+        if w >= 2 and h >= 8 and w < 0.85 * pw and h < 0.85 * ph
+    ]
 
-    if char_contours:
-        all_pts = np.vstack(char_contours)
-        x_min, y_min, w_crop, h_crop = cv2.boundingRect(all_pts)
+    if valid_bboxes:
+        x_min = min(b[0] for b in valid_bboxes)
+        y_min = min(b[1] for b in valid_bboxes)
+        x_max = max(b[0] + b[2] for b in valid_bboxes)
+        y_max = max(b[1] + b[3] for b in valid_bboxes)
         
-        # Crop the padded image to the character bounding box with a small margin
         margin = 4
-        x1 = max(0, x_min - margin)
-        y1 = max(0, y_min - margin)
-        x2 = min(pw, x_min + w_crop + margin)
-        y2 = min(ph, y_min + h_crop + margin)
+        x1, y1 = max(0, x_min - margin), max(0, y_min - margin)
+        x2, y2 = min(pw, x_max + margin), min(ph, y_max + margin)
         cropped_padded = padded_inv[y1:y2, x1:x2]
     else:
         cropped_padded = inv_binary
 
-    # Invert back to black text on white background
     final_binary = cv2.bitwise_not(cropped_padded)
 
     # ─── Step 7: Final White Padding ───

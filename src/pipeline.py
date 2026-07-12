@@ -206,6 +206,7 @@ class DetectionTracker:
             track["snapshot_path"] = snapshot_path
             track["video_timestamp"] = video_timestamp
             track["plate_crop_path"] = f"outputs/plate_crops/Processed/frame{frame_idx}_track{track['track_id']}_processed.jpg"
+        return should_update
 
     def find_by_id(self, track_id):
         for track in self.tracks:
@@ -248,19 +249,20 @@ def _apply_ocr_result(future):
             track = detection_tracker.find_by_id(track_id)
             if track:
                 track["max_plate_area"] = max(track.get("max_plate_area", 0), plate_area)
-                detection_tracker.update_plate(track, text, conf, plate_area, snapshot_path, frame_idx_ocr, video_timestamp=video_timestamp)
+                updated = detection_tracker.update_plate(track, text, conf, plate_area, snapshot_path, frame_idx_ocr, video_timestamp=video_timestamp)
                 
                 # Real-time write mapping so dashboard updates immediately
-                log_detection(
-                    track["track_id"],
-                    track["vehicle_type"],
-                    track["color"],
-                    track["best_plate"],
-                    track["best_ocr_conf"],
-                    track["snapshot_path"],
-                    plate_crop_path=track.get("plate_crop_path", ""),
-                    video_timestamp=track.get("video_timestamp", "")
-                )
+                if updated:
+                    log_detection(
+                        track["track_id"],
+                        track["vehicle_type"],
+                        track["color"],
+                        track["best_plate"],
+                        track["best_ocr_conf"],
+                        track["snapshot_path"],
+                        plate_crop_path=track.get("plate_crop_path", ""),
+                        video_timestamp=track.get("video_timestamp", "")
+                    )
     except Exception as e:
         print(f"[OCR] Worker failed: {e}")
 

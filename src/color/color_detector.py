@@ -25,62 +25,50 @@ def detect_dominant_color(cropped_vehicle_img):
     resized = cv2.resize(body_region, (50, 50))
     hsv = cv2.cvtColor(resized, cv2.COLOR_BGR2HSV)
     
-    # Initialize color bins
-    color_counts = {
-        "black": 0,
-        "white": 0,
-        "silver": 0,
-        "gray": 0,
-        "red": 0,
-        "orange": 0,
-        "yellow": 0,
-        "green": 0,
-        "blue": 0,
-        "purple": 0
-    }
-
-    # Classify each pixel in the hsv grid
-    for row in hsv:
-        for pixel in row:
-            h, s, v = int(pixel[0]), int(pixel[1]), int(pixel[2])
-            
-            # Achromatic check: low saturation or extreme darkness
-            if s < 45 or v < 50:
-                if v < 65:
-                    color_counts["black"] += 1
-                elif v > 195:
-                    color_counts["white"] += 1
-                elif v > 135:
-                    color_counts["silver"] += 1
-                else:
-                    color_counts["gray"] += 1
-            else:
-                # Chromatic check: classify by Hue (0 - 180 range in OpenCV)
-                if h < 8 or h >= 165:
-                    color_counts["red"] += 1
-                elif h < 22:
-                    color_counts["orange"] += 1
-                elif h < 38:
-                    color_counts["yellow"] += 1
-                elif h < 85:
-                    color_counts["green"] += 1
-                elif h < 135:
-                    color_counts["blue"] += 1
-                else:
-                    color_counts["purple"] += 1
-
-    total_pixels = 50 * 50
+    # Initialize color counts using vectorized masking
+    H = hsv[:, :, 0]
+    S = hsv[:, :, 1]
+    V = hsv[:, :, 2]
     
-    # Sum up chromatic pixels
-    chromatic_keys = ["red", "orange", "yellow", "green", "blue", "purple"]
-    total_chromatic = sum(color_counts[k] for k in chromatic_keys)
+    # Achromatic checks (low saturation or extreme darkness)
+    achromatic = (S < 45) | (V < 50)
+    
+    black_count = np.sum(achromatic & (V < 65))
+    white_count = np.sum(achromatic & (V >= 65) & (V > 195))
+    silver_count = np.sum(achromatic & (V >= 65) & (V <= 195) & (V > 135))
+    gray_count = np.sum(achromatic & (V >= 65) & (V <= 135))
+    
+    # Chromatic checks
+    chromatic = ~achromatic
+    
+    red_count = np.sum(chromatic & ((H < 8) | (H >= 165)))
+    orange_count = np.sum(chromatic & (H >= 8) & (H < 165) & (H < 22))
+    yellow_count = np.sum(chromatic & (H >= 22) & (H < 165) & (H < 38))
+    green_count = np.sum(chromatic & (H >= 38) & (H < 165) & (H < 85))
+    blue_count = np.sum(chromatic & (H >= 85) & (H < 165) & (H < 135))
+    purple_count = np.sum(chromatic & (H >= 135) & (H < 165))
+    
+    chromatic_counts = {
+        "red": red_count,
+        "orange": orange_count,
+        "yellow": yellow_count,
+        "green": green_count,
+        "blue": blue_count,
+        "purple": purple_count
+    }
+    
+    achromatic_counts = {
+        "black": black_count,
+        "white": white_count,
+        "silver": silver_count,
+        "gray": gray_count
+    }
+    
+    total_chromatic = sum(chromatic_counts.values())
+    total_pixels = 50 * 50
     chromatic_ratio = total_chromatic / total_pixels
-
-    # Decision logic
+    
     if chromatic_ratio >= 0.10:
-        # Find dominant chromatic paint color
-        return max(chromatic_keys, key=lambda k: color_counts[k])
+        return max(chromatic_counts, key=chromatic_counts.get)
     else:
-        # Find dominant achromatic paint color
-        achromatic_keys = ["black", "white", "silver", "gray"]
-        return max(achromatic_keys, key=lambda k: color_counts[k])
+        return max(achromatic_counts, key=achromatic_counts.get)
