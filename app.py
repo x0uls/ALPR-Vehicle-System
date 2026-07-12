@@ -90,7 +90,7 @@ async def process_video_sse(video_path, ocr_engine):
 
     os.makedirs("outputs/results", exist_ok=True)
     out_path = "outputs/results/processed_output.mp4"
-    output_fps = fps / 3.0
+    output_fps = fps
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(out_path, fourcc, output_fps, (width, height))
 
@@ -139,7 +139,9 @@ async def process_video_sse(video_path, ocr_engine):
         )
 
         for p_frame in processed_frames:
-            out.write(p_frame)
+            # Repeat the annotated frame current_skip times to preserve the output video duration
+            for _ in range(current_skip):
+                out.write(p_frame)
             processed_count += 1
 
         # Calculate time taken per frame in this batch
@@ -153,19 +155,26 @@ async def process_video_sse(video_path, ocr_engine):
         # Dynamic Skip Factor 2: vehicle velocity based
         max_d = detection_tracker.get_max_displacement()
         if not detection_tracker.tracks:
-            velocity_skip = 3
-        elif max_d < 5:
-            velocity_skip = 8  # Static or very slow: skip more frames
-        elif max_d < 15:
-            velocity_skip = 5
-        elif max_d < 30:
-            velocity_skip = 3
+            # No active tracks: skip aggressively to process empty video segments faster
+            velocity_skip = min(15, int(fps))
         else:
-            velocity_skip = 1  # Fast moving: reduce skip to maintain tracking
+            # Active tracks: keep skip small to maintain continuous IoU tracking
+            if max_d > 20:
+                velocity_skip = 1  # Fast moving: process every frame
+            elif max_d > 10:
+                velocity_skip = 2
+            else:
+                velocity_skip = 3  # Slow/static: process every 3rd frame
 
         # Set dynamic skip spacing for next batch
         current_skip = max(speed_skip, velocity_skip)
-        current_skip = min(current_skip, int(fps))  # Cap skip to 1 second maximum
+        
+        # Capping rule to prevent tracker tracking loss:
+        # If there are active tracks in the scene, never skip more than 3 frames
+        if detection_tracker.tracks:
+            current_skip = min(current_skip, 3)
+        else:
+            current_skip = min(current_skip, int(fps))  # Cap empty-scene skip to 1 second maximum
 
         # Send state updates periodically
         if processed_count > 0:

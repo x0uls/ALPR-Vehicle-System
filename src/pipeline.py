@@ -160,6 +160,10 @@ class DetectionTracker:
 
     def update_plate(self, track, plate_text, ocr_conf, plate_area, snapshot_path, frame_idx, video_timestamp=""):
         """Update if the new read is better, using temporal voting to prevent single-frame misreads."""
+        # Reject extremely low confidence reads early to prevent noise/garbage from registering
+        if ocr_conf < 0.15:
+            return False
+
         effective_conf = max(ocr_conf, 0.01) if (plate_text and len(plate_text.strip()) > 0) else ocr_conf
         score = plate_area * effective_conf
 
