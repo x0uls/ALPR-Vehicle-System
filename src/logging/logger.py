@@ -31,12 +31,25 @@ def parse_timestamp_to_seconds(ts_str):
     return 0.0
 
 _log_buffer = []
+_canonical_plates_cache = {}
+
+def _rebuild_cache_from_rows(rows):
+    global _canonical_plates_cache
+    _canonical_plates_cache = {}
+    for row in rows:
+        canon_id = row.get("canonical_id")
+        plate = row.get("plate_number")
+        if canon_id and plate:
+            norm = _normalize_plate(plate)
+            if norm:
+                _canonical_plates_cache.setdefault(canon_id, set()).add(norm)
 
 
 def init_log():
     """Reset the detection log and clear previous run outputs (crops, snapshots)."""
-    global _log_buffer
+    global _log_buffer, _canonical_plates_cache
     _log_buffer = []
+    _canonical_plates_cache = {}
     
     # 1. Reset the CSV detection log
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
@@ -97,12 +110,13 @@ def log_detection(track_id, vehicle_type, color, plate_number, confidence, snaps
 
 
 def flush_log():
-    """Flush buffered detections to CSV, deduplicating by track_id AND fuzzy plate_number matching (keeps highest confidence)."""
+    """Flush buffered detections to CSV, deduplicating by track_id AND plate_number matching (keeps highest confidence)."""
     global _log_buffer
     if not _log_buffer:
         return
 
     rows = _read_all_rows()
+    _rebuild_cache_from_rows(rows)
 
     for new_row in _log_buffer:
         updated = False
@@ -123,49 +137,88 @@ def flush_log():
                 updated = True
                 break
         
-        # 2. Deduplicate by fuzzy plate_number matching (different track ID, similar plate, same vehicle type and color, close in time)
+        # 2. Deduplicate by plate_number matching (different track ID)
         if not updated and new_row.get("plate_number"):
-            best_match_idx = -1
-            best_match_ratio = 0.0
-            
             new_plate = new_row["plate_number"]
+            new_plate_norm = _normalize_plate(new_plate)
             new_type = new_row["vehicle_type"]
-            new_color = (new_row.get("color") or "").strip().lower()
             new_time = parse_timestamp_to_seconds(new_row.get("timestamp", "00:00.0"))
             
+            # Phase A: Try exact normalized plate match first against cached history (global, no time/color limit)
             for i, row in enumerate(rows):
-                row_plate = row.get("plate_number")
                 row_type = row.get("vehicle_type")
-                row_color = (row.get("color") or "").strip().lower()
-                row_time = parse_timestamp_to_seconds(row.get("timestamp", "00:00.0"))
-                
-                if row_plate and row_type == new_type and row_color == new_color:
-                    if abs(row_time - new_time) <= 15.0:
-                        ratio = check_plate_similarity(row_plate, new_plate)
-                        if ratio >= 0.70 and ratio > best_match_ratio:
-                            best_match_ratio = ratio
-                            best_match_idx = i
+                if row_type == new_type:
+                    row_canon_id = row.get("canonical_id", row.get("track_id"))
+                    cached_plates = _canonical_plates_cache.get(row_canon_id, set())
+                    # Check if exact match is in the cache for this canonical group
+                    if new_plate_norm in cached_plates:
+                        matched_row = rows[i]
+                        try:
+                            old_conf = float(matched_row.get("confidence", 0.0))
+                            new_conf = float(new_row["confidence"])
+                        except ValueError:
+                            old_conf, new_conf = 0.0, 0.0
+                        
+                        canonical_id = row_canon_id
+                        if new_conf > old_conf:
+                            new_row["canonical_id"] = canonical_id
+                            rows[i] = new_row
+                        else:
+                            matched_row["canonical_id"] = canonical_id
+                        
+                        _canonical_plates_cache.setdefault(canonical_id, set()).add(new_plate_norm)
+                        updated = True
+                        break
             
-            if best_match_idx != -1:
-                matched_row = rows[best_match_idx]
-                try:
-                    old_conf = float(matched_row.get("confidence", 0.0))
-                    new_conf = float(new_row["confidence"])
-                except ValueError:
-                    old_conf, new_conf = 0.0, 0.0
+            # Phase B: Try fuzzy plate match against cached history (within 30s proximity, same vehicle type, no color limit)
+            if not updated:
+                best_match_idx = -1
+                best_match_ratio = 0.0
+                best_match_canon_id = None
                 
-                # Keep the canonical_id of the existing row we matched with
-                canonical_id = matched_row.get("canonical_id", matched_row.get("track_id", new_row["track_id"]))
+                for i, row in enumerate(rows):
+                    row_type = row.get("vehicle_type")
+                    row_time = parse_timestamp_to_seconds(row.get("timestamp", "00:00.0"))
+                    
+                    if row_type == new_type:
+                        if abs(row_time - new_time) <= 30.0:
+                            row_canon_id = row.get("canonical_id", row.get("track_id"))
+                            cached_plates = _canonical_plates_cache.get(row_canon_id, set())
+                            
+                            # Find the best similarity match in the cache for this canonical ID
+                            for cached_plate in cached_plates:
+                                ratio = check_plate_similarity(cached_plate, new_plate)
+                                if ratio >= 0.70 and ratio > best_match_ratio:
+                                    best_match_ratio = ratio
+                                    best_match_idx = i
+                                    best_match_canon_id = row_canon_id
                 
-                if new_conf > old_conf:
-                    new_row["canonical_id"] = canonical_id
-                    rows[best_match_idx] = new_row
-                else:
-                    matched_row["canonical_id"] = canonical_id
-                
-                updated = True
+                if best_match_idx != -1:
+                    matched_row = rows[best_match_idx]
+                    try:
+                        old_conf = float(matched_row.get("confidence", 0.0))
+                        new_conf = float(new_row["confidence"])
+                    except ValueError:
+                        old_conf, new_conf = 0.0, 0.0
+                    
+                    canonical_id = best_match_canon_id
+                    if new_conf > old_conf:
+                        new_row["canonical_id"] = canonical_id
+                        rows[best_match_idx] = new_row
+                    else:
+                        matched_row["canonical_id"] = canonical_id
+                    
+                    _canonical_plates_cache.setdefault(canonical_id, set()).add(new_plate_norm)
+                    updated = True
                     
         if not updated:
+            # Rebuild cache entry for new unique tracks
+            canon_id = new_row.get("canonical_id")
+            plate = new_row.get("plate_number")
+            if canon_id and plate:
+                norm = _normalize_plate(plate)
+                if norm:
+                    _canonical_plates_cache.setdefault(canon_id, set()).add(norm)
             rows.append(new_row)
 
     _write_all_rows(rows)
