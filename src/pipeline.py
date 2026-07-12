@@ -104,14 +104,22 @@ class DetectionTracker:
         self.tracks = active
 
     def match_or_create(self, bbox, vehicle_type, frame_idx):
-        # Match to existing tracks
+        # Strategy 1: Match by IoU overlap with an existing track
+        best_iou = 0.0
+        best_track = None
         for track in self.tracks:
-            if track["vehicle_type"] == vehicle_type and self._iou(track["bbox"], bbox) >= TRACK_IOU_THRESHOLD:
-                track["prev_bbox"] = track["bbox"]
-                track["bbox"] = bbox
-                track["last_seen"] = frame_idx
-                track["age"] += 1
-                return track
+            if track["vehicle_type"] == vehicle_type:
+                iou = self._iou(track["bbox"], bbox)
+                if iou >= TRACK_IOU_THRESHOLD and iou > best_iou:
+                    best_iou = iou
+                    best_track = track
+
+        if best_track:
+            best_track["prev_bbox"] = best_track["bbox"]
+            best_track["bbox"] = bbox
+            best_track["last_seen"] = frame_idx
+            best_track["age"] += 1
+            return best_track
 
         # Create new track
         track = {

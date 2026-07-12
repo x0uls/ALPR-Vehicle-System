@@ -95,7 +95,7 @@ async def process_video_sse(video_path, ocr_engine):
     frame_idx = 0
     processed_count = 0
 
-    sent_logs = set()
+    sent_logs = {}  # dedup_key -> best confidence sent so far
     sent_crops = {}  # track_id -> best confidence sent so far
     sent_texts = {}  # track_id -> best text sent so far
 
@@ -205,9 +205,17 @@ async def process_video_sse(video_path, ocr_engine):
             try:
                 df = pd.read_csv("outputs/logs/detections.csv")
                 for _, row in df.iterrows():
-                    track_key = f"{row['track_id']}_{row['confidence']}"
-                    if track_key not in sent_logs:
-                        sent_logs.add(track_key)
+                    plate = str(row['plate_number']) if pd.notna(row['plate_number']) else ""
+                    track_id = str(row['track_id'])
+                    conf = float(row['confidence']) if pd.notna(row['confidence']) else 0.0
+                    
+                    # Use plate_number as the primary dedup key when it exists,
+                    # otherwise fall back to track_id
+                    dedup_key = plate if plate else f"track_{track_id}"
+                    
+                    prev_conf = sent_logs.get(dedup_key, -1.0)
+                    if conf > prev_conf:
+                        sent_logs[dedup_key] = conf
                         row_dict = row.to_dict()
                         snap_path = row_dict.get("snapshot_path")
                         crop_path = row_dict.get("plate_crop_path")

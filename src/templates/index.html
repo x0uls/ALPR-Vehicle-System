@@ -790,10 +790,24 @@
                     trackDetailsMap[rowData.track_id].plate_crop_url = rowData.plate_crop_url;
                 }
 
-                // Insert or update row in memory database
-                const existingIdx = detectionLogs.findIndex(item => item.track_id === rowData.track_id);
+                // Deduplicate by plate_number first, then by track_id
+                const plateNum = rowData.plate_number || '';
+                let existingIdx = -1;
+
+                if (plateNum) {
+                    existingIdx = detectionLogs.findIndex(item => item.plate_number === plateNum);
+                }
+                if (existingIdx === -1) {
+                    existingIdx = detectionLogs.findIndex(item => item.track_id === rowData.track_id);
+                }
+
                 if (existingIdx !== -1) {
-                    detectionLogs[existingIdx] = rowData;
+                    // Update existing entry - keep the one with higher confidence
+                    const oldConf = parseFloat(detectionLogs[existingIdx].confidence) || 0;
+                    const newConf = parseFloat(rowData.confidence) || 0;
+                    if (newConf >= oldConf) {
+                        detectionLogs[existingIdx] = rowData;
+                    }
                 } else {
                     detectionLogs.push(rowData);
                 }
@@ -805,11 +819,11 @@
                     renderTable();
                 }
 
-                // Update unique list sizes
-                uniqueVehicles.add(rowData.track_id);
-                statVehicles.textContent = uniqueVehicles.size;
-                progressDetections.textContent = uniqueVehicles.size;
-                logCount.textContent = `${uniqueVehicles.size} Total`;
+                // Count unique plates for the vehicle counter
+                const uniquePlates = new Set(detectionLogs.map(d => d.plate_number || `track_${d.track_id}`));
+                statVehicles.textContent = uniquePlates.size;
+                progressDetections.textContent = uniquePlates.size;
+                logCount.textContent = `${detectionLogs.length} Total`;
 
                 if (exportBtn) exportBtn.disabled = false;
             });
