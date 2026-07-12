@@ -199,6 +199,8 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
     # Add generous white padding so characters don't touch edges (Tesseract requirement)
     padded_final = cv2.copyMakeBorder(final_binary, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
     
+    padded_final = cv2.GaussianBlur(padded_final, (3, 3), 0)
+
     return padded_final
 
 
