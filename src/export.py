@@ -12,7 +12,7 @@ def build_xlsx_report(df: pd.DataFrame) -> BytesIO:
     ws = wb.active
     ws.title = "ALPR Detections"
     
-    headers = ["Track ID", "Timestamp", "Vehicle Type", "Color", "Plate Number", "Confidence", "Snapshot Path", "Plate Crop"]
+    headers = ["Track ID", "Timestamp", "Vehicle Type", "Color", "Plate Number", "Confidence", "Vehicle Image", "Plate Crop"]
     ws.append(headers)
     
     header_font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
@@ -29,7 +29,6 @@ def build_xlsx_report(df: pd.DataFrame) -> BytesIO:
     
     font_regular = Font(name="Arial", size=10)
     align_center = Alignment(horizontal="center", vertical="center")
-    align_left = Alignment(horizontal="left", vertical="center")
     
     for idx, row in df.iterrows():
         row_idx = idx + 2
@@ -52,14 +51,12 @@ def build_xlsx_report(df: pd.DataFrame) -> BytesIO:
         conf_cell = ws.cell(row=row_idx, column=6, value=conf_val)
         conf_cell.number_format = "0%"
         
-        ws.cell(row=row_idx, column=7, value=str(snapshot_path))
-        
-        for col_idx in range(1, 8):
+        for col_idx in range(1, 7):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.font = font_regular
-            cell.alignment = align_center if col_idx in [1, 2, 3, 4, 5, 6] else align_left
+            cell.alignment = align_center
         
-        ws.row_dimensions[row_idx].height = 40
+        ws.row_dimensions[row_idx].height = 80
         
         # Locate corresponding processed plate crop for track
         crop_glob = f"outputs/plate_crops/Processed/*_track{track_id}_processed.jpg"
@@ -68,18 +65,34 @@ def build_xlsx_report(df: pd.DataFrame) -> BytesIO:
             crop_path = matching_files[0]
             if os.path.exists(crop_path):
                 try:
-                    img = OpenpyxlImage(crop_path)
-                    img.width = 100
-                    img.height = 35
-                    ws.add_image(img, f"H{row_idx}")
+                    img_plate = OpenpyxlImage(crop_path)
+                    img_plate.width = 100
+                    img_plate.height = 35
+                    ws.add_image(img_plate, f"H{row_idx}")
                 except Exception:
                     ws.cell(row=row_idx, column=8, value="Img Err")
         else:
             ws.cell(row=row_idx, column=8, value="No Crop")
+
+        # Locate and embed vehicle snapshot image
+        if snapshot_path and os.path.exists(snapshot_path):
+            try:
+                img_vehicle = OpenpyxlImage(snapshot_path)
+                # Fit 120x70 bounding box within the cell
+                img_vehicle.width = 120
+                img_vehicle.height = 70
+                ws.add_image(img_vehicle, f"G{row_idx}")
+            except Exception:
+                ws.cell(row=row_idx, column=7, value="Img Err")
+        else:
+            ws.cell(row=row_idx, column=7, value="No Image")
             
     for col in ws.columns:
         max_len = 0
         col_letter = col[0].column_letter
+        if col_letter == "G":
+            ws.column_dimensions["G"].width = 20
+            continue
         if col_letter == "H":
             ws.column_dimensions["H"].width = 18
             continue

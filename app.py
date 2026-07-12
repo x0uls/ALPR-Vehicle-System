@@ -342,84 +342,29 @@ async def get_logs_api():
     except Exception as e:
         return {"logs": f"Error reading logs: {str(e)}"}
 
-# Register Export API endpoint (CSV or XLSX with embedded images)
+# Register Export API endpoint (XLSX with embedded vehicle and plate images)
 @app.get("/api/export")
-async def export_api(format: str = "csv"):
+async def export_api():
     csv_path = "outputs/logs/detections.csv"
     if not os.path.exists(csv_path):
         return HTMLResponse(content="<h3>No records available to export yet.</h3>", status_code=400)
     
-    if format == "csv":
-        try:
-            from io import BytesIO
-            df = pd.read_csv(csv_path)
-            # Ensure columns exist, if not create empty ones
-            for col in ["track_id", "timestamp", "vehicle_type", "color", "plate_number", "confidence", "snapshot_path", "plate_crop_path"]:
-                if col not in df.columns:
-                    df[col] = ""
-            
-            # Map paths to relative web URLs
-            def to_url(val):
-                if pd.isna(val) or not val:
-                    return ""
-                val_str = str(val).strip()
-                if val_str.startswith("outputs/"):
-                    return "/" + val_str
-                return val_str
-
-            df["snapshot_url"] = df["snapshot_path"].apply(to_url)
-            df["plate_crop_url"] = df["plate_crop_path"].apply(to_url)
-            
-            # Select and rename columns
-            export_df = df[[
-                "track_id", "timestamp", "vehicle_type", "color", 
-                "plate_number", "confidence", "snapshot_url", "plate_crop_url"
-            ]].copy()
-            
-            export_df.columns = [
-                "ID", "Timestamp", "Type", "Color", 
-                "Plate Number", "Confidence", "Vehicle Image", "Corresponding Plate Image"
-            ]
-            
-            # Format confidence as percentage string or float
-            export_df["Confidence"] = export_df["Confidence"].apply(lambda x: f"{float(x)*100:.0f}%" if pd.notna(x) and x != "" else "")
-            
-            # Capitalize vehicle type and color
-            export_df["Type"] = export_df["Type"].apply(lambda x: str(x).capitalize() if pd.notna(x) else "")
-            export_df["Color"] = export_df["Color"].apply(lambda x: str(x).capitalize() if pd.notna(x) else "")
-            
-            # Write to buffer
-            out_buf = BytesIO()
-            export_df.to_csv(out_buf, index=False)
-            out_buf.seek(0)
-            
-            return StreamingResponse(
-                out_buf,
-                media_type="text/csv",
-                headers={"Content-Disposition": "attachment; filename=alpr_detections.csv"}
-            )
-        except Exception as e:
-            return HTMLResponse(content=f"<h3>Failed to build CSV export: {str(e)}</h3>", status_code=500)
+    try:
+        from src.export import build_xlsx_report
+    except ImportError:
+        return HTMLResponse(content="<h3>openpyxl is not installed. Please add it to requirements.txt and install it.</h3>", status_code=500)
+    
+    try:
+        df = pd.read_csv(csv_path)
+        out_buf = build_xlsx_report(df)
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>Failed to build export: {str(e)}</h3>", status_code=500)
         
-    elif format == "xlsx":
-        try:
-            from src.export import build_xlsx_report
-        except ImportError:
-            return HTMLResponse(content="<h3>openpyxl is not installed. Please add it to requirements.txt and install it.</h3>", status_code=500)
-        
-        try:
-            df = pd.read_csv(csv_path)
-            out_buf = build_xlsx_report(df)
-        except Exception as e:
-            return HTMLResponse(content=f"<h3>Failed to build export: {str(e)}</h3>", status_code=500)
-            
-        return StreamingResponse(
-            out_buf,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=alpr_detections.xlsx"}
-        )
-        
-    return HTMLResponse(content="<h3>Invalid export format. Only 'csv' and 'xlsx' are supported.</h3>", status_code=400)
+    return StreamingResponse(
+        out_buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=alpr_detections.xlsx"}
+    )
 
 
 # ─── Server Entry Point ──────────────────────────────────────────
