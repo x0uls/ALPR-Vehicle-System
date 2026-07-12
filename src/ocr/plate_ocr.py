@@ -210,7 +210,7 @@ def _run_ocr(processed, engine_name):
     
     if engine_name == "PyTesseract":
         try:
-            config = f"--psm 7 --oem 1 -c tessedit_char_whitelist={allowlist}"
+            config = f"--psm 7 --oem 1"
             d = pytesseract.image_to_data(processed, config=config, output_type=pytesseract.Output.DICT)
             
             words_confs = []
