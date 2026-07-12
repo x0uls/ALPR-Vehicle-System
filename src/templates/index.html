@@ -594,9 +594,10 @@
             logTableBody.innerHTML = '';
             detectionLogs.forEach(rowData => {
                 const tr = document.createElement('tr');
-                tr.id = `log-row-${rowData.track_id}`;
+                const canonicalId = rowData.canonical_id || rowData.track_id;
+                tr.id = `log-row-${canonicalId}`;
                 tr.className = "border-b border-slate-800/20 hover:bg-slate-900/20 transition-colors cursor-pointer select-none";
-                tr.onclick = () => openModal(rowData.track_id);
+                tr.onclick = () => openModal(canonicalId);
 
                 tr.innerHTML = `
                     <td class="py-2.5 px-2 font-semibold text-slate-400">#${rowData.track_id}</td>
@@ -777,29 +778,22 @@
 
             eventSource.addEventListener('log', (e) => {
                 const rowData = JSON.parse(e.data);
+                const canonicalId = rowData.canonical_id || rowData.track_id;
 
                 // Store/update details
-                if (!trackDetailsMap[rowData.track_id]) {
-                    trackDetailsMap[rowData.track_id] = {};
+                if (!trackDetailsMap[canonicalId]) {
+                    trackDetailsMap[canonicalId] = {};
                 }
-                Object.assign(trackDetailsMap[rowData.track_id], rowData);
+                Object.assign(trackDetailsMap[canonicalId], rowData);
                 if (rowData.snapshot_url) {
-                    trackDetailsMap[rowData.track_id].snapshot_url = rowData.snapshot_url;
+                    trackDetailsMap[canonicalId].snapshot_url = rowData.snapshot_url;
                 }
                 if (rowData.plate_crop_url) {
-                    trackDetailsMap[rowData.track_id].plate_crop_url = rowData.plate_crop_url;
+                    trackDetailsMap[canonicalId].plate_crop_url = rowData.plate_crop_url;
                 }
 
-                // Deduplicate by plate_number first, then by track_id
-                const plateNum = rowData.plate_number || '';
-                let existingIdx = -1;
-
-                if (plateNum) {
-                    existingIdx = detectionLogs.findIndex(item => item.plate_number === plateNum);
-                }
-                if (existingIdx === -1) {
-                    existingIdx = detectionLogs.findIndex(item => item.track_id === rowData.track_id);
-                }
+                // Deduplicate by canonical_id
+                let existingIdx = detectionLogs.findIndex(item => (item.canonical_id || item.track_id) === canonicalId);
 
                 if (existingIdx !== -1) {
                     // Update existing entry - keep the one with higher confidence
@@ -819,10 +813,9 @@
                     renderTable();
                 }
 
-                // Count unique plates for the vehicle counter
-                const uniquePlates = new Set(detectionLogs.map(d => d.plate_number || `track_${d.track_id}`));
-                statVehicles.textContent = uniquePlates.size;
-                progressDetections.textContent = uniquePlates.size;
+                // Count unique vehicles for the vehicle counter
+                statVehicles.textContent = detectionLogs.length;
+                progressDetections.textContent = detectionLogs.length;
                 logCount.textContent = `${detectionLogs.length} Total`;
 
                 if (exportBtn) exportBtn.disabled = false;
@@ -831,33 +824,39 @@
             eventSource.addEventListener('crop', (e) => {
                 const data = JSON.parse(e.data);
 
-                // Key crops by track_id to prevent duplicates in gallery
+                // Key crops by canonicalId to prevent duplicates in gallery
                 const trackId = data.track_id;
-                const cropId = `crop-card-track-${trackId}`;
+                const canonicalId = data.canonical_id || trackId;
+                const cropId = `crop-card-track-${canonicalId}`;
                 let existingCard = document.getElementById(cropId);
 
                 // Store/update track details
-                if (!trackDetailsMap[trackId]) {
-                    trackDetailsMap[trackId] = {
+                if (!trackDetailsMap[canonicalId]) {
+                    trackDetailsMap[canonicalId] = {
                         track_id: trackId,
+                        canonical_id: canonicalId,
                         plate_number: data.text,
                         plate_crop_url: data.url,
-                        snapshot_url: data.snapshot_url
+                        snapshot_url: data.snapshot_url,
+                        confidence: data.confidence || 0.0
                     };
                 } else {
-                    trackDetailsMap[trackId].plate_crop_url = data.url;
-                    if (data.snapshot_url) {
-                        trackDetailsMap[trackId].snapshot_url = data.snapshot_url;
-                    }
-                    if (data.text) {
-                        trackDetailsMap[trackId].plate_number = data.text;
+                    const prevConf = trackDetailsMap[canonicalId].confidence || 0.0;
+                    const newConf = data.confidence || 0.0;
+                    if (newConf >= prevConf) {
+                        trackDetailsMap[canonicalId].plate_crop_url = data.url;
+                        trackDetailsMap[canonicalId].plate_number = data.text;
+                        trackDetailsMap[canonicalId].confidence = newConf;
+                        if (data.snapshot_url) {
+                            trackDetailsMap[canonicalId].snapshot_url = data.snapshot_url;
+                        }
                     }
                 }
 
                 const cardInnerHtml = `
-                    <img src="${data.url}" class="h-10 w-full object-contain filter contrast-125 select-none" draggable="false" />
-                    <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tight">${data.text}</span>
-                    <span class="text-[8px] text-slate-600 font-semibold">#${trackId}</span>
+                    <img src="${trackDetailsMap[canonicalId].plate_crop_url}" class="h-10 w-full object-contain filter contrast-125 select-none" draggable="false" />
+                    <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tight">${trackDetailsMap[canonicalId].plate_number}</span>
+                    <span class="text-[8px] text-slate-600 font-semibold">#${canonicalId}</span>
                 `;
 
                 if (existingCard) {
@@ -866,7 +865,7 @@
                     const card = document.createElement('div');
                     card.id = cropId;
                     card.className = "bg-slate-950 p-1 border border-slate-800 rounded-lg flex flex-col items-center shadow-sm overflow-hidden transition-all hover:border-slate-700 cursor-pointer";
-                    card.onclick = () => openModal(trackId);
+                    card.onclick = () => openModal(canonicalId);
                     card.innerHTML = cardInnerHtml;
 
                     // Insert at front of grid

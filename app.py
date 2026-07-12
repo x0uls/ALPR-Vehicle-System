@@ -30,6 +30,9 @@ class LogMirror:
     def flush(self):
         self.original_stream.flush()
 
+    def __getattr__(self, name):
+        return getattr(self.original_stream, name)
+
 os.makedirs("outputs/logs", exist_ok=True)
 server_log_path = "outputs/logs/server.log"
 try:
@@ -205,13 +208,12 @@ async def process_video_sse(video_path, ocr_engine):
             try:
                 df = pd.read_csv("outputs/logs/detections.csv")
                 for _, row in df.iterrows():
-                    plate = str(row['plate_number']) if pd.notna(row['plate_number']) else ""
                     track_id = str(row['track_id'])
+                    canonical_id = str(row['canonical_id']) if ('canonical_id' in row and pd.notna(row['canonical_id'])) else track_id
                     conf = float(row['confidence']) if pd.notna(row['confidence']) else 0.0
                     
-                    # Use plate_number as the primary dedup key when it exists,
-                    # otherwise fall back to track_id
-                    dedup_key = plate if plate else f"track_{track_id}"
+                    # Use canonical_id as the primary dedup key
+                    dedup_key = f"canonical_{canonical_id}"
                     
                     prev_conf = sent_logs.get(dedup_key, -1.0)
                     if conf > prev_conf:
@@ -225,21 +227,22 @@ async def process_video_sse(video_path, ocr_engine):
             except Exception:
                 pass
 
-            # Check and stream newly cropped plate images (best per track only, directly from CSV logs)
+            # Check and stream newly cropped plate images (best per vehicle only, directly from CSV logs)
             try:
                 df = pd.read_csv("outputs/logs/detections.csv")
                 for _, row in df.iterrows():
                     track_id = int(row["track_id"])
+                    canonical_id = str(row["canonical_id"]) if ("canonical_id" in row and pd.notna(row["canonical_id"])) else str(track_id)
                     current_conf = float(row["confidence"])
                     
-                    # Only send if first crop for this track, confidence improved, or text changed
-                    prev_conf = sent_crops.get(track_id, -1.0)
-                    prev_text = sent_texts.get(track_id, "")
+                    # Only send if first crop for this vehicle, confidence improved, or text changed
+                    prev_conf = sent_crops.get(canonical_id, -1.0)
+                    prev_text = sent_texts.get(canonical_id, "")
                     current_text = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
                     
                     if current_conf > prev_conf or current_text != prev_text:
-                        sent_crops[track_id] = current_conf
-                        sent_texts[track_id] = current_text
+                        sent_crops[canonical_id] = current_conf
+                        sent_texts[canonical_id] = current_text
                         
                         crop_path = row.get("plate_crop_path")
                         if pd.notna(crop_path) and crop_path:
@@ -255,6 +258,7 @@ async def process_video_sse(video_path, ocr_engine):
                                 'url': crop_url,
                                 'text': str(row["plate_number"]) if pd.notna(row["plate_number"]) else "",
                                 'track_id': track_id,
+                                'canonical_id': canonical_id,
                                 'snapshot_url': snapshot_url,
                                 'confidence': current_conf,
                                 'vehicle_type': str(row["vehicle_type"]) if pd.notna(row["vehicle_type"]) else None,
