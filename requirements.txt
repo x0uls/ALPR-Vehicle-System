@@ -12,6 +12,9 @@ ultralytics
 roboflow
 fiftyone
 opencv-python
+supervision
+imutils
+deskew
 
 # Text Extraction Frameworks
 easyocr
