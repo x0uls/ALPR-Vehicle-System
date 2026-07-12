@@ -170,9 +170,12 @@ async def process_video_sse(video_path, ocr_engine):
         current_skip = max(speed_skip, velocity_skip)
         
         # Capping rule to prevent tracker tracking loss:
-        # If there are active tracks in the scene, never skip more than 3 frames
+        # If there are active tracks in the scene, cap the frame skipping:
+        # - On GPU: max skip of 3 for maximum accuracy
+        # - On CPU: max skip of 5 to balance accuracy and prevent timeouts/bottlenecks
         if detection_tracker.tracks:
-            current_skip = min(current_skip, 3)
+            max_active_skip = 3 if torch.cuda.is_available() else 5
+            current_skip = min(current_skip, max_active_skip)
         else:
             current_skip = min(current_skip, int(fps))  # Cap empty-scene skip to 1 second maximum
 
@@ -341,9 +344,15 @@ async def upload_video_api(file: UploadFile = File(...)):
 # Register Server-Sent Events (SSE) stream processing endpoint
 @app.get("/api/stream-process")
 async def stream_process_api(video_path: str, ocr_engine: str):
+    headers = {
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive",
+    }
     return StreamingResponse(
         process_video_sse(video_path, ocr_engine),
-        media_type="text/event-stream"
+        media_type="text/event-stream",
+        headers=headers
     )
 
 # Register Logs API endpoint
