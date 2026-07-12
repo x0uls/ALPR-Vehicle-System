@@ -1,5 +1,6 @@
+import csv
 import os
-import pandas as pd
+from datetime import datetime
 
 LOG_PATH = "outputs/logs/detections.csv"
 FIELDNAMES = ["track_id", "timestamp", "vehicle_type", "color", "plate_number", "confidence", "snapshot_path", "plate_crop_path"]
@@ -14,7 +15,9 @@ def init_log():
     
     # 1. Reset the CSV detection log
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-    pd.DataFrame(columns=FIELDNAMES).to_csv(LOG_PATH, index=False)
+    with open(LOG_PATH, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(FIELDNAMES)
 
     # 2. Clear old image files so they don't leak into the gallery of the new run
     import shutil
@@ -27,8 +30,31 @@ def init_log():
         os.makedirs(folder, exist_ok=True)
 
 
+def _read_all_rows():
+    if not os.path.exists(LOG_PATH):
+        return []
+    with open(LOG_PATH, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+
+def _write_all_rows(rows):
+    with open(LOG_PATH, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
 def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, plate_crop_path="", video_timestamp=""):
-    """Buffer a detection row. Flushes to disk automatically every 20 entries."""
+    """Buffer a detection row. Flushes to disk automatically every 20 entries.
+    
+    Call flush_log() at end-of-video to ensure all buffered entries are written.
+    Deduplication by track_id happens at flush time.
+
+    Args:
+        video_timestamp: The video position string (e.g. '01:23.4') computed from frame_idx / fps.
+    """
     _log_buffer.append({
         "track_id": str(track_id),
         "timestamp": video_timestamp,
@@ -45,45 +71,44 @@ def log_detection(track_id, vehicle_type, color, plate_number, confidence, snaps
 
 
 def flush_log():
-    """Flush buffered detections to CSV, deduplicating using pandas DataFrame operations."""
+    """Flush buffered detections to CSV, deduplicating by plate_number (keeps highest confidence)
+    or by track_id (keeps latest)."""
     global _log_buffer
     if not _log_buffer:
         return
 
-    # Read existing log
-    if os.path.exists(LOG_PATH):
-        try:
-            df = pd.read_csv(LOG_PATH)
-        except Exception:
-            df = pd.DataFrame(columns=FIELDNAMES)
-    else:
-        df = pd.DataFrame(columns=FIELDNAMES)
+    rows = _read_all_rows()
 
-    # Concatenate with new entries
-    df_new = pd.DataFrame(_log_buffer)
-    df = pd.concat([df, df_new], ignore_index=True)
+    for new_row in _log_buffer:
+        updated = False
+        new_plate = new_row["plate_number"].replace(" ", "").upper()
+        
+        # 1. Deduplicate by plate number first
+        for i, row in enumerate(rows):
+            row_plate = row.get("plate_number", "").replace(" ", "").upper()
+            if row_plate == new_plate:
+                try:
+                    old_conf = float(row.get("confidence", 0.0))
+                    new_conf = float(new_row["confidence"])
+                except ValueError:
+                    old_conf, new_conf = 0.0, 0.0
+                
+                # Keep the entry with the higher confidence reading
+                if new_conf > old_conf:
+                    rows[i] = new_row
+                updated = True
+                break
+                
+        # 2. Fallback: Deduplicate by track_id
+        if not updated:
+            for i, row in enumerate(rows):
+                if row.get("track_id") == new_row["track_id"]:
+                    rows[i] = new_row
+                    updated = True
+                    break
+                    
+        if not updated:
+            rows.append(new_row)
 
-    # Coerce confidence to float for comparison
-    df["confidence"] = pd.to_numeric(df["confidence"], errors="coerce").fillna(0.0)
-    
-    # Generate clean normalized plate field for duplicate resolution
-    df["plate_clean"] = df["plate_number"].astype(str).str.replace(" ", "").str.upper()
-
-    # Sort descending by confidence so drop_duplicates keeps the highest confidence reads
-    df = df.sort_values(by="confidence", ascending=False)
-    
-    # 1. Deduplicate by plate number
-    df = df.drop_duplicates(subset=["plate_clean"], keep="first")
-    
-    # 2. Deduplicate by track_id
-    df = df.drop_duplicates(subset=["track_id"], keep="first")
-
-    # Sort by track ID index for neatness
-    df["track_id_int"] = pd.to_numeric(df["track_id"], errors="coerce").fillna(999999)
-    df = df.sort_values(by="track_id_int").drop(columns=["track_id_int", "plate_clean"])
-
-    # Ensure correct column order and save
-    df = df[FIELDNAMES]
-    df.to_csv(LOG_PATH, index=False)
-    
+    _write_all_rows(rows)
     _log_buffer = []
