@@ -168,16 +168,7 @@ async def process_video_sse(video_path, ocr_engine):
 
         # Set dynamic skip spacing for next batch
         current_skip = max(speed_skip, velocity_skip)
-        
-        # Capping rule to prevent tracker tracking loss:
-        # If there are active tracks in the scene, cap the frame skipping:
-        # - On GPU: max skip of 3 for maximum accuracy
-        # - On CPU: max skip of 5 to balance accuracy and prevent timeouts/bottlenecks
-        if detection_tracker.tracks:
-            max_active_skip = 3 if torch.cuda.is_available() else 5
-            current_skip = min(current_skip, max_active_skip)
-        else:
-            current_skip = min(current_skip, int(fps))  # Cap empty-scene skip to 1 second maximum
+        current_skip = min(current_skip, int(fps))  # Cap skip to 1 second maximum
 
         # Send state updates periodically
         if processed_count > 0:
