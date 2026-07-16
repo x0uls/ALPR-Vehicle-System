@@ -245,10 +245,6 @@ class DetectionTracker:
         
         Uses temporal voting across multiple frames to protect against single-frame errors.
         """
-        # Reject extremely low confidence predictions (< 15%) early to ignore noise/garbage
-        if ocr_conf < 0.15:
-            return False
-
         effective_conf = max(ocr_conf, 0.01) if (plate_text and len(plate_text.strip()) > 0) else ocr_conf
         
         # Calculate a quality score (higher area * higher confidence = better quality read)
