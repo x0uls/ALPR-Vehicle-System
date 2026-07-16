@@ -16,6 +16,8 @@ opencv-python
 # Text Extraction Frameworks
 easyocr
 pytesseract
+deskew
+scikit-image
 
 
 # Data Analytics & Mathematical Foundations
