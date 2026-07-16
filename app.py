@@ -183,16 +183,16 @@ async def process_video_sse(video_path, ocr_engine):
         # Dynamic Skip Factor 2: vehicle velocity based
         max_displacement = detection_tracker.get_max_displacement()
         if not detection_tracker.tracks:
-            # No active tracks: skip aggressively (up to 1s of video) to process empty segments faster
-            velocity_based_skip = min(15, int(frames_per_second))
+            # No active tracks: check every 3rd frame to avoid missing vehicles entering the scene
+            velocity_based_skip = 3
+        elif max_displacement < 5:
+            velocity_based_skip = 8  # Static or very slow: skip more frames
+        elif max_displacement < 15:
+            velocity_based_skip = 5
+        elif max_displacement < 30:
+            velocity_based_skip = 3
         else:
-            # Active tracks: keep skip small to maintain continuous tracking overlap
-            if max_displacement > 20:
-                velocity_based_skip = 1  # Fast moving: process every frame to avoid losing track
-            elif max_displacement > 10:
-                velocity_based_skip = 2
-            else:
-                velocity_based_skip = 3  # Slow/static: process every 3rd frame
+            velocity_based_skip = 1  # Fast moving: reduce skip to maintain tracking
 
         # Set dynamic skip spacing for the next batch
         current_skip = max(speed_based_skip, velocity_based_skip)

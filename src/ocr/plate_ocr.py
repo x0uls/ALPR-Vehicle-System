@@ -7,6 +7,7 @@ import numpy as np
 import easyocr
 import torch
 from deskew import determine_skew
+from skimage.transform import rotate
 import pytesseract
 
 # Lazy loader variable to store the EasyOCR model reference
@@ -60,30 +61,6 @@ def _resize_keep_aspect(img, target, by="width"):
         return cv2.resize(img, (target, int(target / aspect)))
     return cv2.resize(img, (int(target * aspect), target))
 
-def _rotate_image(image, angle):
-    """
-    Rotates an image around its center by a specific angle.
-    
-    Calculates the new bounding box dimensions so character edges aren't cropped/cut off.
-    """
-    h, w = image.shape[:2]
-    center_x, center_y = w // 2, h // 2
-    
-    # Get the 2D rotation affine matrix
-    rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), angle, 1.0)
-    
-    # Calculate cosine and sine of the angle to adjust new width and height
-    abs_cos_angle = np.abs(rotation_matrix[0, 0])
-    abs_sin_angle = np.abs(rotation_matrix[0, 1])
-    new_width = int((h * abs_sin_angle) + (w * abs_cos_angle))
-    new_height = int((h * abs_cos_angle) + (w * abs_sin_angle))
-    
-    # Shift the center in the translation columns of the matrix to avoid clipping
-    rotation_matrix[0, 2] += (new_width / 2) - center_x
-    rotation_matrix[1, 2] += (new_height / 2) - center_y
-    
-    # Warp the image. BORDER_REPLICATE fills empty corners by copying edge pixels
-    return cv2.warpAffine(image, rotation_matrix, (new_width, new_height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
 
 def _fix_plate_format(text):
     """
@@ -165,7 +142,9 @@ def auto_deskew(img):
     if angle is None or abs(angle) < 1.0:
         return img
         
-    return _rotate_image(img, angle)
+    # Perform high-quality subpixel rotation via scikit-image and scale back to standard grayscale [0, 255]
+    rotated = rotate(img, angle, resize=True, mode='edge')
+    return (rotated * 255).astype(np.uint8)
 
 def preprocess_for_easyocr(cropped_plate_img):
     """
