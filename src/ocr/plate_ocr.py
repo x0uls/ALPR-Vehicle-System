@@ -67,67 +67,62 @@ def _fix_plate_format(text):
     Corrects common OCR letter/digit confusion based on Malaysian license plate formats.
     
     For example: '0' instead of 'O' in a letters segment, or 'S' instead of '5' in a digits segment.
-    It evaluates multiple layouts (letter/digit splits) and picks the one needing the fewest fixes.
+    It splits the plate string at the first and last digit boundaries, translating characters
+    in the prefix/suffix to letters, and characters in the middle to digits.
     """
-    compact = text.replace(' ', '').upper()
-    if len(compact) < MIN_PLATE_LENGTH:
+    compact_text = text.replace(' ', '').upper()
+    if len(compact_text) < MIN_PLATE_LENGTH:
         return text
 
     # Translation maps to fix OCR reading errors based on position expectations
     digit_to_letter = str.maketrans('01258', 'OIZSB')
-    letter_to_digit = str.maketrans('OIZSBGDTQ', '012586007')
+    letter_to_digit = str.maketrans('OIZSB', '01258')
+    extra_letter_to_digit = {'G': '6', 'D': '0', 'Q': '0', 'T': '7'}
 
-    # Default to scanning 1, 2, or 3-letter prefix lengths unless we hit a special word prefix
-    prefix_lengths = [1, 2, 3]
-    for special_prefix in SPECIAL_PLATE_PREFIXES:
-        if compact.startswith(special_prefix):
-            prefix_lengths = [len(special_prefix)]
+    # Locate the first digit to separate the letter prefix from the numbers
+    first_digit_index = None
+    for i, char in enumerate(compact_text):
+        if char.isdigit():
+            first_digit_index = i
             break
 
-    best_corrected = None
-    best_changes = 999  # Start with an artificially high count of changes
+    if first_digit_index is None:
+        return text
 
-    # Partition the compact text into prefix (letters), middle (digits), and suffix (optional letter)
-    for prefix_length in prefix_lengths:
-        for has_suffix in [False, True]:
-            if has_suffix:
-                if len(compact) <= prefix_length + 1:
-                    continue
-                prefix = compact[:prefix_length]
-                middle_digits = compact[prefix_length:-1]
-                suffix = compact[-1]
-            else:
-                if len(compact) <= prefix_length:
-                    continue
-                prefix = compact[:prefix_length]
-                middle_digits = compact[prefix_length:]
-                suffix = ""
+    # Locate the last digit to separate the middle numbers from any trailing letter suffix
+    last_digit_index = first_digit_index
+    for i in range(first_digit_index, len(compact_text)):
+        if compact_text[i].isdigit():
+            last_digit_index = i
 
-            # Malaysian plates always contain between 1 and 4 middle digits
-            if not (1 <= len(middle_digits) <= 4):
-                continue
+    corrected_chars = []
+    for i, char in enumerate(compact_text):
+        if i < first_digit_index:
+            # Prefix section: must only contain letters
+            if char.isdigit():
+                char = char.translate(digit_to_letter)
+            corrected_chars.append(char)
+        elif i <= last_digit_index:
+            # Middle section: must only contain digits
+            if char.isalpha():
+                if char in extra_letter_to_digit:
+                    char = extra_letter_to_digit[char]
+                else:
+                    char = char.translate(letter_to_digit)
+            corrected_chars.append(char)
+        else:
+            # Suffix section: must only contain letters
+            if char.isdigit():
+                char = char.translate(digit_to_letter)
+            corrected_chars.append(char)
 
-            # Apply translations based on expected format
-            prefix_corrected = prefix if prefix in SPECIAL_PLATE_PREFIXES else prefix.translate(digit_to_letter)
-            middle_digits_corrected = middle_digits.translate(letter_to_digit)
-            suffix_corrected = suffix.translate(digit_to_letter) if suffix else ""
+    corrected_text = ''.join(corrected_chars)
 
-            # Check if our corrections result in a valid format layout
-            is_valid_prefix = (prefix_corrected in SPECIAL_PLATE_PREFIXES) or (re.match(r'^[A-Z]{1,3}$', prefix_corrected) is not None)
-            is_valid_middle = (re.match(r'^\d{1,4}$', middle_digits_corrected) is not None)
-            is_valid_suffix = (not suffix_corrected) or (re.match(r'^[A-Z]$', suffix_corrected) is not None)
-
-            if is_valid_prefix and is_valid_middle and is_valid_suffix:
-                # Count character mismatches to measure how many corrections were made
-                changes = sum(char1 != char2 for char1, char2 in zip(compact, prefix_corrected + middle_digits_corrected + suffix_corrected))
-                # Choose the candidate that matches the format rules with the minimum adjustments
-                if changes < best_changes:
-                    best_changes = changes
-                    best_corrected = prefix_corrected + " " + middle_digits_corrected + suffix_corrected
-
-    if best_corrected:
-        return best_corrected
-    return text
+    # Re-insert a single space at the letter-digit boundary for readability
+    for i in range(1, len(corrected_text)):
+        if corrected_text[i-1].isalpha() and corrected_text[i].isdigit():
+            return corrected_text[:i] + ' ' + corrected_text[i:]
+    return corrected_text
 
 def auto_deskew(img):
     """

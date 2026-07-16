@@ -242,15 +242,19 @@ async def process_video_sse(video_path, ocr_engine):
                 if os.path.exists("outputs/logs/detections.csv"):
                     detections_dataframe = pd.read_csv("outputs/logs/detections.csv")
                     for _, row in detections_dataframe.iterrows():
-                        track_id_string = str(row['track_id'])
-                        canonical_id = str(row['canonical_id']) if ('canonical_id' in row and pd.notna(row['canonical_id'])) else track_id_string
+                        plate = str(row['plate_number']) if pd.notna(row['plate_number']) else ""
+                        track_id_str = str(row['track_id'])
+                        try:
+                            track_id = int(row['track_id'])
+                        except (ValueError, TypeError):
+                            track_id = track_id_str
                         conf = float(row['confidence']) if pd.notna(row['confidence']) else 0.0
                         
-                        # 1. Yield event if confidence improved for this canonical track
-                        deduplication_key = f"canonical_{canonical_id}"
-                        previous_log_confidence = sent_logs.get(deduplication_key, -1.0)
+                        # 1. Yield event if confidence improved for this plate or track
+                        dedup_key = plate if plate else f"track_{track_id}"
+                        previous_log_confidence = sent_logs.get(dedup_key, -1.0)
                         if conf > previous_log_confidence:
-                            sent_logs[deduplication_key] = conf
+                            sent_logs[dedup_key] = conf
                             row_dict = row.to_dict()
                             snapshot_path = row_dict.get("snapshot_path")
                             crop_path = row_dict.get("plate_crop_path")
@@ -258,14 +262,14 @@ async def process_video_sse(video_path, ocr_engine):
                             row_dict["plate_crop_url"] = "/" + str(crop_path) if pd.notna(crop_path) and crop_path else None
                             yield f"event: log\ndata: {json.dumps(row_dict)}\n\n"
                         
-                        # 2. Yield crop update if confidence improved or plate text changed
-                        previous_crop_confidence = sent_crops.get(canonical_id, -1.0)
-                        previous_text = sent_texts.get(canonical_id, "")
+                        # 2. Yield crop update if confidence improved or plate text changed for this track
+                        previous_crop_confidence = sent_crops.get(track_id, -1.0)
+                        previous_text = sent_texts.get(track_id, "")
                         current_text = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
                         
                         if conf > previous_crop_confidence or current_text != previous_text:
-                            sent_crops[canonical_id] = conf
-                            sent_texts[canonical_id] = current_text
+                            sent_crops[track_id] = conf
+                            sent_texts[track_id] = current_text
                             
                             crop_path = row.get("plate_crop_path")
                             if pd.notna(crop_path) and crop_path:
@@ -275,17 +279,11 @@ async def process_video_sse(video_path, ocr_engine):
                                 snapshot_path = row.get("snapshot_path")
                                 snapshot_url = "/" + str(snapshot_path).replace("\\", "/") if pd.notna(snapshot_path) and snapshot_path else None
                                 
-                                try:
-                                    track_id = int(row["track_id"])
-                                except (ValueError, TypeError):
-                                    track_id = track_id_string
-                                
                                 crop_payload = {
                                     'filename': filename,
                                     'url': crop_url,
                                     'text': current_text,
                                     'track_id': track_id,
-                                    'canonical_id': canonical_id,
                                     'snapshot_url': snapshot_url,
                                     'confidence': conf,
                                     'vehicle_type': str(row["vehicle_type"]) if pd.notna(row["vehicle_type"]) else None,
