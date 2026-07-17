@@ -10,20 +10,8 @@ from deskew import determine_skew
 from skimage.transform import rotate
 import pytesseract
 
-# Lazy loader variable to store the EasyOCR model reference
-_reader = None
-
-def get_easyocr_reader():
-    """
-    Initializes and returns the EasyOCR Reader instance on first use (lazy loading).
-    
-    This avoids consuming VRAM or system memory if the user chooses PyTesseract instead.
-    """
-    global _reader
-    if _reader is None:
-        # Load English model. GPU is used automatically if PyTorch detects a CUDA-compatible GPU.
-        _reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
-    return _reader
+# Initialize EasyOCR reader at import time (thread-safe for downstream worker pools)
+reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
 
 
 # Regex to strip non-alphanumeric characters, leaving only clean letters, numbers, and spaces
@@ -311,7 +299,7 @@ def _run_easyocr_raw(processed):
     # text_threshold=0.3: Minimum confidence score to accept characters.
     # low_text=0.2: Threshold for grouping nearby letters together.
     # mag_ratio=1.5: Upscales internal crop size to capture details in smaller text.
-    results = get_easyocr_reader().readtext(processed, allowlist=allowlist, paragraph=False, text_threshold=0.3, low_text=0.2, mag_ratio=1.5)
+    results = reader.readtext(processed, allowlist=allowlist, paragraph=False, text_threshold=0.3, low_text=0.2, mag_ratio=1.5)
     if not results:
         return '', 0.0
 
