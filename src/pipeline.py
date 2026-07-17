@@ -206,6 +206,7 @@ class DetectionTracker:
             "snapshot_path": None,
             "last_ocr_frame": -999,
             "global_plate_bbox": None,
+            "local_plate_bbox": None,
             "video_timestamp": "",
             "plate_crop_path": "",
             "structural_state": {}
@@ -401,10 +402,14 @@ def _draw_overlay(frame, track_dict):
     cv2.putText(frame, " ".join(parts), (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     
-    # Draw local plate bounding box in red inside the vehicle box
-    global_plate_bbox = track_dict.get("global_plate_bbox")
-    if global_plate_bbox:
-        global_plate_x1, global_plate_y1, global_plate_x2, global_plate_y2 = global_plate_bbox
+    # Draw plate bounding box in red, calculated relative to current vehicle box position
+    local_plate_bbox = track_dict.get("local_plate_bbox")
+    if local_plate_bbox:
+        lpx1, lpy1, lpx2, lpy2 = local_plate_bbox
+        global_plate_x1 = x1 + lpx1
+        global_plate_y1 = y1 + lpy1
+        global_plate_x2 = x1 + lpx2
+        global_plate_y2 = y1 + lpy2
         cv2.rectangle(frame, (global_plate_x1, global_plate_y1), (global_plate_x2, global_plate_y2), (0, 0, 255), 2)
 
 
@@ -489,6 +494,7 @@ def process_batch(batch_frames, frame_indices, ocr_engine_name, ocr_pool, pendin
                         global_plate_x2 = vehicle_box_x1 + local_plate_x2
                         global_plate_y2 = vehicle_box_y1 + local_plate_y2
                         track["global_plate_bbox"] = (global_plate_x1, global_plate_y1, global_plate_x2, global_plate_y2)
+                        track["local_plate_bbox"] = (local_plate_x1, local_plate_y1, local_plate_x2, local_plate_y2)
 
                         # Gate 1: Check if plate size grew by 10% or if we lack a solid reading (best_score < 5000).
                         # Closer vehicles have larger plates and yield better quality readings.
