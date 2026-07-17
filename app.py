@@ -174,10 +174,10 @@ async def process_video_sse(video_path, ocr_engine, frame_skip="dynamic"):
             latest_frame_idx = batch_indices[-1]
             progress_percent = int((latest_frame_idx / total_frames) * 100) if total_frames else 0
 
-            # Calculate ETA (Estimated Time of Arrival)
+            # Calculate ETA (Estimated Time of Arrival) using precise frame counts to avoid integer rounding jumps
             eta_str = "--"
-            if progress_percent > 0:
-                eta_seconds = (elapsed_time / progress_percent) * (100 - progress_percent)
+            if latest_frame_idx > 0 and total_frames > latest_frame_idx:
+                eta_seconds = (elapsed_time / latest_frame_idx) * (total_frames - latest_frame_idx)
                 eta_str = _format_elapsed(eta_seconds)
 
             processing_fps = round(processed_frames_count / elapsed_time, 1) if elapsed_time > 0 else 0
