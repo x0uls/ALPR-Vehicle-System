@@ -14,43 +14,6 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import sys
 
-class LogMirror:
-    """
-    Redirects stdout/stderr streams to a file on disk while mirroring them back to the terminal.
-    
-    This ensures we write background execution history to a server.log file that can be displayed
-    on the web dashboard front-end without losing the console output.
-    """
-    def __init__(self, original_stream, log_file):
-        self.original_stream = original_stream
-        self.log_file = log_file
-
-    def write(self, data):
-        self.original_stream.write(data)
-        try:
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(data)
-        except Exception:
-            pass
-
-    def flush(self):
-        self.original_stream.flush()
-
-    def __getattr__(self, name):
-        return getattr(self.original_stream, name)
-
-# Redirect program console printouts to server.log for dashboard log panels
-os.makedirs("outputs/logs", exist_ok=True)
-server_log_path = "outputs/logs/server.log"
-try:
-    with open(server_log_path, "w", encoding="utf-8") as f:
-        f.write("--- Server Log Started ---\n")
-except Exception:
-    pass
-
-sys.stdout = LogMirror(sys.stdout, server_log_path)
-sys.stderr = LogMirror(sys.stderr, server_log_path)
-
 import torch
 from src.pipeline import detection_tracker, process_batch, drain_pending_ocr
 from src.logging.logger import init_log
@@ -69,7 +32,7 @@ def _format_elapsed(seconds):
 
 # ─── Server-Sent Events (SSE) Real-Time Generator ────────────────
 
-async def process_video_sse(video_path, ocr_engine):
+async def process_video_sse(video_path, ocr_engine, frame_skip="dynamic"):
     """
     Asynchronous generator that runs the video detection pipeline and yields real-time updates.
     
@@ -194,9 +157,15 @@ async def process_video_sse(video_path, ocr_engine):
         else:
             velocity_based_skip = 1  # Fast moving: reduce skip to maintain tracking
 
-        # Set dynamic skip spacing for the next batch
-        current_skip = max(speed_based_skip, velocity_based_skip)
-        current_skip = min(current_skip, int(frames_per_second))  # Cap skip to 1 second maximum
+        if frame_skip == "dynamic":
+            # Set dynamic skip spacing for the next batch
+            current_skip = max(speed_based_skip, velocity_based_skip)
+            current_skip = min(current_skip, int(frames_per_second))  # Cap skip to 1 second maximum
+        else:
+            try:
+                current_skip = max(1, int(frame_skip))
+            except (ValueError, TypeError):
+                current_skip = 1
 
         # Send state updates periodically
         if processed_frames_count > 0:
@@ -366,7 +335,7 @@ async def upload_video_api(file: UploadFile = File(...)):
 
 # SSE stream process endpoint
 @app.get("/api/stream-process")
-async def stream_process_api(video_path: str, ocr_engine: str):
+async def stream_process_api(video_path: str, ocr_engine: str, frame_skip: str = "dynamic"):
     """
     FastAPI streaming endpoint that mounts our process_video_sse generator.
     
@@ -378,27 +347,10 @@ async def stream_process_api(video_path: str, ocr_engine: str):
         "Connection": "keep-alive",
     }
     return StreamingResponse(
-        process_video_sse(video_path, ocr_engine),
+        process_video_sse(video_path, ocr_engine, frame_skip),
         media_type="text/event-stream",
         headers=headers
     )
-
-# Serve server log histories
-@app.get("/api/logs")
-async def get_logs_api():
-    """Reads and returns the last 200 lines of standard outputs/errors from server.log."""
-    server_log_path = "outputs/logs/server.log"
-    if not os.path.exists(server_log_path):
-        if os.path.exists("uvicorn.log"):
-            server_log_path = "uvicorn.log"
-        else:
-            return {"logs": "No logs available."}
-    try:
-        with open(server_log_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            return {"logs": "".join(lines[-200:])}
-    except Exception as e:
-        return {"logs": f"Error reading logs: {str(e)}"}
 
 # Serve XLSX Excel report export downloads
 @app.get("/api/export")
