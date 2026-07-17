@@ -309,11 +309,20 @@ async def process_video_sse(video_path, ocr_engine):
 
     # Transcode final raw output into browser-compatible H.264 format using FFMPEG.
     # -vcodec libx264: H.264 video compression standard compatible with HTML5 players
-    # -preset ultrafast: Executes encoding quickly to minimize user wait time
+    # -preset veryfast: Fast compression speed with much better file size optimization than ultrafast
+    # -crf 28: Visually lossless compression standard that dramatically reduces video file size
+    # -movflags +faststart: Relocates the index (moov atom) to the beginning so browsers can stream and play it instantly
     final_output_video_path = "outputs/results/final_output.mp4"
     try:
         subprocess.run(
-            ["ffmpeg", "-y", "-i", output_video_path, "-vcodec", "libx264", "-preset", "ultrafast", final_output_video_path],
+            [
+                "ffmpeg", "-y", "-i", output_video_path,
+                "-vcodec", "libx264",
+                "-preset", "veryfast",
+                "-crf", "28",
+                "-movflags", "+faststart",
+                final_output_video_path
+            ],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
