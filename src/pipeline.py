@@ -331,7 +331,7 @@ def _draw_overlay(frame, track_dict, model_theme="EasyOCR"):
     else:
         parts.append("• Scanning...")
 
-    label_str = f" [{model_theme}] " + " ".join(parts) + " "
+    label_str = " " + " ".join(parts) + " "
     
     # 5. Draw dark top badge background
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -346,13 +346,7 @@ def _draw_overlay(frame, track_dict, model_theme="EasyOCR"):
     cv2.rectangle(frame, (x1, badge_y1), (badge_x2, badge_y2), (15, 23, 42), -1)
     cv2.rectangle(frame, (x1, badge_y1), (badge_x2, badge_y2), primary_color, 1)
 
-    if conf >= 0.8:
-        text_color = (0, 255, 120)
-    elif conf >= 0.5:
-        text_color = (0, 215, 255)
-    else:
-        text_color = (255, 255, 255)
-
+    text_color = primary_color
     cv2.putText(frame, label_str, (x1 + 4, badge_y2 - 6), font, font_scale, text_color, font_thick, cv2.LINE_AA)
 
     # 6. Draw local license plate crop box in vibrant red/coral
@@ -529,9 +523,10 @@ def process_batch_dual(batch_frames, frame_indices, easyocr_pool, pytesseract_po
 
             vehicle_type = VEHICLE_CLASSES[class_id]
 
-            # Match or create tracks on BOTH model trackers
+            # Match or create tracks on BOTH model trackers with unified track_id
             track_easy = easyocr_tracker.match_or_create((x1, y1, x2, y2), vehicle_type, frame_idx)
             track_tess = pytesseract_tracker.match_or_create((x1, y1, x2, y2), vehicle_type, frame_idx)
+            track_tess["track_id"] = track_easy["track_id"]
 
             # Analyze vehicle color if missing
             if track_easy["color"] is None:

@@ -609,9 +609,9 @@
                 const rowData = JSON.parse(e.data);
                 const model = rowData.model;
                 
-                const plateNorm = (rowData.plate_number || '').replace(/\s+/g, '').toUpperCase();
                 const gtNorm = (rowData.matched_gt || '').replace(/\s+/g, '').toUpperCase();
-                const key = plateNorm || (gtNorm && gtNorm !== '--' ? gtNorm : `track-${rowData.track_id}`);
+                const plateNorm = (rowData.plate_number || '').replace(/\s+/g, '').toUpperCase();
+                const key = (gtNorm && gtNorm !== '--') ? `gt-${gtNorm}` : (plateNorm ? `plate-${plateNorm}` : `track-${rowData.track_id}`);
 
                 if (!dualLogsMap[key]) dualLogsMap[key] = { track_id: rowData.track_id };
                 

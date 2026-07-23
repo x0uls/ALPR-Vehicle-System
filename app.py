@@ -94,17 +94,26 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
         while True:
             batch_frames = []
             batch_indices = []
+            batch_intermediate_frames = []
 
             for _ in range(batch_size):
+                skipped_frames = []
                 for _ in range(current_skip - 1):
-                    video_capture.grab()
-                    frame_idx += 1
+                    ret_s, f_s = video_capture.read()
+                    if ret_s:
+                        # Downscale skipped frame if wider than 1920
+                        sh, sw = f_s.shape[:2]
+                        if sw > 1920:
+                            f_s = cv2.resize(f_s, (1920, int(sh * (1920 / sw))))
+                        skipped_frames.append(f_s)
+                        frame_idx += 1
 
                 ret, frame = video_capture.read()
                 if not ret:
                     break
                 batch_frames.append(frame)
                 batch_indices.append(frame_idx)
+                batch_intermediate_frames.append(skipped_frames)
                 frame_idx += 1
 
             if not batch_frames:
@@ -121,11 +130,23 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
                 fps=frames_per_second
             )
 
-            for p_easy, p_tess in zip(processed_easy_frames, processed_tess_frames):
-                for _ in range(current_skip):
-                    video_writer_easy.write(p_easy)
-                    video_writer_tess.write(p_tess)
+            from src.pipeline import _draw_overlay, easyocr_tracker, pytesseract_tracker
+            for p_easy, p_tess, intermediate_frames in zip(processed_easy_frames, processed_tess_frames, batch_intermediate_frames):
+                video_writer_easy.write(p_easy)
+                video_writer_tess.write(p_tess)
                 processed_frames_count += 1
+
+                # Render active tracks on intermediate skipped frames for smooth 30 FPS playback
+                for skipped_frame in intermediate_frames:
+                    f_easy = skipped_frame.copy()
+                    for track in easyocr_tracker.tracks:
+                        _draw_overlay(f_easy, track, model_theme="EasyOCR")
+                    video_writer_easy.write(f_easy)
+
+                    f_tess = skipped_frame.copy()
+                    for track in pytesseract_tracker.tracks:
+                        _draw_overlay(f_tess, track, model_theme="PyTesseract")
+                    video_writer_tess.write(f_tess)
 
             batch_elapsed = time.time() - batch_start_time
             time_per_frame = batch_elapsed / len(batch_frames)
@@ -208,7 +229,15 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
                                     track_id = track_id_str
                                 conf = float(row['confidence']) if pd.notna(row['confidence']) else 0.0
 
-                                dedup_key = plate if plate else f"track_{track_id}"
+                                if gt_plates and plate:
+                                    best_gt, best_cer = find_best_ground_truth_match(plate, gt_plates)
+                                else:
+                                    best_gt, best_cer = None, None
+
+                                norm_gt = best_gt.replace(" ", "").upper() if best_gt else ""
+                                norm_plate = plate.replace(" ", "").upper() if plate else ""
+                                dedup_key = f"gt_{norm_gt}" if norm_gt else (norm_plate if norm_plate else f"track_{track_id}")
+
                                 prev_log_conf = sent_logs[model_name].get(dedup_key, -1.0)
 
                                 if conf > prev_log_conf:
@@ -219,14 +248,8 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
                                     crop_path = row_dict.get("plate_crop_path")
                                     row_dict["snapshot_url"] = "/" + str(snapshot_path).replace("\\", "/") if pd.notna(snapshot_path) and snapshot_path else None
                                     row_dict["plate_crop_url"] = "/" + str(crop_path).replace("\\", "/") if pd.notna(crop_path) and crop_path else None
-
-                                    if gt_plates and plate:
-                                        best_gt, best_cer = find_best_ground_truth_match(plate, gt_plates)
-                                        row_dict["cer"] = round(best_cer, 4) if best_cer is not None else None
-                                        row_dict["matched_gt"] = best_gt
-                                    else:
-                                        row_dict["cer"] = None
-                                        row_dict["matched_gt"] = None
+                                    row_dict["cer"] = round(best_cer, 4) if best_cer is not None else None
+                                    row_dict["matched_gt"] = best_gt if best_gt else "--"
 
                                     yield f"event: log\ndata: {json.dumps(row_dict)}\n\n"
 
