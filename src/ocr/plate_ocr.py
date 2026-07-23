@@ -283,10 +283,8 @@ def _run_pytesseract_raw(processed):
         combined_text = " ".join(words)
         # Scale PyTesseract 0-100 confidence ratings down to a float between 0.0 and 1.0
         avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
-        print(f"[OCR DEBUG] PyTesseract raw='{' '.join(data_dict.get('text', []))}', cleaned='{combined_text}', conf={avg_conf:.3f}")
         return combined_text, avg_conf
     except Exception as e:
-        print(f"[OCR] PyTesseract execution failed: {str(e)}")
         return '', 0.0
 
 def _run_easyocr_raw(processed):
