@@ -435,9 +435,9 @@
 
             try {
                 const response = await fetch('/api/upload', { method: 'POST', body: formData });
-                if (!response.ok) throw new Error('Upload failed');
-
                 const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Upload failed');
+
                 selectedVideoPath = data.filepath;
 
                 videoInfo.textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
@@ -461,7 +461,12 @@
 
             } catch (err) {
                 console.error(err);
-                uploadZone.innerHTML = `<span class="text-rose-400 text-xs font-medium">Upload failed. Try again.</span>`;
+                uploadZone.innerHTML = `
+                    <div class="flex flex-col items-center gap-1">
+                        <span class="text-rose-400 text-xs font-medium">Upload Error: ${err.message}</span>
+                        <span class="text-[10px] text-zinc-400 underline cursor-pointer hover:text-zinc-200" onclick="fileInput.click()">Click here to retry file upload</span>
+                    </div>
+                `;
             }
         }
 

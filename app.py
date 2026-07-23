@@ -7,6 +7,7 @@ import base64
 import json
 
 import cv2
+import torch
 import pandas as pd
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Request
@@ -370,11 +371,19 @@ async def serve_dashboard():
 
 @app.post("/api/upload")
 async def upload_video_api(file: UploadFile = File(...)):
-    os.makedirs("outputs/uploads", exist_ok=True)
-    filepath = f"outputs/uploads/{file.filename}"
-    with open(filepath, "wb") as f:
-        f.write(await file.read())
-    return {"filepath": filepath}
+    try:
+        os.makedirs("outputs/uploads", exist_ok=True)
+        filename = file.filename if file.filename else "uploaded_video.mp4"
+        filepath = f"outputs/uploads/{filename}"
+        with open(filepath, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        return {"filepath": filepath}
+    except Exception as e:
+        import traceback
+        print(f"[UPLOAD ERROR] {e}")
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/stream-process")
 async def stream_process_api(video_path: str, ocr_engine: str = "dual", frame_skip: str = "dynamic"):
