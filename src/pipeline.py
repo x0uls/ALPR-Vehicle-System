@@ -467,32 +467,43 @@ def process_batch_dual(batch_frames, frame_indices, easyocr_pool, pytesseract_po
                         if sharpness_variance < adaptive_sharpness_threshold:
                             continue
 
-                        # Submit crop to BOTH EasyOCR and PyTesseract pools
-                        track_easy["last_ocr_frame"] = frame_idx
-                        ocr_future_easy = easyocr_pool.submit(
-                            _ocr_worker,
-                            padded_plate_crop.copy(),
-                            vehicle_crop_image.copy(),
-                            "EasyOCR",
-                            track_easy["track_id"],
-                            plate_pixel_area,
-                            frame_idx,
-                            fps
-                        )
-                        pending_easyocr_futures.append(ocr_future_easy)
+                        # Gate 1 & 2 for EasyOCR (check plate growth and cooldown window)
+                        has_easy_size_grew = plate_pixel_area > track_easy.get("max_plate_area", 0) * 1.1
+                        is_easy_cooldown = (frame_idx - track_easy.get("last_ocr_frame", -999) < OCR_COOLDOWN_FRAMES) and not has_easy_size_grew
+                        should_run_easy = not is_easy_cooldown and (has_easy_size_grew or track_easy.get("best_score", 0) < 5000)
 
-                        track_tess["last_ocr_frame"] = frame_idx
-                        ocr_future_tess = pytesseract_pool.submit(
-                            _ocr_worker,
-                            padded_plate_crop.copy(),
-                            vehicle_crop_image.copy(),
-                            "PyTesseract",
-                            track_tess["track_id"],
-                            plate_pixel_area,
-                            frame_idx,
-                            fps
-                        )
-                        pending_pytesseract_futures.append(ocr_future_tess)
+                        # Gate 1 & 2 for PyTesseract (check plate growth and cooldown window)
+                        has_tess_size_grew = plate_pixel_area > track_tess.get("max_plate_area", 0) * 1.1
+                        is_tess_cooldown = (frame_idx - track_tess.get("last_ocr_frame", -999) < OCR_COOLDOWN_FRAMES) and not has_tess_size_grew
+                        should_run_tess = not is_tess_cooldown and (has_tess_size_grew or track_tess.get("best_score", 0) < 5000)
+
+                        if should_run_easy:
+                            track_easy["last_ocr_frame"] = frame_idx
+                            ocr_future_easy = easyocr_pool.submit(
+                                _ocr_worker,
+                                padded_plate_crop.copy(),
+                                vehicle_crop_image.copy(),
+                                "EasyOCR",
+                                track_easy["track_id"],
+                                plate_pixel_area,
+                                frame_idx,
+                                fps
+                            )
+                            pending_easyocr_futures.append(ocr_future_easy)
+
+                        if should_run_tess:
+                            track_tess["last_ocr_frame"] = frame_idx
+                            ocr_future_tess = pytesseract_pool.submit(
+                                _ocr_worker,
+                                padded_plate_crop.copy(),
+                                vehicle_crop_image.copy(),
+                                "PyTesseract",
+                                track_tess["track_id"],
+                                plate_pixel_area,
+                                frame_idx,
+                                fps
+                            )
+                            pending_pytesseract_futures.append(ocr_future_tess)
 
         # 6. Render bounding box overlays on copies of the frame for both models
         frame_easy = frame.copy()

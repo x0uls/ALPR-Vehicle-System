@@ -148,8 +148,10 @@ def preprocess_for_easyocr(cropped_plate_img):
     resized = _resize_keep_aspect(cropped_plate_img, TARGET_WIDTH, "width")
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY) if len(resized.shape) == 3 else resized
     
-    # Gentle contrast enhancement
-    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8)).apply(gray)
+    # Apply Contrast Limited Adaptive Histogram Equalization (CLAHE).
+    # Improves local contrast in dark/bright spots (shadows/highlights) without blowing out noise.
+    # clipLimit=2.0 limits maximum contrast boost, tileGridSize=(8, 8) divides image into local 8x8 blocks.
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
     processed = auto_deskew(clahe)
     
     # Add a 15-pixel white border so character edges don't touch the image boundaries
