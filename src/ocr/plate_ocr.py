@@ -288,11 +288,11 @@ def _run_pytesseract_raw(processed):
 
 def _run_easyocr_raw(processed):
     """
-    Executes raw EasyOCR detection on a preprocessed or raw image.
+    Executes raw EasyOCR detection on a preprocessed image using optimize branch's allowlist and mag_ratio.
     """
     try:
-        # Run EasyOCR without aggressive allowlist restriction to capture full text line
-        results = reader.readtext(processed, detail=1, paragraph=False, text_threshold=0.2, low_text=0.2)
+        allowlist = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+        results = reader.readtext(processed, allowlist=allowlist, paragraph=False, text_threshold=0.3, low_text=0.2, mag_ratio=1.5)
         if not results:
             return '', 0.0
 
@@ -317,38 +317,26 @@ def _run_ocr(processed, engine_name):
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """
     Core entry point to extract license plate text and confidences from a plate crop.
+    Restored from optimize branch for highest recognition accuracy.
     """
     if engine_name != "PyTesseract":
         processed = preprocess_for_easyocr(cropped_plate_img)
-        if processed is not None:
-            text, conf = _run_ocr(processed, engine_name)
-            if text and conf > 0:
-                return text, conf, engine_name, processed
-        
-        # Fallback: run directly on raw cropped plate image if preprocessed read returned empty
-        if cropped_plate_img is not None and cropped_plate_img.size > 0:
-            raw_rgb = cv2.cvtColor(cropped_plate_img, cv2.COLOR_BGR2RGB)
-            text_raw, conf_raw = _run_ocr(raw_rgb, engine_name)
-            if text_raw:
-                return text_raw, conf_raw, engine_name, raw_rgb
-        
-        return '', 0.0, engine_name, processed
+        if processed is None:
+            return '', 0.0, engine_name, None
+        text, conf = _run_ocr(processed, engine_name)
+        return text, conf, engine_name, processed
 
     candidates = []
-    # Test both adaptive and Otsu thresholding for Tesseract since plate backgrounds
-    # (dark/light plates, reflective coatings, shadows) respond differently to each method.
     for thresh_method in ("adaptive", "otsu"):
         processed = preprocess_for_tesseract(cropped_plate_img, thresh_method)
         if processed is not None:
             text, conf = _run_ocr(processed, engine_name)
-            # Accept immediately if confidence is high (>= 0.50) to minimize runtime
             if text and conf >= 0.50:
                 return text, conf, engine_name, processed
             candidates.append((text, conf, processed))
 
     valid = [c for c in candidates if c[0].strip()]
     if valid:
-        # Fall back to returning the candidate that achieved the highest confidence score
         best = max(valid, key=lambda x: x[1])
         return best[0], best[1], engine_name, best[2]
         
