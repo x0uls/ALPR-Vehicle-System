@@ -118,7 +118,7 @@ class DetectionTracker:
                 active.append(track_dict)
         self.tracks = active
 
-    def match_or_create(self, bbox, vehicle_type, frame_idx):
+    def match_or_create(self, bbox, vehicle_type, frame_idx, override_id=None):
         best_iou = 0.0
         best_track = None
         
@@ -134,10 +134,13 @@ class DetectionTracker:
             best_track["bbox"] = bbox
             best_track["last_seen"] = frame_idx
             best_track["age"] += 1
+            if override_id is not None:
+                best_track["track_id"] = override_id
             return best_track
 
+        t_id = override_id if override_id is not None else next(self._id_counter)
         track = {
-            "track_id": next(self._id_counter),
+            "track_id": t_id,
             "bbox": bbox,
             "prev_bbox": None,
             "vehicle_type": vehicle_type,
@@ -525,8 +528,7 @@ def process_batch_dual(batch_frames, frame_indices, easyocr_pool, pytesseract_po
 
             # Match or create tracks on BOTH model trackers with unified track_id
             track_easy = easyocr_tracker.match_or_create((x1, y1, x2, y2), vehicle_type, frame_idx)
-            track_tess = pytesseract_tracker.match_or_create((x1, y1, x2, y2), vehicle_type, frame_idx)
-            track_tess["track_id"] = track_easy["track_id"]
+            track_tess = pytesseract_tracker.match_or_create((x1, y1, x2, y2), vehicle_type, frame_idx, override_id=track_easy["track_id"])
 
             # Analyze vehicle color if missing
             if track_easy["color"] is None:

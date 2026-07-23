@@ -101,16 +101,15 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
                 for _ in range(current_skip - 1):
                     ret_s, f_s = video_capture.read()
                     if ret_s:
-                        # Downscale skipped frame if wider than 1920
-                        sh, sw = f_s.shape[:2]
-                        if sw > 1920:
-                            f_s = cv2.resize(f_s, (1920, int(sh * (1920 / sw))))
+                        f_s = cv2.resize(f_s, (width, height))
                         skipped_frames.append(f_s)
                         frame_idx += 1
 
                 ret, frame = video_capture.read()
                 if not ret:
                     break
+                if frame.shape[1] != width or frame.shape[0] != height:
+                    frame = cv2.resize(frame, (width, height))
                 batch_frames.append(frame)
                 batch_indices.append(frame_idx)
                 batch_intermediate_frames.append(skipped_frames)
@@ -132,21 +131,29 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
 
             from src.pipeline import _draw_overlay, easyocr_tracker, pytesseract_tracker
             for p_easy, p_tess, intermediate_frames in zip(processed_easy_frames, processed_tess_frames, batch_intermediate_frames):
+                if p_easy.shape[1] != width or p_easy.shape[0] != height:
+                    p_easy = cv2.resize(p_easy, (width, height))
+                if p_tess.shape[1] != width or p_tess.shape[0] != height:
+                    p_tess = cv2.resize(p_tess, (width, height))
+
                 video_writer_easy.write(p_easy)
                 video_writer_tess.write(p_tess)
                 processed_frames_count += 1
 
                 # Render active tracks on intermediate skipped frames for smooth 30 FPS playback
                 for skipped_frame in intermediate_frames:
-                    f_easy = skipped_frame.copy()
-                    for track in easyocr_tracker.tracks:
-                        _draw_overlay(f_easy, track, model_theme="EasyOCR")
-                    video_writer_easy.write(f_easy)
+                    try:
+                        f_easy = skipped_frame.copy()
+                        for track in easyocr_tracker.tracks:
+                            _draw_overlay(f_easy, track, model_theme="EasyOCR")
+                        video_writer_easy.write(f_easy)
 
-                    f_tess = skipped_frame.copy()
-                    for track in pytesseract_tracker.tracks:
-                        _draw_overlay(f_tess, track, model_theme="PyTesseract")
-                    video_writer_tess.write(f_tess)
+                        f_tess = skipped_frame.copy()
+                        for track in pytesseract_tracker.tracks:
+                            _draw_overlay(f_tess, track, model_theme="PyTesseract")
+                        video_writer_tess.write(f_tess)
+                    except Exception:
+                        pass
 
             batch_elapsed = time.time() - batch_start_time
             time_per_frame = batch_elapsed / len(batch_frames)
