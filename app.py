@@ -303,30 +303,28 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
         video_writer_easy.release()
         video_writer_tess.release()
 
-        # Send progress ping before starting video encoding
-        yield f": ping\n\n"
-
-        # Transcode both videos to H.264 mp4
+        # Transcode both videos to H.264 mp4 asynchronously with ultrafast preset & SSE keep-alive pings
         final_easy_path = "outputs/results/final_output_easyocr.mp4"
         final_tess_path = "outputs/results/final_output_pytesseract.mp4"
 
         for raw_p, final_p in [(raw_video_easy_path, final_easy_path), (raw_video_tess_path, final_tess_path)]:
+            cmd = [
+                "ffmpeg", "-y", "-i", raw_p,
+                "-vcodec", "libx264",
+                "-preset", "ultrafast",
+                "-crf", "28",
+                "-movflags", "+faststart",
+                final_p
+            ]
             try:
-                subprocess.run(
-                    [
-                        "ffmpeg", "-y", "-i", raw_p,
-                        "-vcodec", "libx264",
-                        "-preset", "veryfast",
-                        "-crf", "28",
-                        "-movflags", "+faststart",
-                        final_p
-                    ],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-            except Exception:
-                pass
+                proc = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                while proc.returncode is None:
+                    try:
+                        await asyncio.wait_for(proc.wait(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        yield f": ping\n\n"
+            except Exception as ffmpeg_err:
+                print(f"[FFMPEG WARN] {ffmpeg_err}")
             yield f": ping\n\n"
 
         final_elapsed = time.time() - start_time
