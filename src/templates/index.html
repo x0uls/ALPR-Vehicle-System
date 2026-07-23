@@ -607,8 +607,6 @@
 
             eventSource.addEventListener('log', (e) => {
                 const rowData = JSON.parse(e.data);
-            eventSource.addEventListener('log', (e) => {
-                const rowData = JSON.parse(e.data);
                 const model = rowData.model;
                 
                 const plateNorm = (rowData.plate_number || '').replace(/\s+/g, '').toUpperCase();
