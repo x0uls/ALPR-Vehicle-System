@@ -70,56 +70,56 @@ def init_log():
     
     Ensures that data from old runs does not pollute or leak into the gallery of the new run.
     """
-    global _log_buffer
-    _log_buffer = []
+_log_buffers = {}
+
+
+def init_log(log_path=LOG_PATH):
+    """
+    Resets the specified CSV file and clears output crop image directories.
+    """
+    global _log_buffers
+    _log_buffers[log_path] = []
     
-    # 1. Reset the CSV detection log file with empty headers
-    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-    with open(LOG_PATH, "w", newline="") as f:
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(FIELDNAMES)
 
-    # 2. Clear old cropped plate images and snapshots to save disk space and clean UI galleries
     import shutil
     for folder in ["outputs/plate_crops/Raw", "outputs/plate_crops/Processed", "outputs/snapshots"]:
-        if os.path.exists(folder):
-            try:
-                shutil.rmtree(folder)
-            except Exception:
-                pass  # Ignore lock/permission errors on individual files
         os.makedirs(folder, exist_ok=True)
 
 
-def _read_all_rows():
+def _read_all_rows(log_path=LOG_PATH):
     """
-    Reads all existing records from the detections CSV file.
-    
-    Returns a list of dictionaries where each dictionary represents a row.
+    Reads all existing records from the target CSV file.
     """
-    if not os.path.exists(LOG_PATH):
+    if not os.path.exists(log_path):
         return []
-    with open(LOG_PATH, "r", newline="") as f:
+    with open(log_path, "r", newline="") as f:
         reader = csv.DictReader(f)
         return list(reader)
 
 
-def _write_all_rows(rows):
+def _write_all_rows(rows, log_path=LOG_PATH):
     """
-    Writes all log entries to the detections CSV file, replacing any existing content.
+    Writes all log entries to the target CSV file.
     """
-    with open(LOG_PATH, "w", newline="") as f:
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
         writer.writeheader()
         writer.writerows(rows)
 
 
-def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, plate_crop_path="", video_timestamp=""):
+def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, plate_crop_path="", video_timestamp="", log_path=LOG_PATH):
     """
-    Appends a new detection row to the in-memory buffer.
-    
-    To avoid writing to disk on every single frame, we buffer logs and auto-flush them every 20 entries.
+    Appends a new detection row to the specified log buffer.
     """
-    _log_buffer.append({
+    if log_path not in _log_buffers:
+        _log_buffers[log_path] = []
+
+    _log_buffers[log_path].append({
         "track_id": str(track_id),
         "timestamp": video_timestamp,
         "vehicle_type": vehicle_type,
@@ -129,45 +129,37 @@ def log_detection(track_id, vehicle_type, color, plate_number, confidence, snaps
         "snapshot_path": snapshot_path,
         "plate_crop_path": plate_crop_path,
     })
-    # Auto-flush buffer to the CSV file on disk when it hits 20 entries to limit data loss on crash
-    if len(_log_buffer) >= 20:
-        flush_log()
+    if len(_log_buffers[log_path]) >= 20:
+        flush_log(log_path)
 
 
-def flush_log():
+def flush_log(log_path=LOG_PATH):
     """
-    Flushes buffered log entries to the CSV file, merging matching tracks and plate numbers.
-    
-    Resolves double-detection errors by keeping the entry that achieved the highest confidence.
+    Flushes buffered log entries to the specified CSV file on disk.
     """
-    global _log_buffer
-    if not _log_buffer:
+    global _log_buffers
+    buffer = _log_buffers.get(log_path, [])
+    if not buffer:
         return
 
-    rows = _read_all_rows()
+    rows = _read_all_rows(log_path)
 
-    for new_detection_row in _log_buffer:
+    for new_detection_row in buffer:
         updated = False
-        
-        # 1. Deduplicate by track_id first (same tracker identity, confidence improved)
         for i, row in enumerate(rows):
             if row.get("track_id") == new_detection_row["track_id"]:
                 old_conf = _safe_float(row.get("confidence"))
                 new_conf = _safe_float(new_detection_row.get("confidence"))
-                
-                # Update the row on disk if the new frame read achieved a higher confidence score
                 if new_conf > old_conf:
                     rows[i] = new_detection_row
                 updated = True
                 break
         
-        # 2. Deduplicate by exact plate_number matching (different track ID, same physical plate text)
         if not updated and new_detection_row.get("plate_number"):
             for i, row in enumerate(rows):
                 if row.get("plate_number") == new_detection_row["plate_number"]:
                     old_conf = _safe_float(row.get("confidence"))
                     new_conf = _safe_float(new_detection_row.get("confidence"))
-                    
                     if new_conf > old_conf:
                         rows[i] = new_detection_row
                     updated = True
@@ -176,5 +168,5 @@ def flush_log():
         if not updated:
             rows.append(new_detection_row)
 
-    _write_all_rows(rows)
-    _log_buffer = []
+    _write_all_rows(rows, log_path)
+    _log_buffers[log_path] = []

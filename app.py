@@ -15,18 +15,17 @@ from fastapi.staticfiles import StaticFiles
 import sys
 
 import torch
-from src.pipeline import detection_tracker, process_batch, drain_pending_ocr
+from src.pipeline import easyocr_tracker, pytesseract_tracker, process_batch_dual, drain_pending_ocr
 from src.logging.logger import init_log
 from src.metrics.cer import (
     compute_cer, find_best_ground_truth_match,
-    save_ground_truth, load_ground_truth, compute_average_cer
+    save_ground_truth, load_ground_truth, compute_average_cer,
+    compute_comprehensive_metrics, compute_dual_model_comparison
 )
 
 def _format_elapsed(seconds):
     """
     Formats elapsed raw seconds into a friendly human-readable time string.
-    
-    For example: 95 seconds becomes '1m 35s'.
     """
     m, s = divmod(int(seconds), 60)
     if m > 0:
@@ -36,77 +35,68 @@ def _format_elapsed(seconds):
 
 # ─── Server-Sent Events (SSE) Real-Time Generator ────────────────
 
-async def process_video_sse(video_path, ocr_engine, frame_skip="dynamic"):
+async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic"):
     """
-    Asynchronous generator that runs the video detection pipeline and yields real-time updates.
-    
-    Uses SSE format ('event: ...\ndata: ...\n\n') to stream live dashboard stats, log events,
-    and base64-encoded frame images back to the user's web browser page.
+    Asynchronous generator that runs dual-model (EasyOCR + PyTesseract) ALPR pipeline.
+    Yields real-time SSE updates for live dual video canvas previews, vehicle logs, plate crops, and metrics.
     """
-    # 1. Reset CSV logging files and remove old snapshot images
-    init_log()
+    # 1. Reset CSV logging files and clear old crops
+    init_log("outputs/logs/detections_easyocr.csv")
+    init_log("outputs/logs/detections_pytesseract.csv")
+    init_log("outputs/logs/detections.csv")
+
+    easyocr_tracker.flush_all()
+    pytesseract_tracker.flush_all()
 
     video_capture = cv2.VideoCapture(video_path)
     if not video_capture.isOpened():
         yield f"event: error\ndata: {json.dumps({'error': 'Cannot open video file'})}\n\n"
         return
 
-    # Extract video properties
     total_frames = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     frames_per_second = video_capture.get(cv2.CAP_PROP_FPS)
     if frames_per_second == 0 or frames_per_second is None:
-        frames_per_second = 30  # Default fallback standard framerate if metadata query fails
+        frames_per_second = 30.0
 
     width, height = int(video_capture.get(3)), int(video_capture.get(4))
-    # Downscale resolution to 1080p if video width exceeds 1920px.
-    # Prevents huge images from thrasher memory or slowing down YOLO processing.
     if width > 1920:
         scale = 1920 / width
         width, height = 1920, int(height * scale)
 
-    # 2. Configure dedicated OCR Worker thread pool size
+    # 2. Configure dedicated OCR Worker thread pools for both engines
     from concurrent.futures import ThreadPoolExecutor
-    if ocr_engine == "PyTesseract":
-        # PyTesseract spawns a CLI sub-process command, which is heavy on CPU.
-        # Limit worker thread count to avoid high CPU core context-switching overhead.
-        worker_threads = min(os.cpu_count() or 2, 6)
-    else:
-        # EasyOCR runs on GPU/Cuda tensors. EasyOCR handles batches well; 2 threads are plenty
-        # to feed the queue without overloading memory buffers.
-        worker_threads = 2
-    ocr_worker_pool = ThreadPoolExecutor(max_workers=worker_threads)
-    pending_ocr_futures = []
+    easyocr_pool = ThreadPoolExecutor(max_workers=2)
+    pytesseract_pool = ThreadPoolExecutor(max_workers=min(os.cpu_count() or 2, 6))
+
+    pending_easyocr_futures = []
+    pending_pytesseract_futures = []
 
     # Configure Video Writer output streams
     os.makedirs("outputs/results", exist_ok=True)
-    output_video_path = "outputs/results/processed_output.mp4"
+    raw_video_easy_path = "outputs/results/raw_output_easyocr.mp4"
+    raw_video_tess_path = "outputs/results/raw_output_pytesseract.mp4"
+
     output_fps = frames_per_second
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    video_writer = cv2.VideoWriter(output_video_path, fourcc, output_fps, (width, height))
+    video_writer_easy = cv2.VideoWriter(raw_video_easy_path, fourcc, output_fps, (width, height))
+    video_writer_tess = cv2.VideoWriter(raw_video_tess_path, fourcc, output_fps, (width, height))
 
     start_time = time.time()
     frame_idx = 0
     processed_frames_count = 0
 
-    # Dictionaries to track what data has already been sent to the dashboard to avoid redundant SSE events
-    sent_logs = {}    # deduplication key -> best confidence sent so far
-    sent_crops = {}   # track_id -> best confidence crop sent so far
-    sent_texts = {}   # track_id -> best text reading sent so far
+    sent_logs = {"EasyOCR": {}, "PyTesseract": {}}
+    sent_crops = {"EasyOCR": {}, "PyTesseract": {}}
+    sent_texts = {"EasyOCR": {}, "PyTesseract": {}}
 
-    # 3. Configure micro-batching sizes.
-    # If a CUDA GPU is available, process frames in batches of 4 to exploit parallel GPU calculations.
-    # On CPU, process 1 frame at a time to prevent high RAM paging/swapping.
     batch_size = 4 if torch.cuda.is_available() else 1
-    current_skip = 1  # Spacing skip between processed frames (starts at 1)
+    current_skip = 1
 
     while True:
         batch_frames = []
         batch_indices = []
 
-        # Read frames with current spacing skip in micro-batch
         for _ in range(batch_size):
-            # Skip current_skip - 1 frames using grab()
-            # grab() is much faster than read() because it discards frames without decoding their visual data
             for _ in range(current_skip - 1):
                 video_capture.grab()
                 frame_idx += 1
@@ -121,64 +111,56 @@ async def process_video_sse(video_path, ocr_engine, frame_skip="dynamic"):
         if not batch_frames:
             break
 
-        # Process the micro-batch and measure elapsed time
         batch_start_time = time.time()
-        processed_frames = process_batch(
+        processed_easy_frames, processed_tess_frames = process_batch_dual(
             batch_frames,
             batch_indices,
-            ocr_engine,
-            ocr_worker_pool,
-            pending_ocr_futures,
+            easyocr_pool,
+            pytesseract_pool,
+            pending_easyocr_futures,
+            pending_pytesseract_futures,
             fps=frames_per_second
         )
 
-        for p_frame in processed_frames:
-            # Repeat the annotated frame current_skip times to preserve the output video duration
+        for p_easy, p_tess in zip(processed_easy_frames, processed_tess_frames):
             for _ in range(current_skip):
-                video_writer.write(p_frame)
+                video_writer_easy.write(p_easy)
+                video_writer_tess.write(p_tess)
             processed_frames_count += 1
 
-        # Calculate time taken per frame in this batch
         batch_elapsed = time.time() - batch_start_time
         time_per_frame = batch_elapsed / len(batch_frames)
 
-        # 4. Dynamic Skip Factor 1: speed-based target close to real-time.
-        # If processing is slow, skip frames to keep up with the video framerate.
         native_frame_time = 1.0 / frames_per_second
         speed_based_skip = max(1, int(time_per_frame / native_frame_time))
 
-        # Dynamic Skip Factor 2: vehicle velocity based
-        max_displacement = detection_tracker.get_max_displacement()
-        if not detection_tracker.tracks:
-            # No active tracks: check every 3rd frame to avoid missing vehicles entering the scene
+        max_displacement = max(easyocr_tracker.get_max_displacement(), pytesseract_tracker.get_max_displacement())
+        if not easyocr_tracker.tracks and not pytesseract_tracker.tracks:
             velocity_based_skip = 3
         elif max_displacement < 5:
-            velocity_based_skip = 8  # Static or very slow: skip more frames
+            velocity_based_skip = 8
         elif max_displacement < 15:
             velocity_based_skip = 5
         elif max_displacement < 30:
             velocity_based_skip = 3
         else:
-            velocity_based_skip = 1  # Fast moving: reduce skip to maintain tracking
+            velocity_based_skip = 1
 
         if frame_skip == "dynamic":
-            # Set dynamic skip spacing for the next batch
             current_skip = max(speed_based_skip, velocity_based_skip)
-            current_skip = min(current_skip, int(frames_per_second))  # Cap skip to 1 second maximum
+            current_skip = min(current_skip, int(frames_per_second))
         else:
             try:
                 current_skip = max(1, int(frame_skip))
             except (ValueError, TypeError):
                 current_skip = 1
 
-        # Send state updates periodically
         if processed_frames_count > 0:
             elapsed_time = time.time() - start_time
             elapsed_str = _format_elapsed(elapsed_time)
             latest_frame_idx = batch_indices[-1]
             progress_percent = int((latest_frame_idx / total_frames) * 100) if total_frames else 0
 
-            # Calculate ETA (Estimated Time of Arrival) using precise frame counts to avoid integer rounding jumps
             eta_str = "--"
             if latest_frame_idx > 0 and total_frames > latest_frame_idx:
                 eta_seconds = (elapsed_time / latest_frame_idx) * (total_frames - latest_frame_idx)
@@ -186,7 +168,6 @@ async def process_video_sse(video_path, ocr_engine, frame_skip="dynamic"):
 
             processing_fps = round(processed_frames_count / elapsed_time, 1) if elapsed_time > 0 else 0
 
-            # Yield progress stats back to dashboard
             progress_data = {
                 "frame_idx": latest_frame_idx,
                 "total_frames": total_frames,
@@ -197,168 +178,174 @@ async def process_video_sse(video_path, ocr_engine, frame_skip="dynamic"):
             }
             yield f"event: progress\ndata: {json.dumps(progress_data)}\n\n"
 
-            # Stream canvas preview frame (downscaled to width 480 to save bandwidth)
-            last_processed_frame = processed_frames[-1]
-            image_height, image_width = last_processed_frame.shape[:2]
-            image_scale = 480.0 / image_width if image_width > 480 else 1.0
-            preview_frame = last_processed_frame
-            if image_scale < 1.0:
-                preview_frame = cv2.resize(last_processed_frame, (int(image_width * image_scale), int(image_height * image_scale)))
+            # Stream dual canvas previews (EasyOCR & PyTesseract)
+            last_easy = processed_easy_frames[-1]
+            last_tess = processed_tess_frames[-1]
+            image_h, image_w = last_easy.shape[:2]
+            scale = 480.0 / image_w if image_w > 480 else 1.0
 
-            # Encode image to JPEG, convert to base64 string, and yield event
-            _, jpeg_buffer = cv2.imencode('.jpg', preview_frame)
-            image_base64 = base64.b64encode(jpeg_buffer).decode('utf-8')
-            yield f"event: frame\ndata: {json.dumps({'image': image_base64})}\n\n"
+            if scale < 1.0:
+                last_easy = cv2.resize(last_easy, (int(image_w * scale), int(image_h * scale)))
+                last_tess = cv2.resize(last_tess, (int(image_w * scale), int(image_h * scale)))
 
-            # Check and stream CSV log changes & newly cropped plate images
-            try:
-                if os.path.exists("outputs/logs/detections.csv"):
-                    detections_dataframe = pd.read_csv("outputs/logs/detections.csv")
-                    gt_plates = load_ground_truth()
-                    for _, row in detections_dataframe.iterrows():
-                        plate = str(row['plate_number']) if pd.notna(row['plate_number']) else ""
-                        track_id_str = str(row['track_id'])
-                        try:
-                            track_id = int(row['track_id'])
-                        except (ValueError, TypeError):
-                            track_id = track_id_str
-                        conf = float(row['confidence']) if pd.notna(row['confidence']) else 0.0
-                        
-                        # 1. Yield event if confidence improved for this plate or track
-                        dedup_key = plate if plate else f"track_{track_id}"
-                        previous_log_confidence = sent_logs.get(dedup_key, -1.0)
-                        if conf > previous_log_confidence:
-                            sent_logs[dedup_key] = conf
-                            row_dict = row.to_dict()
-                            snapshot_path = row_dict.get("snapshot_path")
-                            crop_path = row_dict.get("plate_crop_path")
-                            row_dict["snapshot_url"] = "/" + str(snapshot_path) if pd.notna(snapshot_path) and snapshot_path else None
-                            row_dict["plate_crop_url"] = "/" + str(crop_path) if pd.notna(crop_path) and crop_path else None
-                            
-                            # Compute CER against ground truth if available
-                            if gt_plates and plate:
-                                best_gt, best_cer = find_best_ground_truth_match(plate, gt_plates)
-                                row_dict["cer"] = round(best_cer, 4) if best_cer is not None else None
-                                row_dict["matched_gt"] = best_gt
-                            else:
-                                row_dict["cer"] = None
-                                row_dict["matched_gt"] = None
-                            
-                            yield f"event: log\ndata: {json.dumps(row_dict)}\n\n"
-                        
-                        # 2. Yield crop update if confidence improved or plate text changed for this track
-                        previous_crop_confidence = sent_crops.get(track_id, -1.0)
-                        previous_text = sent_texts.get(track_id, "")
-                        current_text = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
-                        
-                        if conf > previous_crop_confidence or current_text != previous_text:
-                            sent_crops[track_id] = conf
-                            sent_texts[track_id] = current_text
-                            
-                            crop_path = row.get("plate_crop_path")
-                            if pd.notna(crop_path) and crop_path:
-                                crop_url = "/" + str(crop_path).replace("\\", "/")
-                                filename = os.path.basename(str(crop_path))
-                                
-                                snapshot_path = row.get("snapshot_path")
-                                snapshot_url = "/" + str(snapshot_path).replace("\\", "/") if pd.notna(snapshot_path) and snapshot_path else None
-                                
-                                crop_payload = {
-                                    'filename': filename,
-                                    'url': crop_url,
-                                    'text': current_text,
-                                    'track_id': track_id,
-                                    'snapshot_url': snapshot_url,
-                                    'confidence': conf,
-                                    'vehicle_type': str(row["vehicle_type"]) if pd.notna(row["vehicle_type"]) else None,
-                                    'color': str(row["color"]) if pd.notna(row["color"]) else None,
-                                    'timestamp': str(row["timestamp"]) if pd.notna(row["timestamp"]) else None
-                                }
-                                yield f"event: crop\ndata: {json.dumps(crop_payload)}\n\n"
-            except Exception:
-                pass
+            _, buffer_easy = cv2.imencode('.jpg', last_easy)
+            _, buffer_tess = cv2.imencode('.jpg', last_tess)
 
-        # Relinquish CPU execution back to asyncio loop to handle web page requests
+            base_easy = base64.b64encode(buffer_easy).decode('utf-8')
+            base_tess = base64.b64encode(buffer_tess).decode('utf-8')
+
+            yield f"event: frame\ndata: {json.dumps({'image_easyocr': base_easy, 'image_pytesseract': base_tess})}\n\n"
+
+            # Check and stream CSV log updates & cropped plate images for both models
+            gt_plates = load_ground_truth()
+            for model_name, csv_path in [("EasyOCR", "outputs/logs/detections_easyocr.csv"), ("PyTesseract", "outputs/logs/detections_pytesseract.csv")]:
+                try:
+                    if os.path.exists(csv_path):
+                        df = pd.read_csv(csv_path)
+                        for _, row in df.iterrows():
+                            plate = str(row['plate_number']) if pd.notna(row['plate_number']) else ""
+                            track_id_str = str(row['track_id'])
+                            try:
+                                track_id = int(row['track_id'])
+                            except (ValueError, TypeError):
+                                track_id = track_id_str
+                            conf = float(row['confidence']) if pd.notna(row['confidence']) else 0.0
+
+                            dedup_key = plate if plate else f"track_{track_id}"
+                            prev_log_conf = sent_logs[model_name].get(dedup_key, -1.0)
+
+                            if conf > prev_log_conf:
+                                sent_logs[model_name][dedup_key] = conf
+                                row_dict = row.to_dict()
+                                row_dict["model"] = model_name
+                                snapshot_path = row_dict.get("snapshot_path")
+                                crop_path = row_dict.get("plate_crop_path")
+                                row_dict["snapshot_url"] = "/" + str(snapshot_path).replace("\\", "/") if pd.notna(snapshot_path) and snapshot_path else None
+                                row_dict["plate_crop_url"] = "/" + str(crop_path).replace("\\", "/") if pd.notna(crop_path) and crop_path else None
+
+                                if gt_plates and plate:
+                                    best_gt, best_cer = find_best_ground_truth_match(plate, gt_plates)
+                                    row_dict["cer"] = round(best_cer, 4) if best_cer is not None else None
+                                    row_dict["matched_gt"] = best_gt
+                                else:
+                                    row_dict["cer"] = None
+                                    row_dict["matched_gt"] = None
+
+                                yield f"event: log\ndata: {json.dumps(row_dict)}\n\n"
+
+                            prev_crop_conf = sent_crops[model_name].get(track_id, -1.0)
+                            prev_text = sent_texts[model_name].get(track_id, "")
+                            curr_text = str(row["plate_number"]) if pd.notna(row["plate_number"]) else ""
+
+                            if conf > prev_crop_conf or curr_text != prev_text:
+                                sent_crops[model_name][track_id] = conf
+                                sent_texts[model_name][track_id] = curr_text
+
+                                crop_path = row.get("plate_crop_path")
+                                if pd.notna(crop_path) and crop_path:
+                                    crop_url = "/" + str(crop_path).replace("\\", "/")
+                                    filename = os.path.basename(str(crop_path))
+                                    snapshot_path = row.get("snapshot_path")
+                                    snapshot_url = "/" + str(snapshot_path).replace("\\", "/") if pd.notna(snapshot_path) and snapshot_path else None
+
+                                    crop_payload = {
+                                        'model': model_name,
+                                        'filename': filename,
+                                        'url': crop_url,
+                                        'text': curr_text,
+                                        'track_id': track_id,
+                                        'snapshot_url': snapshot_url,
+                                        'confidence': conf,
+                                        'vehicle_type': str(row["vehicle_type"]) if pd.notna(row["vehicle_type"]) else None,
+                                        'color': str(row["color"]) if pd.notna(row["color"]) else None,
+                                        'timestamp': str(row["timestamp"]) if pd.notna(row["timestamp"]) else None
+                                    }
+                                    yield f"event: crop\ndata: {json.dumps(crop_payload)}\n\n"
+                except Exception:
+                    pass
+
         await asyncio.sleep(0.001)
 
-    # Force sweep remaining active tracks and write their final data to the logs
-    detection_tracker.purge_old(frame_idx=frame_idx, frames_per_second=frames_per_second, force_flush=True)
+    easyocr_tracker.purge_old(frame_idx=frame_idx, frames_per_second=frames_per_second, force_flush=True)
+    pytesseract_tracker.purge_old(frame_idx=frame_idx, frames_per_second=frames_per_second, force_flush=True)
 
-    # Drain OCR threads, shut down worker pool, and close file handlers
-    drain_pending_ocr(pending_ocr_futures)
-    ocr_worker_pool.shutdown(wait=True)
-    detection_tracker.flush_all()
+    drain_pending_ocr(pending_easyocr_futures, target_tracker=easyocr_tracker)
+    drain_pending_ocr(pending_pytesseract_futures, target_tracker=pytesseract_tracker)
+
+    easyocr_pool.shutdown(wait=True)
+    pytesseract_pool.shutdown(wait=True)
+
     video_capture.release()
-    video_writer.release()
+    video_writer_easy.release()
+    video_writer_tess.release()
 
-    # Transcode final raw output into browser-compatible H.264 format using FFMPEG.
-    # -vcodec libx264: H.264 video compression standard compatible with HTML5 players
-    # -preset veryfast: Fast compression speed with much better file size optimization than ultrafast
-    # -crf 28: Visually lossless compression standard that dramatically reduces video file size
-    # -movflags +faststart: Relocates the index (moov atom) to the beginning so browsers can stream and play it instantly
-    final_output_video_path = "outputs/results/final_output.mp4"
-    try:
-        subprocess.run(
-            [
-                "ffmpeg", "-y", "-i", output_video_path,
-                "-vcodec", "libx264",
-                "-preset", "veryfast",
-                "-crf", "28",
-                "-movflags", "+faststart",
-                final_output_video_path
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-    except Exception:
-        final_output_video_path = output_video_path
+    # Transcode both videos to H.264 mp4
+    final_easy_path = "outputs/results/final_output_easyocr.mp4"
+    final_tess_path = "outputs/results/final_output_pytesseract.mp4"
 
-    # Yield final completed events
+    for raw_p, final_p in [(raw_video_easy_path, final_easy_path), (raw_video_tess_path, final_tess_path)]:
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-i", raw_p,
+                    "-vcodec", "libx264",
+                    "-preset", "veryfast",
+                    "-crf", "28",
+                    "-movflags", "+faststart",
+                    final_p
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except Exception:
+            pass
+
     final_elapsed = time.time() - start_time
     final_fps = round(processed_frames_count / final_elapsed, 1) if final_elapsed > 0 else 0
+
+    # Load detections and compute comparative Ground Truth metrics
+    gt_plates = load_ground_truth()
+    easy_dets = pd.read_csv("outputs/logs/detections_easyocr.csv").to_dict(orient="records") if os.path.exists("outputs/logs/detections_easyocr.csv") else []
+    tess_dets = pd.read_csv("outputs/logs/detections_pytesseract.csv").to_dict(orient="records") if os.path.exists("outputs/logs/detections_pytesseract.csv") else []
+
+    comparison_metrics = compute_dual_model_comparison(easy_dets, tess_dets, gt_plates, easyocr_time=final_elapsed, pytesseract_time=final_elapsed)
+
     yield f"event: progress\ndata: {json.dumps({'frame_idx': total_frames, 'total_frames': total_frames, 'percent': 100, 'elapsed_str': _format_elapsed(final_elapsed), 'eta': 'Done', 'fps': final_fps})}\n\n"
 
-    yield f"event: complete\ndata: {json.dumps({'video_url': '/outputs/results/final_output.mp4'})}\n\n"
+    complete_payload = {
+        'video_easyocr_url': '/outputs/results/final_output_easyocr.mp4' if os.path.exists(final_easy_path) else '/outputs/results/raw_output_easyocr.mp4',
+        'video_pytesseract_url': '/outputs/results/final_output_pytesseract.mp4' if os.path.exists(final_tess_path) else '/outputs/results/raw_output_pytesseract.mp4',
+        'metrics': comparison_metrics
+    }
+    yield f"event: complete\ndata: {json.dumps(complete_payload)}\n\n"
 
 
 # ─── FastAPI App & Custom Dashboard Serving ───────────────────────
 
-# Initialize FastAPI application instance
-app = FastAPI(title="ALPR & Vehicle Classification")
+app = FastAPI(title="ALPR & Vehicle Classification - Dual Model Comparison")
 
-# Mount outputs storage directory as static file path (accessible via web browser)
 os.makedirs("outputs", exist_ok=True)
 app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 
-# Serve custom dashboard index HTML page at root path
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
-    """Serves the front-end dashboard UI page."""
     with open("src/templates/index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
-# Handle video upload requests
 @app.post("/api/upload")
 async def upload_video_api(file: UploadFile = File(...)):
-    """Receives and saves uploaded video file to the disk uploads directory."""
     os.makedirs("outputs/uploads", exist_ok=True)
     filepath = f"outputs/uploads/{file.filename}"
     with open(filepath, "wb") as f:
         f.write(await file.read())
     return {"filepath": filepath}
 
-# SSE stream process endpoint
 @app.get("/api/stream-process")
-async def stream_process_api(video_path: str, ocr_engine: str, frame_skip: str = "dynamic"):
-    """
-    FastAPI streaming endpoint that mounts our process_video_sse generator.
-    
-    Headers disallow client-side caching and proxy buffering to maintain instant updates.
-    """
+async def stream_process_api(video_path: str, ocr_engine: str = "dual", frame_skip: str = "dynamic"):
     headers = {
         "Cache-Control": "no-cache, no-transform",
-        "X-Accel-Buffering": "no",  # Disables nginx proxy buffering so SSE events flow instantly
+        "X-Accel-Buffering": "no",
         "Connection": "keep-alive",
     }
     return StreamingResponse(
@@ -367,34 +354,24 @@ async def stream_process_api(video_path: str, ocr_engine: str, frame_skip: str =
         headers=headers
     )
 
-# ─── Ground Truth Management API ─────────────────────────────────
+
+# ─── Ground Truth & Comparison API ───────────────────────────────
 
 @app.get("/api/ground-truth")
 async def get_ground_truth():
-    """Returns the current list of ground truth plates."""
     plates = load_ground_truth()
     return JSONResponse({"plates": plates})
 
 @app.post("/api/ground-truth")
 async def set_ground_truth(request: Request):
-    """
-    Saves ground truth plates from a JSON body.
-    
-    Expects {"plates": ["ABC 1234", "WND 5678", ...]}.
-    """
     body = await request.json()
     plates = body.get("plates", [])
-    # Deduplicate and clean empty entries
     cleaned = list(dict.fromkeys(p.strip() for p in plates if p.strip()))
     save_ground_truth(cleaned)
     return JSONResponse({"status": "ok", "count": len(cleaned), "plates": cleaned})
 
 @app.post("/api/ground-truth/upload")
 async def upload_ground_truth(file: UploadFile = File(...)):
-    """
-    Imports ground truth plates from a plain text file (one plate per line)
-    or a CSV file with a 'plate_number' or 'plate' column.
-    """
     content = (await file.read()).decode("utf-8", errors="ignore")
     plates = []
     
@@ -407,13 +384,11 @@ async def upload_ground_truth(file: UploadFile = File(...)):
             if plate.strip():
                 plates.append(plate.strip())
     else:
-        # Plain text: one plate per line
         for line in content.splitlines():
             cleaned = line.strip()
             if cleaned:
                 plates.append(cleaned)
     
-    # Deduplicate while preserving order
     cleaned = list(dict.fromkeys(plates))
     save_ground_truth(cleaned)
     return JSONResponse({"status": "ok", "count": len(cleaned), "plates": cleaned})
@@ -421,26 +396,25 @@ async def upload_ground_truth(file: UploadFile = File(...)):
 @app.get("/api/cer-summary")
 async def cer_summary_api():
     """
-    Computes and returns CER summary statistics for all current detections
-    against the stored ground truth plates.
+    Returns full side-by-side comparative Ground Truth statistics for EasyOCR vs PyTesseract.
     """
-    csv_path = "outputs/logs/detections.csv"
     gt_plates = load_ground_truth()
-    
-    if not os.path.exists(csv_path):
-        return JSONResponse({"average_cer": None, "matched_count": 0, "total_detections": 0, "per_detection": []})
-    
-    df = pd.read_csv(csv_path)
-    detections = df.to_dict(orient="records")
-    summary = compute_average_cer(detections, gt_plates)
-    return JSONResponse(summary)
+    easy_csv = "outputs/logs/detections_easyocr.csv"
+    tess_csv = "outputs/logs/detections_pytesseract.csv"
 
-# Serve XLSX Excel report export downloads
+    easy_dets = pd.read_csv(easy_csv).to_dict(orient="records") if os.path.exists(easy_csv) else []
+    tess_dets = pd.read_csv(tess_csv).to_dict(orient="records") if os.path.exists(tess_csv) else []
+
+    comparison = compute_dual_model_comparison(easy_dets, tess_dets, gt_plates)
+    return JSONResponse(comparison)
+
 @app.get("/api/export")
 async def export_api():
-    """Generates and downloads the Excel report containing embedded crops and telemetry stats."""
-    csv_path = "outputs/logs/detections.csv"
-    if not os.path.exists(csv_path):
+    """Generates and downloads the Excel multi-tab comparison report."""
+    easy_csv = "outputs/logs/detections_easyocr.csv"
+    tess_csv = "outputs/logs/detections_pytesseract.csv"
+
+    if not os.path.exists(easy_csv) and not os.path.exists(tess_csv):
         return HTMLResponse(content="<h3>No records available to export yet.</h3>", status_code=400)
     
     try:
@@ -451,20 +425,21 @@ async def export_api():
     gt_plates = load_ground_truth()
     
     try:
-        df = pd.read_csv(csv_path)
-        out_buf = build_xlsx_report(df, gt_plates)
+        easy_df = pd.read_csv(easy_csv) if os.path.exists(easy_csv) else pd.DataFrame()
+        tess_df = pd.read_csv(tess_csv) if os.path.exists(tess_csv) else pd.DataFrame()
+        out_buf = build_xlsx_report(easy_df, tess_df, gt_plates)
     except Exception as e:
         return HTMLResponse(content=f"<h3>Failed to build export: {str(e)}</h3>", status_code=500)
         
     return StreamingResponse(
         out_buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=alpr_detections.xlsx"}
+        headers={"Content-Disposition": "attachment; filename=alpr_dual_model_comparison.xlsx"}
     )
 
 
 # ─── Server Entry Point ──────────────────────────────────────────
 
 if __name__ == "__main__":
-    # Start web server hosting FastAPI application on port 7860
     uvicorn.run(app, host="0.0.0.0", port=7860)
+

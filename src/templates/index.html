@@ -4,16 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALPR & Vehicle Classification Dashboard</title>
+    <title>ALPR Dual-Model Comparison Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
             background-color: #0b0f19;
         }
 
-        /* Custom scrollbar styling for a cleaner dashboard look */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -31,96 +30,183 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #475569;
         }
+
+        @keyframes pulse-glow-blue {
+            0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.8); }
+        }
+
+        @keyframes pulse-glow-purple {
+            0%, 100% { box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(168, 85, 247, 0.8); }
+        }
+
+        .active-easyocr-glow {
+            animation: pulse-glow-blue 2s infinite;
+            border-color: #3b82f6 !important;
+        }
+
+        .active-pytesseract-glow {
+            animation: pulse-glow-purple 2s infinite;
+            border-color: #a855f7 !important;
+        }
     </style>
 </head>
 
 <body class="text-slate-200 min-h-screen flex flex-col">
 
     <!-- Header Section -->
-    <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50 px-6 py-4">
+    <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50 px-6 py-3.5">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div
-                    class="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                        stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m1-4h12m-5 4h5a1 1 0 001-1v-4a1 1 0 00-1-1h-3m-6 0H7m1-4h3m5 0h3" />
+                <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m1-4h12m-5 4h5a1 1 0 001-1v-4a1 1 0 00-1-1h-3m-6 0H7m1-4h3m5 0h3" />
                     </svg>
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold text-white tracking-tight">ALPR System</h1>
-                    <p class="text-xs text-slate-400">Automated License Plate Recognition & Classification</p>
+                    <h1 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                        ALPR System <span class="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Dual-Model Comparison</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">EasyOCR vs PyTesseract Automated Benchmarking Platform</p>
                 </div>
+            </div>
+
+            <!-- Top Quick Sync Action Button -->
+            <div class="flex items-center gap-3">
+                <button id="sync-btn" onclick="togglePlaybackSync()"
+                    class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-all">
+                    <span id="sync-icon">🔗</span>
+                    <span id="sync-label">Sync Players: OFF</span>
+                </button>
             </div>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">
+    <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-6 flex flex-col gap-6">
 
-        <!-- Top Metrics Cards -->
-        <section class="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
-                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Frames Processed</div>
-                <div id="stat-frames" class="text-2xl font-bold text-white mt-1">--</div>
+        <!-- Executive Ground Truth Comparison Metrics Header -->
+        <section class="grid grid-cols-2 md:grid-cols-6 gap-3">
+            
+            <!-- Leader / Winner Card -->
+            <div class="bg-gradient-to-b from-slate-900/90 to-slate-900/50 border border-amber-500/30 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                <div class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Accuracy Winner</div>
+                <div id="stat-winner" class="text-lg font-black text-amber-300 mt-1 flex items-center gap-1">--</div>
+                <div class="text-[10px] text-slate-500 mt-1">Multi-factor Ground Truth</div>
             </div>
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
-                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vehicles Logged</div>
-                <div id="stat-vehicles" class="text-2xl font-bold text-white mt-1">0</div>
+
+            <!-- CER Card -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Avg CER (Lower Better)</div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <span id="stat-cer-easy" class="text-lg font-bold text-blue-400">--</span>
+                    <span class="text-xs text-slate-600 font-mono">vs</span>
+                    <span id="stat-cer-tess" class="text-lg font-bold text-purple-400">--</span>
+                </div>
+                <div id="stat-cer-label" class="text-[10px] text-slate-500 mt-1">EasyOCR vs PyTesseract</div>
             </div>
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
-                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Elapsed Time</div>
-                <div id="stat-elapsed" class="text-2xl font-bold text-white mt-1">0s</div>
+
+            <!-- Exact Match Rate Card -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Exact Matches (CER=0)</div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <span id="stat-exact-easy" class="text-lg font-bold text-blue-400">--</span>
+                    <span class="text-xs text-slate-600 font-mono">vs</span>
+                    <span id="stat-exact-tess" class="text-lg font-bold text-purple-400">--</span>
+                </div>
+                <div class="text-[10px] text-slate-500 mt-1">100% Perfect Reads</div>
             </div>
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
-                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Processing Speed</div>
-                <div id="stat-fps" class="text-2xl font-bold text-white mt-1">--</div>
+
+            <!-- GT Recall Card -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">GT Recall (Coverage)</div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <span id="stat-recall-easy" class="text-lg font-bold text-blue-400">--</span>
+                    <span class="text-xs text-slate-600 font-mono">vs</span>
+                    <span id="stat-recall-tess" class="text-lg font-bold text-purple-400">--</span>
+                </div>
+                <div class="text-[10px] text-slate-500 mt-1">Target Plates Identified</div>
             </div>
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
-                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Avg CER</div>
-                <div id="stat-cer" class="text-2xl font-bold text-white mt-1">--</div>
-                <div id="stat-cer-label" class="text-[10px] text-slate-500 mt-0.5">No ground truth</div>
+
+            <!-- Avg Confidence Card -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Avg Confidence</div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <span id="stat-conf-easy" class="text-lg font-bold text-blue-400">--</span>
+                    <span class="text-xs text-slate-600 font-mono">vs</span>
+                    <span id="stat-conf-tess" class="text-lg font-bold text-purple-400">--</span>
+                </div>
+                <div class="text-[10px] text-slate-500 mt-1">Mean Predict Score</div>
             </div>
+
+            <!-- Speed & Frames Card -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Speed & Elapsed</div>
+                <div id="stat-fps" class="text-lg font-bold text-emerald-400 mt-1">--</div>
+                <div id="stat-elapsed" class="text-[10px] text-slate-400 mt-1">0s total</div>
+            </div>
+
         </section>
 
-        <!-- Main Panels Layout -->
+        <!-- Dual Player & Controller Layout -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            <!-- Left Side: Live Preview Panel -->
+            <!-- Left Side: Dual Video Players Panel (2-Column Grid) -->
             <div class="lg:col-span-2 flex flex-col gap-4">
-                <div
-                    class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4 flex flex-col grow min-h-[450px] relative overflow-hidden">
+                <div class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4 flex flex-col grow relative overflow-hidden">
                     <div class="flex items-center justify-between mb-3">
-                        <span class="text-sm font-semibold text-white">Stream Preview</span>
-                        <span id="video-info" class="text-xs text-slate-400">No active video source</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-semibold text-white">Dual Stream & Player Comparison</span>
+                            <span id="video-info" class="text-xs text-slate-400 font-mono">No active video source</span>
+                        </div>
                     </div>
 
-                    <!-- Media Display Window -->
-                    <div
-                        class="relative w-full grow bg-slate-950/80 rounded-lg flex items-center justify-center overflow-hidden border border-slate-900">
+                    <!-- Shared Upload Zone (when no video uploaded) -->
+                    <div id="upload-zone"
+                        class="w-full min-h-[360px] flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-800 hover:border-blue-500/50 hover:bg-blue-950/5 transition-all duration-200 cursor-pointer rounded-lg">
+                        <input type="file" id="video-file-input" accept="video/*" class="hidden">
+                        <svg class="h-12 w-12 text-slate-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span class="text-sm font-medium text-slate-300">Drag and drop traffic video, or <span class="text-blue-500 underline">browse</span></span>
+                        <span class="text-xs text-slate-500 mt-1">Runs EasyOCR & PyTesseract concurrently</span>
+                    </div>
 
-                        <!-- Upload Target Container -->
-                        <div id="upload-zone"
-                            class="absolute inset-0 flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-800 hover:border-blue-500/50 hover:bg-blue-950/5 transition-all duration-200 cursor-pointer rounded-lg">
-                            <input type="file" id="video-file-input" accept="video/*" class="hidden">
-                            <svg class="h-10 w-10 text-slate-500 mb-3" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                            </svg>
-                            <span class="text-sm font-medium text-slate-300">Drag and drop traffic video, or <span
-                                    class="text-blue-500 underline">browse</span></span>
-                            <span class="text-xs text-slate-500 mt-1">Supports common video formats</span>
+                    <!-- Dual Players Grid Container (Hidden until processing starts) -->
+                    <div id="dual-players-container" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 grow">
+                        
+                        <!-- EasyOCR Player Card (Blue Theme) -->
+                        <div id="player-card-easyocr" class="bg-slate-950/80 rounded-xl border-2 border-blue-500/30 p-3 flex flex-col gap-2 relative overflow-hidden transition-all duration-300">
+                            <!-- Live Track Badge Top Overlay -->
+                            <div class="flex items-center justify-between px-2 py-1 bg-slate-900/90 rounded-lg border border-blue-500/20 text-xs">
+                                <span class="font-bold text-blue-400 flex items-center gap-1.5">
+                                    <span class="h-2 w-2 rounded-full bg-blue-500 animate-ping"></span> EasyOCR
+                                </span>
+                                <span id="badge-easyocr" class="font-mono text-[10px] text-slate-300 truncate max-w-[180px]">Scanning frames...</span>
+                            </div>
+                            <!-- Canvas Stream Preview -->
+                            <canvas id="canvas-easyocr" class="w-full max-h-[380px] object-contain rounded-lg border border-slate-900"></canvas>
+                            <!-- HTML5 Video Player for processed output -->
+                            <video id="video-easyocr" class="hidden w-full max-h-[380px] object-contain rounded-lg" controls></video>
                         </div>
 
-                        <!-- Canvas for Real-Time Streaming -->
-                        <canvas id="stream-canvas" class="hidden max-h-[500px] w-full object-contain"></canvas>
+                        <!-- PyTesseract Player Card (Purple Theme) -->
+                        <div id="player-card-pytesseract" class="bg-slate-950/80 rounded-xl border-2 border-purple-500/30 p-3 flex flex-col gap-2 relative overflow-hidden transition-all duration-300">
+                            <!-- Live Track Badge Top Overlay -->
+                            <div class="flex items-center justify-between px-2 py-1 bg-slate-900/90 rounded-lg border border-purple-500/20 text-xs">
+                                <span class="font-bold text-purple-400 flex items-center gap-1.5">
+                                    <span class="h-2 w-2 rounded-full bg-purple-500 animate-ping"></span> PyTesseract
+                                </span>
+                                <span id="badge-pytesseract" class="font-mono text-[10px] text-slate-300 truncate max-w-[180px]">Scanning frames...</span>
+                            </div>
+                            <!-- Canvas Stream Preview -->
+                            <canvas id="canvas-pytesseract" class="w-full max-h-[380px] object-contain rounded-lg border border-slate-900"></canvas>
+                            <!-- HTML5 Video Player for processed output -->
+                            <video id="video-pytesseract" class="hidden w-full max-h-[380px] object-contain rounded-lg" controls></video>
+                        </div>
 
-                        <!-- HTML5 Video Player for processed output -->
-                        <video id="output-video" class="hidden w-full max-h-[500px] object-contain" controls></video>
                     </div>
                 </div>
             </div>
@@ -130,15 +216,14 @@
 
                 <!-- Controller Box -->
                 <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-4">
-                    <h3 class="text-sm font-semibold text-white border-b border-slate-800 pb-2">Control Panel</h3>
+                    <h3 class="text-sm font-semibold text-white border-b border-slate-800 pb-2">Execution Controller</h3>
 
                     <div class="flex flex-col gap-1.5">
-                        <label class="text-xs text-slate-400 font-medium">OCR Engine</label>
-                        <select id="ocr-engine-select"
-                            class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors">
-                            <option value="EasyOCR">EasyOCR (Accurate - Recommended)</option>
-                            <option value="PyTesseract">PyTesseract (Fast Baseline)</option>
-                        </select>
+                        <label class="text-xs text-slate-400 font-medium">Pipeline Mode</label>
+                        <div class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-emerald-400 font-semibold flex items-center justify-between">
+                            <span>Dual-Model Parallel Execution</span>
+                            <span class="text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Automated</span>
+                        </div>
                     </div>
 
                     <div class="flex flex-col gap-1.5">
@@ -150,13 +235,12 @@
                             <option value="2">Skip every 2nd frame</option>
                             <option value="3">Skip every 3rd frame</option>
                             <option value="5">Skip every 5th frame</option>
-                            <option value="10">Skip every 10th frame</option>
                         </select>
                     </div>
 
                     <button id="process-btn" disabled
-                        class="w-full bg-blue-600/50 hover:bg-blue-600 disabled:bg-slate-800 text-white disabled:text-slate-500 font-medium rounded-lg py-2.5 text-sm transition-all duration-200 cursor-not-allowed disabled:cursor-not-allowed shadow-md shadow-blue-500/5">
-                        Process Video
+                        class="w-full bg-blue-600/50 hover:bg-blue-600 disabled:bg-slate-800 text-white disabled:text-slate-500 font-semibold rounded-lg py-3 text-sm transition-all duration-200 cursor-not-allowed disabled:cursor-not-allowed shadow-lg shadow-blue-500/10 flex items-center justify-center gap-2">
+                        <span>⚡ Run Dual-Model Comparison</span>
                     </button>
                 </div>
 
@@ -166,19 +250,19 @@
                         <h3 class="text-sm font-semibold text-white">Ground Truth Plates</h3>
                         <span id="gt-count" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-medium font-mono">0</span>
                     </div>
-                    <textarea id="gt-input" rows="4" placeholder="Enter plate numbers (one per line)&#10;e.g.&#10;WND 1234&#10;ABC 5678" 
+                    <textarea id="gt-input" rows="4" placeholder="Enter known plate numbers (one per line)&#10;e.g.&#10;WND 1234&#10;ABC 5678" 
                         class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500 transition-colors resize-none"></textarea>
                     <div class="flex gap-2">
                         <button id="gt-save-btn" onclick="saveGroundTruth()"
                             class="flex-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-700 rounded-lg transition-all">
-                            Save
+                            Save Ground Truth
                         </button>
                         <label class="flex-1 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all text-center cursor-pointer">
                             Import File
                             <input type="file" id="gt-file-input" accept=".txt,.csv" class="hidden" onchange="importGroundTruth(event)">
                         </label>
                     </div>
-                    <p class="text-[10px] text-slate-500">CER is computed after processing by matching OCR reads to these plates.</p>
+                    <p class="text-[10px] text-slate-500">CER, Exact Match Rate, Recall & Precision are computed against these plates.</p>
                 </div>
 
                 <!-- Progress Tracker Box -->
@@ -192,8 +276,7 @@
                             <span id="progress-percent" class="text-slate-200">0%</span>
                         </div>
                         <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-900">
-                            <div id="progress-bar-fill"
-                                class="bg-blue-500 h-full w-0 rounded-full transition-all duration-100"></div>
+                            <div id="progress-bar-fill" class="bg-gradient-to-r from-blue-500 to-purple-500 h-full w-0 rounded-full transition-all duration-100"></div>
                         </div>
                     </div>
 
@@ -203,8 +286,8 @@
                             <span id="progress-eta" class="font-medium text-slate-300">--</span>
                         </div>
                         <div>
-                            <span class="text-slate-500 block">Detections</span>
-                            <span id="progress-detections" class="font-medium text-slate-300">0</span>
+                            <span class="text-slate-500 block">Frame Counter</span>
+                            <span id="stat-frames" class="font-medium text-slate-300">--</span>
                         </div>
                     </div>
                 </div>
@@ -212,96 +295,41 @@
             </div>
         </div>
 
-        <!-- Bottom Log and Crops Gallery -->
+        <!-- Bottom Side-by-Side Detection Records Table and Gallery -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            <!-- Bottom Left: Log Panel -->
-            <div
-                class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-3 min-h-[350px]">
+            <!-- Bottom Left: Side-by-Side Log Comparison Table -->
+            <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-3 min-h-[380px]">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <h3 class="text-sm font-semibold text-white">Detection Records</h3>
-                    <div class="flex items-center gap-2">
-                        <span id="log-count"
-                            class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-medium font-mono">0
-                            Total</span>
-                        <button id="export-btn" onclick="downloadExport()" disabled
-                            class="px-2.5 py-1 text-xs font-semibold text-slate-300 bg-slate-850 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-850 border border-slate-800 rounded-lg flex items-center gap-1.5 transition-all">
-                            <span>Export to Excel</span>
-                            <svg class="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                        </button>
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-sm font-semibold text-white">Side-by-Side Model Detections</h3>
+                        <span id="log-count" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-medium font-mono">0 Total</span>
                     </div>
+                    <button id="export-btn" onclick="downloadExport()" disabled
+                        class="px-3 py-1.5 text-xs font-semibold text-slate-200 bg-emerald-600/80 hover:bg-emerald-600 disabled:opacity-40 border border-emerald-700 rounded-lg flex items-center gap-1.5 transition-all">
+                        <span>Export Excel Comparison</span>
+                        <svg class="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="grow overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse">
                         <thead>
                             <tr class="border-b border-slate-800/80 text-slate-400 select-none">
-                                <th onclick="sortLogs('track_id')"
-                                    class="py-3 px-2 font-semibold cursor-pointer hover:text-white transition-colors">
-                                    <div class="flex items-center gap-1">
-                                        <span>ID</span>
-                                        <span id="sort-icon-track_id"
-                                            class="text-[10px] text-slate-600 font-mono">↕</span>
-                                    </div>
-                                </th>
-                                <th onclick="sortLogs('timestamp')"
-                                    class="py-3 px-2 font-semibold cursor-pointer hover:text-white transition-colors">
-                                    <div class="flex items-center gap-1">
-                                        <span>Timestamp</span>
-                                        <span id="sort-icon-timestamp"
-                                            class="text-[10px] text-slate-600 font-mono">↕</span>
-                                    </div>
-                                </th>
-                                <th onclick="sortLogs('vehicle_type')"
-                                    class="py-3 px-2 font-semibold cursor-pointer hover:text-white transition-colors">
-                                    <div class="flex items-center gap-1">
-                                        <span>Type</span>
-                                        <span id="sort-icon-vehicle_type"
-                                            class="text-[10px] text-slate-600 font-mono">↕</span>
-                                    </div>
-                                </th>
-                                <th onclick="sortLogs('color')"
-                                    class="py-3 px-2 font-semibold cursor-pointer hover:text-white transition-colors">
-                                    <div class="flex items-center gap-1">
-                                        <span>Color</span>
-                                        <span id="sort-icon-color" class="text-[10px] text-slate-600 font-mono">↕</span>
-                                    </div>
-                                </th>
-                                <th onclick="sortLogs('plate_number')"
-                                    class="py-3 px-2 font-semibold cursor-pointer hover:text-white transition-colors">
-                                    <div class="flex items-center gap-1">
-                                        <span>Plate Number</span>
-                                        <span id="sort-icon-plate_number"
-                                            class="text-[10px] text-slate-600 font-mono">↕</span>
-                                    </div>
-                                </th>
-                                <th onclick="sortLogs('confidence')"
-                                    class="py-3 px-2 font-semibold cursor-pointer hover:text-white transition-colors">
-                                    <div class="flex items-center gap-1">
-                                        <span>Confidence</span>
-                                        <span id="sort-icon-confidence"
-                                            class="text-[10px] text-slate-600 font-mono">↕</span>
-                                    </div>
-                                </th>
-                                <th onclick="sortLogs('cer')"
-                                    class="py-3 px-2 font-semibold cursor-pointer hover:text-white transition-colors">
-                                    <div class="flex items-center gap-1">
-                                        <span>CER</span>
-                                        <span id="sort-icon-cer"
-                                            class="text-[10px] text-slate-600 font-mono">↕</span>
-                                    </div>
-                                </th>
+                                <th class="py-3 px-2 font-semibold">ID</th>
+                                <th class="py-3 px-2 font-semibold">Time</th>
+                                <th class="py-3 px-2 font-semibold">Vehicle</th>
+                                <th class="py-3 px-2 font-semibold text-blue-400">EasyOCR Read</th>
+                                <th class="py-3 px-2 font-semibold text-purple-400">PyTesseract Read</th>
+                                <th class="py-3 px-2 font-semibold text-slate-300">Ground Truth</th>
+                                <th class="py-3 px-2 font-semibold text-amber-400">Winner</th>
                             </tr>
                         </thead>
                         <tbody id="log-table-body" class="divide-y divide-slate-800/40 text-slate-300">
-                            <!-- Populated Dynamically -->
                             <tr id="empty-log-row">
-                                <td colspan="7" class="text-center py-10 text-slate-500">No vehicle records populated.
-                                    Run a process to begin logging.</td>
+                                <td colspan="7" class="text-center py-12 text-slate-500">No vehicle records populated. Run a dual-model process to compare.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -311,12 +339,10 @@
             <!-- Bottom Right: Plate Crops Gallery -->
             <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-3">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <h3 class="text-sm font-semibold text-white">Detected Plates Gallery</h3>
+                    <h3 class="text-sm font-semibold text-white">Detected Plate Crops</h3>
                 </div>
 
-                <div id="crop-gallery" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[500px] content-start"
-                    style="grid-auto-rows: minmax(80px, auto);">
-                    <!-- Images added dynamically -->
+                <div id="crop-gallery" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[420px] content-start" style="grid-auto-rows: minmax(80px, auto);">
                     <div id="empty-gallery-msg" class="col-span-3 text-center py-16 text-slate-500 text-xs">
                         No cropped plates currently parsed.
                     </div>
@@ -329,128 +355,55 @@
 
     <!-- Footer -->
     <footer class="border-t border-slate-800 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500 mt-auto">
-        ALPR Dashboard App
+        ALPR Dual-Model Comparison Dashboard System
     </footer>
-
-    <!-- Image Viewer / Details Modal -->
-    <div id="details-modal"
-        class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm transition-all duration-300">
-        <div
-            class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col">
-            <!-- Modal Header -->
-            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-                <h3 class="text-base font-bold text-white">Detection Details</h3>
-                <button onclick="closeModal()"
-                    class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <!-- Modal Body -->
-            <div class="p-6 flex flex-col md:flex-row gap-6">
-                <!-- Images Column -->
-                <div class="flex-1 flex flex-col gap-4">
-                    <!-- Plate Crop Box -->
-                    <div
-                        class="bg-slate-950 p-3 border border-slate-800 rounded-xl flex flex-col items-center justify-center">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">License
-                            Plate</span>
-                        <img id="modal-plate-img" src=""
-                            class="max-h-20 object-contain filter contrast-125 select-none" />
-                    </div>
-                    <!-- Vehicle Snapshot Box -->
-                    <div
-                        class="bg-slate-950 p-3 border border-slate-800 rounded-xl flex flex-col items-center justify-center min-h-[160px]">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Vehicle / Car
-                            Snapshot</span>
-                        <img id="modal-vehicle-img" src="" class="max-h-48 object-contain rounded-lg shadow"
-                            onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23334155\' stroke-width=\'1.5\'><rect x=\'2\' y=\'2\' width=\'20\' height=\'20\' rx=\'2.18\' ry=\'2.18\'/><line x1=\'7\' y1=\'2\' x2=\'7\' y2=\'22\'/><line x1=\'17\' y1=\'2\' x2=\'17\' y2=\'22\'/><line x1=\'2\' y1=\'12\' x2=\'22\' y2=\'12\'/></svg>';" />
-                    </div>
-                </div>
-                <!-- Details Column -->
-                <div class="flex-1 flex flex-col gap-4 text-sm justify-between">
-                    <div class="flex flex-col gap-3">
-                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
-                            <span class="text-slate-400 font-medium">Track ID</span>
-                            <span id="modal-track-id" class="text-white font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
-                            <span class="text-slate-400 font-medium">Plate Number</span>
-                            <span id="modal-plate-number" class="text-blue-400 font-bold tracking-wider">--</span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
-                            <span class="text-slate-400 font-medium">Confidence</span>
-                            <span id="modal-confidence" class="text-white font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
-                            <span class="text-slate-400 font-medium">Vehicle Type</span>
-                            <span id="modal-vehicle-type" class="text-white capitalize font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
-                            <span class="text-slate-400 font-medium">Color</span>
-                            <span id="modal-color" class="text-white capitalize font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between border-b border-slate-800 pb-1.5">
-                            <span class="text-slate-400 font-medium">Timestamp</span>
-                            <span id="modal-timestamp" class="text-slate-300 font-semibold">--</span>
-                        </div>
-                        <div id="modal-cer-row" class="flex justify-between border-b border-slate-800 pb-1.5 hidden">
-                            <span class="text-slate-400 font-medium">CER</span>
-                            <span id="modal-cer" class="font-semibold">--</span>
-                        </div>
-                        <div id="modal-gt-row" class="flex justify-between border-b border-slate-800 pb-1.5 hidden">
-                            <span class="text-slate-400 font-medium">Matched GT</span>
-                            <span id="modal-matched-gt" class="text-slate-300 font-semibold font-mono">--</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
 
     <!-- Logic Script -->
     <script>
         const uploadZone = document.getElementById('upload-zone');
         const fileInput = document.getElementById('video-file-input');
         const processBtn = document.getElementById('process-btn');
-        const ocrSelect = document.getElementById('ocr-engine-select');
-        const streamCanvas = document.getElementById('stream-canvas');
-        const outputVideo = document.getElementById('output-video');
+        const dualPlayersContainer = document.getElementById('dual-players-container');
+
+        const canvasEasy = document.getElementById('canvas-easyocr');
+        const canvasTess = document.getElementById('canvas-pytesseract');
+        const videoEasy = document.getElementById('video-easyocr');
+        const videoTess = document.getElementById('video-pytesseract');
+
+        const badgeEasy = document.getElementById('badge-easyocr');
+        const badgeTess = document.getElementById('badge-pytesseract');
+
         const progressBox = document.getElementById('progress-box');
         const progressStatus = document.getElementById('progress-status');
         const progressPercent = document.getElementById('progress-percent');
         const progressFill = document.getElementById('progress-bar-fill');
         const progressEta = document.getElementById('progress-eta');
-        const progressDetections = document.getElementById('progress-detections');
+
         const logTableBody = document.getElementById('log-table-body');
-        const emptyLogRow = document.getElementById('empty-log-row');
         const cropGallery = document.getElementById('crop-gallery');
         const emptyGalleryMsg = document.getElementById('empty-gallery-msg');
         const videoInfo = document.getElementById('video-info');
         const logCount = document.getElementById('log-count');
         const exportBtn = document.getElementById('export-btn');
 
-        // Global stats
-        const statFrames = document.getElementById('stat-frames');
-        const statVehicles = document.getElementById('stat-vehicles');
-        const statElapsed = document.getElementById('stat-elapsed');
+        // Metrics elements
+        const statWinner = document.getElementById('stat-winner');
+        const statCerEasy = document.getElementById('stat-cer-easy');
+        const statCerTess = document.getElementById('stat-cer-tess');
+        const statExactEasy = document.getElementById('stat-exact-easy');
+        const statExactTess = document.getElementById('stat-exact-tess');
+        const statRecallEasy = document.getElementById('stat-recall-easy');
+        const statRecallTess = document.getElementById('stat-recall-tess');
+        const statConfEasy = document.getElementById('stat-conf-easy');
+        const statConfTess = document.getElementById('stat-conf-tess');
         const statFps = document.getElementById('stat-fps');
-        const statCer = document.getElementById('stat-cer');
-        const statCerLabel = document.getElementById('stat-cer-label');
+        const statElapsed = document.getElementById('stat-elapsed');
 
         let selectedVideoPath = null;
-        let loggedPlates = new Set();
-        let uniqueVehicles = new Set();
-        let detectionLogs = []; // In-memory database of all received logs for sorting
-        let trackDetailsMap = {}; // trackId -> full information details
-        let currentSortCol = null;
-        let currentSortDir = 'asc';
+        let dualLogsMap = {}; // trackId -> { easy: rowData, tess: rowData }
+        let isSyncingPlayback = false;
 
-        // ── Upload Event Handlers ─────────────────────────────────────
+        // ── Upload Handlers ──────────────────────────────────────────
         uploadZone.addEventListener('click', () => fileInput.click());
 
         uploadZone.addEventListener('dragover', (e) => {
@@ -465,27 +418,21 @@
         uploadZone.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadZone.classList.remove('border-blue-500', 'bg-blue-950/10');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFileSelect(files[0]);
-            }
+            if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]);
         });
 
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFileSelect(e.target.files[0]);
-            }
+            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
         });
 
         async function handleFileSelect(file) {
-            // Update UI to uploading state
             uploadZone.innerHTML = `
                 <div class="flex flex-col items-center gap-3">
                     <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span class="text-sm font-medium text-slate-300">Uploading video file to server...</span>
+                    <span class="text-sm font-medium text-slate-300">Uploading video file...</span>
                 </div>
             `;
 
@@ -493,17 +440,12 @@
             formData.append('file', file);
 
             try {
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/api/upload', { method: 'POST', body: formData });
                 if (!response.ok) throw new Error('Upload failed');
 
                 const data = await response.json();
                 selectedVideoPath = data.filepath;
 
-                // Configure UI to ready state
                 videoInfo.textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
                 uploadZone.innerHTML = `
                     <svg class="h-10 w-10 text-emerald-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -513,7 +455,6 @@
                     <span class="text-xs text-slate-400 mt-1 click-change underline cursor-pointer">Choose another file</span>
                 `;
 
-                // Allow another file select by stopping propagation on clicking the inner link
                 uploadZone.querySelector('.click-change').addEventListener('click', (e) => {
                     e.stopPropagation();
                     fileInput.click();
@@ -525,224 +466,132 @@
 
             } catch (err) {
                 console.error(err);
-                uploadZone.innerHTML = `
-                    <svg class="h-10 w-10 text-rose-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <span class="text-sm font-semibold text-rose-400">Failed to upload video</span>
-                    <span class="text-xs text-slate-400 underline mt-1">Try again</span>
-                `;
+                uploadZone.innerHTML = `<span class="text-rose-400 text-sm font-semibold">Upload failed. Try again.</span>`;
             }
         }
 
-        // ── Export functionality ──────────────────────────
         function downloadExport() {
             window.location.href = '/api/export';
         }
 
-        // ── Table Sorting functionality ───────────────────────────
-        function sortLogs(col) {
-            if (currentSortCol === col) {
-                currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+        // ── Video Playback Sync Control ──────────────────────────────
+        function togglePlaybackSync() {
+            isSyncingPlayback = !isSyncingPlayback;
+            const btn = document.getElementById('sync-btn');
+            const label = document.getElementById('sync-label');
+            const icon = document.getElementById('sync-icon');
+
+            if (isSyncingPlayback) {
+                btn.className = "px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white border border-emerald-500 flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20";
+                label.textContent = "Sync Players: ON";
+                icon.textContent = "🔗";
             } else {
-                currentSortCol = col;
-                currentSortDir = 'asc';
+                btn.className = "px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-all";
+                label.textContent = "Sync Players: OFF";
+                icon.textContent = "🔓";
             }
-            performSort(col, true);
         }
 
-        function performSort(col, updateUI = true) {
-            detectionLogs.sort((a, b) => {
-                let valA = a[col];
-                let valB = b[col];
+        videoEasy.addEventListener('play', () => {
+            if (isSyncingPlayback && videoTess.paused) videoTess.play();
+        });
+        videoEasy.addEventListener('pause', () => {
+            if (isSyncingPlayback && !videoTess.paused) videoTess.pause();
+        });
+        videoEasy.addEventListener('seeking', () => {
+            if (isSyncingPlayback && Math.abs(videoTess.currentTime - videoEasy.currentTime) > 0.3) {
+                videoTess.currentTime = videoEasy.currentTime;
+            }
+        });
 
-                if (col === 'track_id' || col === 'confidence' || col === 'cer') {
-                    valA = parseFloat(valA) || 0;
-                    valB = parseFloat(valB) || 0;
-                } else {
-                    valA = String(valA || '').toLowerCase();
-                    valB = String(valB || '').toLowerCase();
-                }
+        videoTess.addEventListener('play', () => {
+            if (isSyncingPlayback && videoEasy.paused) videoEasy.play();
+        });
+        videoTess.addEventListener('pause', () => {
+            if (isSyncingPlayback && !videoEasy.paused) videoEasy.pause();
+        });
+        videoTess.addEventListener('seeking', () => {
+            if (isSyncingPlayback && Math.abs(videoEasy.currentTime - videoTess.currentTime) > 0.3) {
+                videoEasy.currentTime = videoTess.currentTime;
+            }
+        });
 
-                if (valA < valB) return currentSortDir === 'asc' ? -1 : 1;
-                if (valA > valB) return currentSortDir === 'asc' ? 1 : -1;
-                return 0;
-            });
-
-            if (updateUI) {
-                // Update indicator icons in header
-                ['track_id', 'timestamp', 'vehicle_type', 'color', 'plate_number', 'confidence', 'cer'].forEach(c => {
-                    const icon = document.getElementById(`sort-icon-${c}`);
-                    if (icon) {
-                        if (c === currentSortCol) {
-                            icon.textContent = currentSortDir === 'asc' ? '▲' : '▼';
-                            icon.className = "text-[10px] text-blue-400 font-bold font-mono";
-                        } else {
-                            icon.textContent = '↕';
-                            icon.className = "text-[10px] text-slate-600 font-mono";
+        // ── Real-Time Frame Tracking Badges during Video Playback ────
+        [ { video: videoEasy, badge: badgeEasy, model: 'EasyOCR', card: document.getElementById('player-card-easyocr'), glowClass: 'active-easyocr-glow' },
+          { video: videoTess, badge: badgeTess, model: 'PyTesseract', card: document.getElementById('player-card-pytesseract'), glowClass: 'active-pytesseract-glow' }
+        ].forEach(({ video, badge, model, card, glowClass }) => {
+            video.addEventListener('timeupdate', () => {
+                const curTime = video.currentTime;
+                let activeItem = null;
+                for (const trackId in dualLogsMap) {
+                    const item = dualLogsMap[trackId][model === 'EasyOCR' ? 'easy' : 'tess'];
+                    if (item && item.timestamp) {
+                        const parts = item.timestamp.split(':');
+                        if (parts.length === 2) {
+                            const secs = parseInt(parts[0]) * 60 + parseFloat(parts[1]);
+                            if (Math.abs(secs - curTime) <= 1.5) {
+                                activeItem = item;
+                                break;
+                            }
                         }
                     }
-                });
-            }
-            renderTable();
-        }
+                }
 
-        function renderTable() {
-            if (detectionLogs.length === 0) {
-                logTableBody.innerHTML = `
-                    <tr id="empty-log-row">
-                        <td colspan="7" class="text-center py-10 text-slate-500">No vehicle records populated. Run a process to begin logging.</td>
-                    </tr>
-                `;
-                return;
-            }
-
-            logTableBody.innerHTML = '';
-            detectionLogs.forEach(rowData => {
-                const tr = document.createElement('tr');
-                const canonicalId = rowData.canonical_id || rowData.track_id;
-                tr.id = `log-row-${canonicalId}`;
-                tr.className = "border-b border-slate-800/20 hover:bg-slate-900/20 transition-colors cursor-pointer select-none";
-                tr.onclick = () => openModal(canonicalId);
-
-                tr.innerHTML = `
-                    <td class="py-2.5 px-2 font-semibold text-slate-400">#${rowData.track_id}</td>
-                    <td class="py-2.5 px-2 text-slate-500">${rowData.timestamp}</td>
-                    <td class="py-2.5 px-2 font-medium capitalize">${rowData.vehicle_type}</td>
-                    <td class="py-2.5 px-2 capitalize">${rowData.color || '--'}</td>
-                    <td class="py-2.5 px-2 font-bold tracking-wider text-blue-400">${rowData.plate_number}</td>
-                    <td class="py-2.5 px-2">
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${rowData.confidence > 0.8 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        rowData.confidence > 0.5 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                            'bg-slate-800 text-slate-400'
-                    }">
-                            ${(rowData.confidence * 100).toFixed(0)}%
-                        </span>
-                    </td>
-                    <td class="py-2.5 px-2">
-                        ${rowData.cer != null ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            rowData.cer === 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                            rowData.cer <= 0.3 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                            'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                        }">${(rowData.cer * 100).toFixed(0)}%</span>` : '<span class="text-slate-600">--</span>'}
-                    </td>
-                `;
-                logTableBody.appendChild(tr);
+                if (activeItem && activeItem.plate_number) {
+                    badge.innerHTML = `🚗 <span class="font-bold text-white">${activeItem.plate_number}</span> (${(activeItem.confidence * 100).toFixed(0)}%)`;
+                    card.classList.add(glowClass);
+                } else {
+                    badge.textContent = 'Scanning video...';
+                    card.classList.remove(glowClass);
+                }
             });
-        }
-
-        // ── Details Modal Open/Close functionality ──────────────────
-        function openModal(trackId) {
-            const details = trackDetailsMap[trackId];
-            if (!details) return;
-
-            document.getElementById('modal-track-id').textContent = `#${trackId}`;
-            document.getElementById('modal-plate-number').textContent = details.plate_number || 'UNKNOWN';
-            document.getElementById('modal-confidence').textContent = details.confidence ? `${(parseFloat(details.confidence) * 100).toFixed(0)}%` : '--';
-            document.getElementById('modal-vehicle-type').textContent = details.vehicle_type || 'Unknown';
-            document.getElementById('modal-color').textContent = details.color || '--';
-            document.getElementById('modal-timestamp').textContent = details.timestamp || '--';
-
-            document.getElementById('modal-plate-img').src = details.plate_crop_url || '';
-            document.getElementById('modal-vehicle-img').src = details.snapshot_url || '';
-
-            // Show CER fields if available
-            const cerRow = document.getElementById('modal-cer-row');
-            const gtRow = document.getElementById('modal-gt-row');
-            if (details.cer != null) {
-                cerRow.classList.remove('hidden');
-                const cerEl = document.getElementById('modal-cer');
-                cerEl.textContent = `${(parseFloat(details.cer) * 100).toFixed(1)}%`;
-                cerEl.className = `font-semibold ${details.cer === 0 ? 'text-emerald-400' : details.cer <= 0.3 ? 'text-amber-400' : 'text-rose-400'}`;
-            } else {
-                cerRow.classList.add('hidden');
-            }
-            if (details.matched_gt) {
-                gtRow.classList.remove('hidden');
-                document.getElementById('modal-matched-gt').textContent = details.matched_gt;
-            } else {
-                gtRow.classList.add('hidden');
-            }
-
-            const modal = document.getElementById('details-modal');
-            modal.classList.remove('hidden');
-        }
-
-        function closeModal() {
-            const modal = document.getElementById('details-modal');
-            modal.classList.add('hidden');
-        }
-
-        // Close details modal on Escape key or outside click
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
-        });
-        document.getElementById('details-modal').addEventListener('click', (e) => {
-            if (e.target === document.getElementById('details-modal')) closeModal();
         });
 
-
-
-        // ── Pipeline processing execution ────────────────────────────
+        // ── Main Dual-Model Execution Listener ────────────────────────
         processBtn.addEventListener('click', () => {
             if (!selectedVideoPath) return;
 
-            // Reset UI lists
-            loggedPlates.clear();
-            uniqueVehicles.clear();
-            detectionLogs = [];
-            trackDetailsMap = {};
-            currentSortCol = null;
-            currentSortDir = 'asc';
-
-            // Reset header indicators
-            ['track_id', 'timestamp', 'vehicle_type', 'color', 'plate_number', 'confidence', 'cer'].forEach(c => {
-                const icon = document.getElementById(`sort-icon-${c}`);
-                if (icon) {
-                    icon.textContent = '↕';
-                    icon.className = "text-[10px] text-slate-600 font-mono";
-                }
-            });
-
+            dualLogsMap = {};
             logTableBody.innerHTML = '';
             cropGallery.innerHTML = '';
             emptyGalleryMsg.classList.remove('hidden');
-            statVehicles.textContent = '0';
-            progressDetections.textContent = '0';
-            logCount.textContent = '0 Total';
 
-            if (exportBtn) exportBtn.disabled = true;
-
-            // Show stream elements, hide upload indicators
             uploadZone.classList.add('hidden');
-            outputVideo.classList.add('hidden');
-            streamCanvas.classList.remove('hidden');
+            dualPlayersContainer.classList.remove('hidden');
 
-            // Activate progress card visual
+            videoEasy.classList.add('hidden');
+            videoTess.classList.add('hidden');
+            canvasEasy.classList.remove('hidden');
+            canvasTess.classList.remove('hidden');
+
             progressBox.classList.remove('opacity-50');
             processBtn.disabled = true;
-            processBtn.textContent = 'Processing...';
+            processBtn.textContent = 'Processing Dual Pipeline...';
 
-            const engine = ocrSelect.value;
             const skipMode = document.getElementById('frame-skip-select').value;
-            const eventSource = new EventSource(`/api/stream-process?video_path=${encodeURIComponent(selectedVideoPath)}&ocr_engine=${engine}&frame_skip=${skipMode}`);
+            const eventSource = new EventSource(`/api/stream-process?video_path=${encodeURIComponent(selectedVideoPath)}&ocr_engine=dual&frame_skip=${skipMode}`);
 
-            const canvasCtx = streamCanvas.getContext('2d');
-            const frameImg = new Image();
+            const ctxEasy = canvasEasy.getContext('2d');
+            const ctxTess = canvasTess.getContext('2d');
+            const imgEasy = new Image();
+            const imgTess = new Image();
 
             eventSource.addEventListener('frame', (e) => {
                 const data = JSON.parse(e.data);
 
-                // Initialize canvas sizing on first frame
-                if (streamCanvas.width === 0) {
-                    streamCanvas.width = 640;
-                    streamCanvas.height = 360;
+                if (canvasEasy.width === 0) {
+                    canvasEasy.width = 640; canvasEasy.height = 360;
+                    canvasTess.width = 640; canvasTess.height = 360;
                 }
 
-                frameImg.onload = () => {
-                    canvasCtx.drawImage(frameImg, 0, 0, streamCanvas.width, streamCanvas.height);
-                };
-                frameImg.src = 'data:image/jpeg;base64,' + data.image;
+                if (data.image_easyocr) {
+                    imgEasy.onload = () => ctxEasy.drawImage(imgEasy, 0, 0, canvasEasy.width, canvasEasy.height);
+                    imgEasy.src = 'data:image/jpeg;base64,' + data.image_easyocr;
+                }
+                if (data.image_pytesseract) {
+                    imgTess.onload = () => ctxTess.drawImage(imgTess, 0, 0, canvasTess.width, canvasTess.height);
+                    imgTess.src = 'data:image/jpeg;base64,' + data.image_pytesseract;
+                }
             });
 
             eventSource.addEventListener('progress', (e) => {
@@ -752,108 +601,41 @@
                 progressFill.style.width = `${data.percent}%`;
                 progressEta.textContent = data.eta;
 
-                // Update top statistics cards
-                statFrames.textContent = `${data.frame_idx} / ${data.total_frames}`;
-                statElapsed.textContent = data.elapsed_str;
+                document.getElementById('stat-frames').textContent = `${data.frame_idx} / ${data.total_frames}`;
+                statElapsed.textContent = `${data.elapsed_str} total`;
                 statFps.textContent = `${data.fps} FPS`;
             });
 
             eventSource.addEventListener('log', (e) => {
                 const rowData = JSON.parse(e.data);
-                const canonicalId = rowData.canonical_id || rowData.track_id;
+                const trackId = rowData.track_id;
+                const model = rowData.model;
 
-                // Store/update details
-                if (!trackDetailsMap[canonicalId]) {
-                    trackDetailsMap[canonicalId] = {};
-                }
-                Object.assign(trackDetailsMap[canonicalId], rowData);
-                if (rowData.snapshot_url) {
-                    trackDetailsMap[canonicalId].snapshot_url = rowData.snapshot_url;
-                }
-                if (rowData.plate_crop_url) {
-                    trackDetailsMap[canonicalId].plate_crop_url = rowData.plate_crop_url;
-                }
+                if (!dualLogsMap[trackId]) dualLogsMap[trackId] = {};
+                dualLogsMap[trackId][model === 'EasyOCR' ? 'easy' : 'tess'] = rowData;
 
-                // Deduplicate by canonical_id
-                let existingIdx = detectionLogs.findIndex(item => (item.canonical_id || item.track_id) === canonicalId);
-
-                if (existingIdx !== -1) {
-                    // Update existing entry - keep the one with higher confidence
-                    const oldConf = parseFloat(detectionLogs[existingIdx].confidence) || 0;
-                    const newConf = parseFloat(rowData.confidence) || 0;
-                    if (newConf >= oldConf) {
-                        detectionLogs[existingIdx] = rowData;
-                    }
-                } else {
-                    detectionLogs.push(rowData);
-                }
-
-                // Render table with sorting preserved
-                if (currentSortCol) {
-                    performSort(currentSortCol, false);
-                } else {
-                    renderTable();
-                }
-
-                // Count unique vehicles for the vehicle counter
-                statVehicles.textContent = detectionLogs.length;
-                progressDetections.textContent = detectionLogs.length;
-                logCount.textContent = `${detectionLogs.length} Total`;
-
+                renderDualTable();
                 if (exportBtn) exportBtn.disabled = false;
-
-                // Update average CER display
-                updateCerDisplay();
             });
 
             eventSource.addEventListener('crop', (e) => {
                 const data = JSON.parse(e.data);
-
-                // Key crops by canonicalId to prevent duplicates in gallery
-                const trackId = data.track_id;
-                const canonicalId = data.canonical_id || trackId;
-                const cropId = `crop-card-track-${canonicalId}`;
+                const cropId = `crop-card-${data.model}-${data.track_id}`;
                 let existingCard = document.getElementById(cropId);
 
-                // Store/update track details
-                if (!trackDetailsMap[canonicalId]) {
-                    trackDetailsMap[canonicalId] = {
-                        track_id: trackId,
-                        canonical_id: canonicalId,
-                        plate_number: data.text,
-                        plate_crop_url: data.url,
-                        snapshot_url: data.snapshot_url,
-                        confidence: data.confidence || 0.0
-                    };
-                } else {
-                    const prevConf = trackDetailsMap[canonicalId].confidence || 0.0;
-                    const newConf = data.confidence || 0.0;
-                    if (newConf >= prevConf) {
-                        trackDetailsMap[canonicalId].plate_crop_url = data.url;
-                        trackDetailsMap[canonicalId].plate_number = data.text;
-                        trackDetailsMap[canonicalId].confidence = newConf;
-                        if (data.snapshot_url) {
-                            trackDetailsMap[canonicalId].snapshot_url = data.snapshot_url;
-                        }
-                    }
-                }
-
-                const cardInnerHtml = `
-                    <img src="${trackDetailsMap[canonicalId].plate_crop_url}" class="h-10 w-full object-contain filter contrast-125 select-none" draggable="false" />
-                    <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tight">${trackDetailsMap[canonicalId].plate_number}</span>
-                    <span class="text-[8px] text-slate-600 font-semibold">#${canonicalId}</span>
+                const cardInner = `
+                    <img src="${data.url}" class="h-10 w-full object-contain filter contrast-125 select-none" draggable="false" />
+                    <span class="text-[9px] font-bold text-slate-300 mt-1 uppercase tracking-tight">${data.text}</span>
+                    <span class="text-[8px] font-semibold ${data.model === 'EasyOCR' ? 'text-blue-400' : 'text-purple-400'}">[${data.model}] #${data.track_id}</span>
                 `;
 
                 if (existingCard) {
-                    existingCard.innerHTML = cardInnerHtml;
+                    existingCard.innerHTML = cardInner;
                 } else {
                     const card = document.createElement('div');
                     card.id = cropId;
-                    card.className = "bg-slate-950 p-1 border border-slate-800 rounded-lg flex flex-col items-center shadow-sm overflow-hidden transition-all hover:border-slate-700 cursor-pointer";
-                    card.onclick = () => openModal(canonicalId);
-                    card.innerHTML = cardInnerHtml;
-
-                    // Insert at front of grid
+                    card.className = "bg-slate-950 p-1 border border-slate-800 rounded-lg flex flex-col items-center shadow-sm overflow-hidden";
+                    card.innerHTML = cardInner;
                     cropGallery.insertBefore(card, cropGallery.firstChild);
                     emptyGalleryMsg.classList.add('hidden');
                 }
@@ -863,34 +645,123 @@
                 const data = JSON.parse(e.data);
                 eventSource.close();
 
-                // Swap live canvas stream to final H.264 mp4 video player
-                streamCanvas.classList.add('hidden');
-                outputVideo.src = data.video_url;
-                outputVideo.classList.remove('hidden');
-                outputVideo.play();
+                canvasEasy.classList.add('hidden');
+                canvasTess.classList.add('hidden');
 
-                // Finish status configurations
-                progressStatus.textContent = 'Processing Finished';
+                videoEasy.src = data.video_easyocr_url;
+                videoTess.src = data.video_pytesseract_url;
+
+                videoEasy.classList.remove('hidden');
+                videoTess.classList.remove('hidden');
+
+                videoEasy.play();
+                videoTess.play();
+
+                progressStatus.textContent = 'Dual Processing Finished';
                 progressPercent.textContent = '100%';
                 progressFill.style.width = '100%';
                 progressEta.textContent = 'Done';
 
                 processBtn.disabled = false;
-                processBtn.textContent = 'Process Video';
+                processBtn.textContent = '⚡ Run Dual-Model Comparison';
+
+                if (data.metrics) {
+                    updateMetricsCards(data.metrics);
+                }
             });
 
             eventSource.onerror = (err) => {
                 console.error("SSE Connection Error", err);
                 eventSource.close();
-
                 progressStatus.textContent = 'Error during processing';
                 processBtn.disabled = false;
-                processBtn.textContent = 'Process Video';
+                processBtn.textContent = '⚡ Run Dual-Model Comparison';
             };
         });
 
-        // ── Ground Truth Management ───────────────────────────────────
+        // ── Render Dual-Model Side-by-Side Comparison Table ─────────
+        function renderDualTable() {
+            const trackIds = Object.keys(dualLogsMap);
+            logCount.textContent = `${trackIds.length} Vehicles`;
 
+            if (trackIds.length === 0) {
+                logTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-slate-500">No vehicle records.</td></tr>`;
+                return;
+            }
+
+            logTableBody.innerHTML = '';
+            trackIds.forEach(trackId => {
+                const pair = dualLogsMap[trackId];
+                const easy = pair.easy || {};
+                const tess = pair.tess || {};
+
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-800/30 hover:bg-slate-900/30 transition-colors";
+
+                const timeStr = easy.timestamp || tess.timestamp || '--';
+                const vehicleStr = easy.vehicle_type || tess.vehicle_type || 'Vehicle';
+                const colorStr = easy.color || tess.color || '';
+                const gtStr = easy.matched_gt || tess.matched_gt || '--';
+
+                const easyText = easy.plate_number ? `${easy.plate_number} (${(easy.confidence * 100).toFixed(0)}%)` : '--';
+                const tessText = tess.plate_number ? `${tess.plate_number} (${(tess.confidence * 100).toFixed(0)}%)` : '--';
+
+                let winnerBadge = '<span class="text-slate-500 font-mono">--</span>';
+                if (gtStr !== '--') {
+                    const easyCer = easy.cer != null ? easy.cer : 1.0;
+                    const tessCer = tess.cer != null ? tess.cer : 1.0;
+                    if (easyCer < tessCer) {
+                        winnerBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">🏆 EasyOCR</span>`;
+                    } else if (tessCer < easyCer) {
+                        winnerBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">🏆 PyTesseract</span>`;
+                    } else {
+                        winnerBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">🤝 Match</span>`;
+                    }
+                }
+
+                tr.innerHTML = `
+                    <td class="py-3 px-2 font-semibold text-slate-400">#${trackId}</td>
+                    <td class="py-3 px-2 text-slate-500">${timeStr}</td>
+                    <td class="py-3 px-2 font-medium capitalize">${vehicleStr} ${colorStr ? `<span class="text-slate-500">(${colorStr})</span>` : ''}</td>
+                    <td class="py-3 px-2 font-bold text-blue-400 tracking-wide">${easyText}</td>
+                    <td class="py-3 px-2 font-bold text-purple-400 tracking-wide">${tessText}</td>
+                    <td class="py-3 px-2 font-mono text-slate-300">${gtStr}</td>
+                    <td class="py-3 px-2">${winnerBadge}</td>
+                `;
+                logTableBody.appendChild(tr);
+            });
+        }
+
+        // ── Update Ground Truth Comparison Metric Header Cards ───────
+        function updateMetricsCards(metrics) {
+            if (!metrics) return;
+
+            const easy = metrics.easyocr || {};
+            const tess = metrics.pytesseract || {};
+            const winner = metrics.winner || '--';
+
+            if (winner === 'EasyOCR') {
+                statWinner.innerHTML = `🏆 <span class="text-blue-400">EasyOCR</span>`;
+            } else if (winner === 'PyTesseract') {
+                statWinner.innerHTML = `🏆 <span class="text-purple-400">PyTesseract</span>`;
+            } else {
+                statWinner.innerHTML = `🤝 <span class="text-emerald-400">Tie</span>`;
+            }
+
+            statCerEasy.textContent = easy.average_cer != null ? `${(easy.average_cer * 100).toFixed(1)}%` : '--';
+            statCerTess.textContent = tess.average_cer != null ? `${(tess.average_cer * 100).toFixed(1)}%` : '--';
+
+            statExactEasy.textContent = `${(easy.exact_match_rate * 100).toFixed(0)}%`;
+            statExactTess.textContent = `${(tess.exact_match_rate * 100).toFixed(0)}%`;
+
+            statRecallEasy.textContent = `${(easy.gt_recall * 100).toFixed(0)}%`;
+            statRecallTess.textContent = `${(tess.gt_recall * 100).toFixed(0)}%`;
+
+            statConfEasy.textContent = `${(easy.average_confidence * 100).toFixed(0)}%`;
+            statConfTess.textContent = `${(tess.average_confidence * 100).toFixed(0)}%`;
+        }
+
+        // ── Ground Truth Management ───────────────────────────────────
         async function saveGroundTruth() {
             const text = document.getElementById('gt-input').value;
             const plates = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -902,8 +773,7 @@
                 });
                 const data = await res.json();
                 document.getElementById('gt-count').textContent = data.count || 0;
-                document.getElementById('gt-input').value = (data.plates || []).join('\n');
-                updateCerSummary();
+                fetchCerSummary();
             } catch (e) {
                 console.error('Failed to save ground truth:', e);
             }
@@ -915,18 +785,14 @@
             const formData = new FormData();
             formData.append('file', file);
             try {
-                const res = await fetch('/api/ground-truth/upload', {
-                    method: 'POST',
-                    body: formData
-                });
+                const res = await fetch('/api/ground-truth/upload', { method: 'POST', body: formData });
                 const data = await res.json();
                 document.getElementById('gt-count').textContent = data.count || 0;
                 document.getElementById('gt-input').value = (data.plates || []).join('\n');
-                updateCerSummary();
+                fetchCerSummary();
             } catch (e) {
                 console.error('Failed to import ground truth:', e);
             }
-            event.target.value = '';
         }
 
         async function loadGroundTruth() {
@@ -935,48 +801,26 @@
                 const data = await res.json();
                 const plates = data.plates || [];
                 document.getElementById('gt-count').textContent = plates.length;
-                if (plates.length > 0) {
-                    document.getElementById('gt-input').value = plates.join('\n');
-                }
+                if (plates.length > 0) document.getElementById('gt-input').value = plates.join('\n');
+                fetchCerSummary();
             } catch (e) {
                 console.error('Failed to load ground truth:', e);
             }
         }
 
-        function updateCerDisplay() {
-            // Compute average CER from in-memory detection logs
-            const withCer = detectionLogs.filter(d => d.cer != null);
-            if (withCer.length === 0) {
-                statCer.textContent = '--';
-                statCerLabel.textContent = 'No ground truth';
-                return;
-            }
-            const avg = withCer.reduce((sum, d) => sum + d.cer, 0) / withCer.length;
-            statCer.textContent = `${(avg * 100).toFixed(1)}%`;
-            statCer.className = `text-2xl font-bold mt-1 ${avg === 0 ? 'text-emerald-400' : avg <= 0.3 ? 'text-amber-400' : 'text-rose-400'}`;
-            statCerLabel.textContent = `${withCer.length} matched`;
-        }
-
-        async function updateCerSummary() {
+        async function fetchCerSummary() {
             try {
                 const res = await fetch('/api/cer-summary');
                 const data = await res.json();
-                if (data.average_cer != null) {
-                    statCer.textContent = `${(data.average_cer * 100).toFixed(1)}%`;
-                    statCer.className = `text-2xl font-bold mt-1 ${data.average_cer === 0 ? 'text-emerald-400' : data.average_cer <= 0.3 ? 'text-amber-400' : 'text-rose-400'}`;
-                    statCerLabel.textContent = `${data.matched_count} matched`;
-                } else {
-                    statCer.textContent = '--';
-                    statCerLabel.textContent = data.matched_count > 0 ? `${data.matched_count} matched` : 'No ground truth';
+                if (data.easyocr || data.pytesseract) {
+                    updateMetricsCards(data);
                 }
             } catch (e) {
                 console.error('Failed to fetch CER summary:', e);
             }
         }
 
-        // Load ground truth on page load
         loadGroundTruth();
-
     </script>
 </body>
 
