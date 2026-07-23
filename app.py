@@ -12,12 +12,13 @@ import uvicorn
 from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from src.pipeline import easyocr_tracker, pytesseract_tracker, process_batch_dual, drain_pending_ocr
+from src.pipeline import easyocr_tracker, pytesseract_tracker, process_batch_dual, drain_pending_ocr, _draw_overlay
 from src.logging.logger import init_log
 from src.metrics.cer import (
     find_best_ground_truth_match, save_ground_truth, load_ground_truth,
     compute_comprehensive_metrics, compute_dual_model_comparison
 )
+from src.export import build_xlsx_report
 
 def _format_elapsed(seconds):
     """
@@ -125,7 +126,6 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
                 fps=frames_per_second
             )
 
-            from src.pipeline import _draw_overlay, easyocr_tracker, pytesseract_tracker
             for p_easy, p_tess, intermediate_frames in zip(processed_easy_frames, processed_tess_frames, batch_intermediate_frames):
                 if p_easy.shape[1] != width or p_easy.shape[0] != height:
                     p_easy = cv2.resize(p_easy, (width, height))
@@ -451,11 +451,6 @@ async def export_api():
 
     if not os.path.exists(easy_csv) and not os.path.exists(tess_csv):
         return HTMLResponse(content="<h3>No records available to export yet.</h3>", status_code=400)
-    
-    try:
-        from src.export import build_xlsx_report
-    except ImportError:
-        return HTMLResponse(content="<h3>openpyxl is not installed. Please add it to requirements.txt and install it.</h3>", status_code=500)
     
     gt_plates = load_ground_truth()
     
