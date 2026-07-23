@@ -6,9 +6,7 @@ import openpyxl
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
-from src.metrics.cer import find_best_ground_truth_match, compute_average_cer
-
-from src.metrics.cer import find_best_ground_truth_match, compute_comprehensive_metrics, compute_dual_model_comparison
+from src.metrics.cer import find_best_ground_truth_match, compute_comprehensive_metrics
 
 
 def _populate_detection_sheet(worksheet, df: pd.DataFrame, ground_truth_plates, title_prefix=""):

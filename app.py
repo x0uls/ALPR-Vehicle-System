@@ -12,14 +12,10 @@ import uvicorn
 from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-import sys
-
-import torch
 from src.pipeline import easyocr_tracker, pytesseract_tracker, process_batch_dual, drain_pending_ocr
 from src.logging.logger import init_log
 from src.metrics.cer import (
-    compute_cer, find_best_ground_truth_match,
-    save_ground_truth, load_ground_truth, compute_average_cer,
+    find_best_ground_truth_match, save_ground_truth, load_ground_truth,
     compute_comprehensive_metrics, compute_dual_model_comparison
 )
 
@@ -351,7 +347,12 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
         yield f"event: complete\ndata: {json.dumps(complete_payload)}\n\n"
 
     except Exception as e:
-        yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+        import traceback
+        print("\n" + "="*50)
+        print("[ALPR PIPELINE ERROR DETECTED]")
+        traceback.print_exc()
+        print("="*50 + "\n")
+        yield f"event: error_msg\ndata: {json.dumps({'error': str(e)})}\n\n"
 
 
 

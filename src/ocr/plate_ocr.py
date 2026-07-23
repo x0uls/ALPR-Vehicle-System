@@ -10,6 +10,12 @@ from deskew import determine_skew
 from skimage.transform import rotate
 import pytesseract
 
+# Auto-detect Tesseract executable path across Linux / Colab and Windows
+for t_path in ["/usr/bin/tesseract", "/usr/local/bin/tesseract", r"C:\Program Files\Tesseract-OCR\tesseract.exe"]:
+    if os.path.exists(t_path):
+        pytesseract.pytesseract.tesseract_cmd = t_path
+        break
+
 # Initialize EasyOCR reader at import time (thread-safe for downstream worker pools)
 reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
 

@@ -677,10 +677,20 @@
                 }
             });
 
+            eventSource.addEventListener('error_msg', (e) => {
+                const data = JSON.parse(e.data);
+                eventSource.close();
+                progressStatus.textContent = `Error: ${data.error}`;
+                processBtn.disabled = false;
+                processBtn.textContent = 'Run Dual-Model Comparison';
+            });
+
             eventSource.onerror = (err) => {
                 console.error("SSE Connection Error", err);
                 eventSource.close();
-                progressStatus.textContent = 'Error during processing';
+                if (!progressStatus.textContent.startsWith('Error:')) {
+                    progressStatus.textContent = 'Connection Closed / Error during processing';
+                }
                 processBtn.disabled = false;
                 processBtn.textContent = 'Run Dual-Model Comparison';
             };
