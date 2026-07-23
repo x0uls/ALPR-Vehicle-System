@@ -9,14 +9,18 @@ import json
 import cv2
 import pandas as pd
 import uvicorn
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import FastAPI, UploadFile, File, Request
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import sys
 
 import torch
 from src.pipeline import detection_tracker, process_batch, drain_pending_ocr
 from src.logging.logger import init_log
+from src.metrics.cer import (
+    compute_cer, find_best_ground_truth_match,
+    save_ground_truth, load_ground_truth, compute_average_cer
+)
 
 def _format_elapsed(seconds):
     """
@@ -210,6 +214,7 @@ async def process_video_sse(video_path, ocr_engine, frame_skip="dynamic"):
             try:
                 if os.path.exists("outputs/logs/detections.csv"):
                     detections_dataframe = pd.read_csv("outputs/logs/detections.csv")
+                    gt_plates = load_ground_truth()
                     for _, row in detections_dataframe.iterrows():
                         plate = str(row['plate_number']) if pd.notna(row['plate_number']) else ""
                         track_id_str = str(row['track_id'])
@@ -229,6 +234,16 @@ async def process_video_sse(video_path, ocr_engine, frame_skip="dynamic"):
                             crop_path = row_dict.get("plate_crop_path")
                             row_dict["snapshot_url"] = "/" + str(snapshot_path) if pd.notna(snapshot_path) and snapshot_path else None
                             row_dict["plate_crop_url"] = "/" + str(crop_path) if pd.notna(crop_path) and crop_path else None
+                            
+                            # Compute CER against ground truth if available
+                            if gt_plates and plate:
+                                best_gt, best_cer = find_best_ground_truth_match(plate, gt_plates)
+                                row_dict["cer"] = round(best_cer, 4) if best_cer is not None else None
+                                row_dict["matched_gt"] = best_gt
+                            else:
+                                row_dict["cer"] = None
+                                row_dict["matched_gt"] = None
+                            
                             yield f"event: log\ndata: {json.dumps(row_dict)}\n\n"
                         
                         # 2. Yield crop update if confidence improved or plate text changed for this track
@@ -352,6 +367,74 @@ async def stream_process_api(video_path: str, ocr_engine: str, frame_skip: str =
         headers=headers
     )
 
+# ─── Ground Truth Management API ─────────────────────────────────
+
+@app.get("/api/ground-truth")
+async def get_ground_truth():
+    """Returns the current list of ground truth plates."""
+    plates = load_ground_truth()
+    return JSONResponse({"plates": plates})
+
+@app.post("/api/ground-truth")
+async def set_ground_truth(request: Request):
+    """
+    Saves ground truth plates from a JSON body.
+    
+    Expects {"plates": ["ABC 1234", "WND 5678", ...]}.
+    """
+    body = await request.json()
+    plates = body.get("plates", [])
+    # Deduplicate and clean empty entries
+    cleaned = list(dict.fromkeys(p.strip() for p in plates if p.strip()))
+    save_ground_truth(cleaned)
+    return JSONResponse({"status": "ok", "count": len(cleaned), "plates": cleaned})
+
+@app.post("/api/ground-truth/upload")
+async def upload_ground_truth(file: UploadFile = File(...)):
+    """
+    Imports ground truth plates from a plain text file (one plate per line)
+    or a CSV file with a 'plate_number' or 'plate' column.
+    """
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    plates = []
+    
+    if file.filename and file.filename.lower().endswith(".csv"):
+        import csv
+        import io
+        reader = csv.DictReader(io.StringIO(content))
+        for row in reader:
+            plate = row.get("plate_number") or row.get("plate") or row.get("Plate Number") or row.get("Plate") or ""
+            if plate.strip():
+                plates.append(plate.strip())
+    else:
+        # Plain text: one plate per line
+        for line in content.splitlines():
+            cleaned = line.strip()
+            if cleaned:
+                plates.append(cleaned)
+    
+    # Deduplicate while preserving order
+    cleaned = list(dict.fromkeys(plates))
+    save_ground_truth(cleaned)
+    return JSONResponse({"status": "ok", "count": len(cleaned), "plates": cleaned})
+
+@app.get("/api/cer-summary")
+async def cer_summary_api():
+    """
+    Computes and returns CER summary statistics for all current detections
+    against the stored ground truth plates.
+    """
+    csv_path = "outputs/logs/detections.csv"
+    gt_plates = load_ground_truth()
+    
+    if not os.path.exists(csv_path):
+        return JSONResponse({"average_cer": None, "matched_count": 0, "total_detections": 0, "per_detection": []})
+    
+    df = pd.read_csv(csv_path)
+    detections = df.to_dict(orient="records")
+    summary = compute_average_cer(detections, gt_plates)
+    return JSONResponse(summary)
+
 # Serve XLSX Excel report export downloads
 @app.get("/api/export")
 async def export_api():
@@ -365,9 +448,11 @@ async def export_api():
     except ImportError:
         return HTMLResponse(content="<h3>openpyxl is not installed. Please add it to requirements.txt and install it.</h3>", status_code=500)
     
+    gt_plates = load_ground_truth()
+    
     try:
         df = pd.read_csv(csv_path)
-        out_buf = build_xlsx_report(df)
+        out_buf = build_xlsx_report(df, gt_plates)
     except Exception as e:
         return HTMLResponse(content=f"<h3>Failed to build export: {str(e)}</h3>", status_code=500)
         

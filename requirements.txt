@@ -18,6 +18,7 @@ easyocr
 pytesseract
 deskew
 scikit-image
+jiwer
 
 
 # Data Analytics & Mathematical Foundations
