@@ -4,342 +4,340 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALPR Dual-Model Comparison Dashboard</title>
+    <title>ALPR Benchmarking Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0b0f19;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #09090b;
+            color: #f4f4f5;
         }
 
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 5px;
+            height: 5px;
         }
 
         ::-webkit-scrollbar-track {
-            background: #0f172a;
+            background: #09090b;
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 3px;
+            background: #27272a;
+            border-radius: 2px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
+            background: #3f3f46;
         }
 
-        @keyframes pulse-glow-blue {
-            0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
-            50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.8); }
+        .active-easyocr-border {
+            border-color: #38bdf8 !important;
         }
 
-        @keyframes pulse-glow-purple {
-            0%, 100% { box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
-            50% { box-shadow: 0 0 25px rgba(168, 85, 247, 0.8); }
-        }
-
-        .active-easyocr-glow {
-            animation: pulse-glow-blue 2s infinite;
-            border-color: #3b82f6 !important;
-        }
-
-        .active-pytesseract-glow {
-            animation: pulse-glow-purple 2s infinite;
-            border-color: #a855f7 !important;
+        .active-pytesseract-border {
+            border-color: #818cf8 !important;
         }
     </style>
 </head>
 
-<body class="text-slate-200 min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col antialiased selection:bg-zinc-800 selection:text-zinc-100">
 
     <!-- Header Section -->
-    <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50 px-6 py-3.5">
+    <header class="border-b border-zinc-800 bg-zinc-950 px-6 py-3 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m1-4h12m-5 4h5a1 1 0 001-1v-4a1 1 0 00-1-1h-3m-6 0H7m1-4h3m5 0h3" />
+                <div class="h-7 w-7 rounded border border-zinc-700 bg-zinc-900 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-zinc-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
                     </svg>
                 </div>
                 <div>
-                    <h1 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                        ALPR System <span class="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Dual-Model Comparison</span>
-                    </h1>
-                    <p class="text-xs text-slate-400">EasyOCR vs PyTesseract Automated Benchmarking Platform</p>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-sm font-semibold text-zinc-100 tracking-tight">ALPR Benchmarking System</h1>
+                        <span class="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">v2.4</span>
+                    </div>
+                    <p class="text-[11px] text-zinc-500">Automated Dual-Model Recognition & Ground Truth Analysis</p>
                 </div>
             </div>
 
-            <!-- Top Sync Action Button -->
-            <div class="flex items-center gap-3">
-                <button id="sync-btn" onclick="togglePlaybackSync()"
-                    class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-all">
-                    <span id="sync-icon">🔗</span>
-                    <span id="sync-label">Sync Players: OFF</span>
-                </button>
-            </div>
+            <!-- Sync Action Toggle -->
+            <button id="sync-btn" onclick="togglePlaybackSync()"
+                class="px-2.5 py-1 text-xs font-medium rounded border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 flex items-center gap-1.5 transition-colors">
+                <span class="text-zinc-500">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                    </svg>
+                </span>
+                <span id="sync-label">Sync Players: OFF</span>
+            </button>
         </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-6 flex flex-col gap-6">
+    <!-- Main Workspace Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-5 flex flex-col gap-5">
 
-        <!-- 1. Top Section: Execution Controller & Ground Truth Plates (Horizontal Grid) -->
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- 1. Controller & Ground Truth Panel (2-Column Grid) -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             <!-- Execution Controller -->
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col justify-between gap-4">
-                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <h3 class="text-sm font-semibold text-white">Execution Controller</h3>
-                    <div class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 font-semibold">Dual-Model Parallel Execution</div>
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col justify-between gap-4">
+                <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Execution Controller</span>
+                    <span class="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">Dual Pipeline</span>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="flex flex-col gap-1.5">
-                        <label class="text-xs text-slate-400 font-medium">Pipeline Mode</label>
-                        <div class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 font-medium">
-                            Automated (EasyOCR + PyTesseract)
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[11px] text-zinc-400">Pipeline Mode</label>
+                        <div class="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 font-mono">
+                            Parallel (EasyOCR + PyTesseract)
                         </div>
                     </div>
 
-                    <div class="flex flex-col gap-1.5">
-                        <label class="text-xs text-slate-400 font-medium">Frame Skip Mode</label>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[11px] text-zinc-400">Frame Skip Mode</label>
                         <select id="frame-skip-select"
-                            class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 transition-colors">
-                            <option value="dynamic">Dynamic (Auto based on Speed/Velocity)</option>
-                            <option value="1">Process All Frames (No Skip)</option>
-                            <option value="2">Skip every 2nd frame</option>
-                            <option value="3">Skip every 3rd frame</option>
-                            <option value="5">Skip every 5th frame</option>
+                            class="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 transition-colors">
+                            <option value="dynamic">Dynamic (Auto Velocity)</option>
+                            <option value="1">Process All Frames (1:1)</option>
+                            <option value="2">Skip Every 2nd Frame</option>
+                            <option value="3">Skip Every 3rd Frame</option>
+                            <option value="5">Skip Every 5th Frame</option>
                         </select>
                     </div>
                 </div>
 
                 <button id="process-btn" disabled
-                    class="w-full bg-blue-600/50 hover:bg-blue-600 disabled:bg-slate-800 text-white disabled:text-slate-500 font-semibold rounded-lg py-2.5 text-sm transition-all duration-200 cursor-not-allowed disabled:cursor-not-allowed shadow-lg shadow-blue-500/10 flex items-center justify-center gap-2">
-                    <span>⚡ Run Dual-Model Comparison</span>
+                    class="w-full bg-zinc-100 hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-500 text-zinc-950 font-medium rounded py-2 text-xs transition-colors cursor-not-allowed disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                    <span>
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                        </svg>
+                    </span>
+                    <span>Run Dual-Model Comparison</span>
                 </button>
             </div>
 
             <!-- Ground Truth Input Panel -->
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col justify-between gap-3">
-                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <h3 class="text-sm font-semibold text-white">Ground Truth Plates</h3>
-                    <span id="gt-count" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-medium font-mono">0</span>
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col justify-between gap-3">
+                <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ground Truth Registry</span>
+                    <span id="gt-count" class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">0 plates</span>
                 </div>
                 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 grow">
-                    <textarea id="gt-input" rows="3" placeholder="Enter known plate numbers (one per line)&#10;e.g.&#10;WND 1234&#10;ABC 5678" 
-                        class="sm:col-span-2 w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500 transition-colors resize-none h-full min-h-[75px]"></textarea>
+                    <textarea id="gt-input" rows="3" placeholder="Enter target plate numbers (one per line)&#10;e.g.&#10;WND1234&#10;ABC5678" 
+                        class="sm:col-span-2 w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-200 font-mono focus:outline-none focus:border-zinc-600 transition-colors resize-none min-h-[70px]"></textarea>
                     
                     <div class="flex flex-col justify-between gap-2">
                         <button id="gt-save-btn" onclick="saveGroundTruth()"
-                            class="w-full py-2 text-xs font-semibold text-white bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-700 rounded-lg transition-all">
-                            Save Ground Truth
+                            class="w-full py-1.5 text-xs font-medium text-zinc-100 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded transition-colors">
+                            Save Registry
                         </button>
-                        <label class="w-full py-2 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all text-center cursor-pointer">
+                        <label class="w-full py-1.5 text-xs font-medium text-zinc-400 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded text-center cursor-pointer transition-colors">
                             Import File
                             <input type="file" id="gt-file-input" accept=".txt,.csv" class="hidden" onchange="importGroundTruth(event)">
                         </label>
                     </div>
                 </div>
-                <p class="text-[10px] text-slate-500">CER, Exact Match Rate, Recall & Precision are computed against these plates.</p>
+                <p class="text-[10px] text-zinc-500">Normalizes spaces and casing automatically before CER calculation.</p>
             </div>
 
         </section>
 
-        <!-- 2. Full-Width Horizontal Pipeline Status Bar -->
-        <section id="progress-box" class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col gap-3 opacity-50 transition-all duration-200">
+        <!-- 2. Full-Width Horizontal Pipeline Status Tracker -->
+        <section id="progress-box" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col gap-2.5 opacity-60 transition-opacity">
             <div class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-3">
-                    <span class="font-semibold text-white">Pipeline Status</span>
-                    <span id="progress-status" class="text-slate-400 font-mono">System Idle</span>
+                <div class="flex items-center gap-2.5">
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Pipeline Status</span>
+                    <span id="progress-status" class="text-xs font-mono text-zinc-300">System Idle</span>
                 </div>
-                <div class="flex items-center gap-6 text-xs text-slate-400 font-mono">
-                    <div>ETA: <span id="progress-eta" class="font-bold text-slate-200">--</span></div>
-                    <div>Elapsed: <span id="stat-elapsed" class="font-bold text-slate-200">0s</span></div>
-                    <div>Speed: <span id="stat-fps" class="font-bold text-emerald-400">--</span></div>
-                    <div>Frames: <span id="stat-frames" class="font-bold text-slate-200">--</span></div>
-                    <span id="progress-percent" class="font-bold text-blue-400 text-sm">0%</span>
+                <div class="flex items-center gap-5 text-xs font-mono text-zinc-400">
+                    <div>ETA: <span id="progress-eta" class="text-zinc-200 font-medium">--</span></div>
+                    <div>Elapsed: <span id="stat-elapsed" class="text-zinc-200 font-medium">0s</span></div>
+                    <div>Speed: <span id="stat-fps" class="text-emerald-400 font-medium">--</span></div>
+                    <div>Frames: <span id="stat-frames" class="text-zinc-200 font-medium">--</span></div>
+                    <span id="progress-percent" class="text-zinc-100 font-semibold font-mono">0%</span>
                 </div>
             </div>
             
-            <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-900">
-                <div id="progress-bar-fill" class="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-full w-0 rounded-full transition-all duration-100"></div>
+            <div class="w-full bg-zinc-950 rounded-sm h-1.5 overflow-hidden border border-zinc-900">
+                <div id="progress-bar-fill" class="bg-zinc-300 h-full w-0 transition-all duration-150"></div>
             </div>
         </section>
 
-        <!-- 3. Dual Video Players Stacked Above and Below (Top: EasyOCR, Bottom: PyTesseract) -->
-        <section class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4 flex flex-col gap-4 relative overflow-hidden">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                <div class="flex items-center gap-3">
-                    <span class="text-sm font-semibold text-white">Dual Video Stream & Player Comparison</span>
-                    <span id="video-info" class="text-xs text-slate-400 font-mono">No active video source</span>
+        <!-- 3. Dual Video Players Stacked Above and Below -->
+        <section class="bg-zinc-900/40 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Stream & Video Inspection</span>
+                    <span id="video-info" class="text-xs text-zinc-500 font-mono">No active video source</span>
                 </div>
             </div>
 
-            <!-- Upload Zone (when no video uploaded) -->
+            <!-- Upload Zone -->
             <div id="upload-zone"
-                class="w-full min-h-[220px] flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-800 hover:border-blue-500/50 hover:bg-blue-950/5 transition-all duration-200 cursor-pointer rounded-lg">
+                class="w-full min-h-[180px] flex flex-col items-center justify-center p-6 border border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-950 transition-all cursor-pointer rounded">
                 <input type="file" id="video-file-input" accept="video/*" class="hidden">
-                <svg class="h-10 w-10 text-slate-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <span class="text-sm font-medium text-slate-300">Drag and drop traffic video, or <span class="text-blue-500 underline">browse</span></span>
-                <span class="text-xs text-slate-500 mt-1">Runs EasyOCR & PyTesseract concurrently</span>
+                <span class="text-zinc-500 mb-2">
+                    <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                </span>
+                <span class="text-xs font-medium text-zinc-300">Drop traffic video file here, or <span class="text-zinc-100 underline">browse</span></span>
+                <span class="text-[10px] text-zinc-500 mt-1">Concurrently benchmarks EasyOCR & PyTesseract</span>
             </div>
 
-            <!-- Stacked Video Players Container (Above and Below) -->
-            <div id="dual-players-container" class="hidden flex flex-col gap-6 w-full">
+            <!-- Dual Players Container (Stacked Above & Below) -->
+            <div id="dual-players-container" class="hidden flex flex-col gap-5 w-full">
                 
-                <!-- EasyOCR Stream Player (Top) -->
-                <div id="player-card-easyocr" class="bg-slate-950/90 rounded-xl border-2 border-blue-500/30 p-3 flex flex-col gap-2 relative overflow-hidden transition-all duration-300">
-                    <div class="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 rounded-lg border border-blue-500/20 text-xs">
-                        <span class="font-bold text-blue-400 flex items-center gap-2">
-                            <span class="h-2.5 w-2.5 rounded-full bg-blue-500 animate-ping"></span> EasyOCR Model Stream
+                <!-- EasyOCR Player Card (Top) -->
+                <div id="player-card-easyocr" class="bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors">
+                    <div class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
+                        <span class="font-medium text-sky-400 flex items-center gap-1.5">
+                            <span class="h-1.5 w-1.5 rounded-full bg-sky-400"></span> EasyOCR Pipeline Stream
                         </span>
-                        <span id="badge-easyocr" class="font-mono text-xs text-slate-300">Scanning frames...</span>
+                        <span id="badge-easyocr" class="font-mono text-xs text-zinc-400">Standby...</span>
                     </div>
-                    <!-- Widescreen Player Canvas & Video -->
-                    <div class="w-full flex justify-center bg-black/60 rounded-lg overflow-hidden border border-slate-900">
-                        <canvas id="canvas-easyocr" class="w-full max-h-[460px] object-contain rounded-lg"></canvas>
-                        <video id="video-easyocr" class="hidden w-full max-h-[460px] object-contain rounded-lg" controls></video>
+                    <div class="w-full flex justify-center bg-black rounded overflow-hidden border border-zinc-900">
+                        <canvas id="canvas-easyocr" class="w-full max-h-[460px] object-contain rounded"></canvas>
+                        <video id="video-easyocr" class="hidden w-full max-h-[460px] object-contain rounded" controls></video>
                     </div>
                 </div>
 
-                <!-- PyTesseract Stream Player (Bottom) -->
-                <div id="player-card-pytesseract" class="bg-slate-950/90 rounded-xl border-2 border-purple-500/30 p-3 flex flex-col gap-2 relative overflow-hidden transition-all duration-300">
-                    <div class="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 rounded-lg border border-purple-500/20 text-xs">
-                        <span class="font-bold text-purple-400 flex items-center gap-2">
-                            <span class="h-2.5 w-2.5 rounded-full bg-purple-500 animate-ping"></span> PyTesseract Model Stream
+                <!-- PyTesseract Player Card (Bottom) -->
+                <div id="player-card-pytesseract" class="bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors">
+                    <div class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
+                        <span class="font-medium text-indigo-400 flex items-center gap-1.5">
+                            <span class="h-1.5 w-1.5 rounded-full bg-indigo-400"></span> PyTesseract Pipeline Stream
                         </span>
-                        <span id="badge-pytesseract" class="font-mono text-xs text-slate-300">Scanning frames...</span>
+                        <span id="badge-pytesseract" class="font-mono text-xs text-zinc-400">Standby...</span>
                     </div>
-                    <!-- Widescreen Player Canvas & Video -->
-                    <div class="w-full flex justify-center bg-black/60 rounded-lg overflow-hidden border border-slate-900">
-                        <canvas id="canvas-pytesseract" class="w-full max-h-[460px] object-contain rounded-lg"></canvas>
-                        <video id="video-pytesseract" class="hidden w-full max-h-[460px] object-contain rounded-lg" controls></video>
+                    <div class="w-full flex justify-center bg-black rounded overflow-hidden border border-zinc-900">
+                        <canvas id="canvas-pytesseract" class="w-full max-h-[460px] object-contain rounded"></canvas>
+                        <video id="video-pytesseract" class="hidden w-full max-h-[460px] object-contain rounded" controls></video>
                     </div>
                 </div>
 
             </div>
         </section>
 
-        <!-- 4. Accuracy Winner & Ground Truth Comparative Metrics Header Cards (Below Streams) -->
+        <!-- 4. Ground Truth Metrics Header Cards (Below Streams) -->
         <section class="grid grid-cols-2 md:grid-cols-6 gap-3">
             
-            <!-- Leader / Winner Card -->
-            <div class="bg-gradient-to-b from-slate-900/90 to-slate-900/50 border border-amber-500/30 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-                <div class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Accuracy Winner</div>
-                <div id="stat-winner" class="text-lg font-black text-amber-300 mt-1 flex items-center gap-1">--</div>
-                <div class="text-[10px] text-slate-500 mt-1">Multi-factor Ground Truth</div>
+            <!-- Accuracy Winner -->
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
+                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Accuracy Leader</span>
+                <div id="stat-winner" class="text-base font-semibold text-amber-400 mt-1 flex items-center gap-1 font-mono">--</div>
+                <span class="text-[10px] text-zinc-500 mt-1">Ground Truth Winner</span>
             </div>
 
             <!-- CER Card -->
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Avg CER (Lower Better)</div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <span id="stat-cer-easy" class="text-lg font-bold text-blue-400">--</span>
-                    <span class="text-xs text-slate-600 font-mono">vs</span>
-                    <span id="stat-cer-tess" class="text-lg font-bold text-purple-400">--</span>
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
+                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Avg CER (Lower Better)</span>
+                <div class="flex items-baseline justify-between mt-1 font-mono">
+                    <span id="stat-cer-easy" class="text-base font-semibold text-sky-400">--</span>
+                    <span class="text-xs text-zinc-600">vs</span>
+                    <span id="stat-cer-tess" class="text-base font-semibold text-indigo-400">--</span>
                 </div>
-                <div id="stat-cer-label" class="text-[10px] text-slate-500 mt-1">EasyOCR vs PyTesseract</div>
+                <span id="stat-cer-label" class="text-[10px] text-zinc-500 mt-1">EasyOCR vs PyTesseract</span>
             </div>
 
-            <!-- Exact Match Rate Card -->
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Exact Matches (CER=0)</div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <span id="stat-exact-easy" class="text-lg font-bold text-blue-400">--</span>
-                    <span class="text-xs text-slate-600 font-mono">vs</span>
-                    <span id="stat-exact-tess" class="text-lg font-bold text-purple-400">--</span>
+            <!-- Exact Match Rate -->
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
+                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Exact Matches (CER=0)</span>
+                <div class="flex items-baseline justify-between mt-1 font-mono">
+                    <span id="stat-exact-easy" class="text-base font-semibold text-sky-400">--</span>
+                    <span class="text-xs text-zinc-600">vs</span>
+                    <span id="stat-exact-tess" class="text-base font-semibold text-indigo-400">--</span>
                 </div>
-                <div class="text-[10px] text-slate-500 mt-1">100% Perfect Reads</div>
+                <span class="text-[10px] text-zinc-500 mt-1">Perfect Reads Rate</span>
             </div>
 
-            <!-- GT Recall Card -->
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">GT Recall (Coverage)</div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <span id="stat-recall-easy" class="text-lg font-bold text-blue-400">--</span>
-                    <span class="text-xs text-slate-600 font-mono">vs</span>
-                    <span id="stat-recall-tess" class="text-lg font-bold text-purple-400">--</span>
+            <!-- GT Recall -->
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
+                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">GT Recall (Coverage)</span>
+                <div class="flex items-baseline justify-between mt-1 font-mono">
+                    <span id="stat-recall-easy" class="text-base font-semibold text-sky-400">--</span>
+                    <span class="text-xs text-zinc-600">vs</span>
+                    <span id="stat-recall-tess" class="text-base font-semibold text-indigo-400">--</span>
                 </div>
-                <div class="text-[10px] text-slate-500 mt-1">Target Plates Identified</div>
+                <span class="text-[10px] text-zinc-500 mt-1">Target Detection %</span>
             </div>
 
-            <!-- Avg Confidence Card -->
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Avg Confidence</div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <span id="stat-conf-easy" class="text-lg font-bold text-blue-400">--</span>
-                    <span class="text-xs text-slate-600 font-mono">vs</span>
-                    <span id="stat-conf-tess" class="text-lg font-bold text-purple-400">--</span>
+            <!-- Avg Confidence -->
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
+                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Avg Confidence</span>
+                <div class="flex items-baseline justify-between mt-1 font-mono">
+                    <span id="stat-conf-easy" class="text-base font-semibold text-sky-400">--</span>
+                    <span class="text-xs text-zinc-600">vs</span>
+                    <span id="stat-conf-tess" class="text-base font-semibold text-indigo-400">--</span>
                 </div>
-                <div class="text-[10px] text-slate-500 mt-1">Mean Predict Score</div>
+                <span class="text-[10px] text-zinc-500 mt-1">Model Predict Score</span>
             </div>
 
-            <!-- Speed Card -->
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-                <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Processing Speed</div>
-                <div id="stat-fps-bottom" class="text-lg font-bold text-emerald-400 mt-1">--</div>
-                <div id="stat-elapsed-bottom" class="text-[10px] text-slate-400 mt-1">0s total</div>
+            <!-- Speed & Frames -->
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
+                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Processing FPS</span>
+                <div id="stat-fps-bottom" class="text-base font-semibold text-emerald-400 mt-1 font-mono">--</div>
+                <div id="stat-elapsed-bottom" class="text-[10px] text-zinc-500 mt-1">0s total</div>
             </div>
 
         </section>
 
-        <!-- 5. Bottom Side-by-Side Detection Records Table and Gallery -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 5. Bottom Section: Detection Records Table & Crops Gallery -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-            <!-- Bottom Left: Side-by-Side Log Comparison Table -->
-            <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-3 min-h-[380px]">
-                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <div class="flex items-center gap-3">
-                        <h3 class="text-sm font-semibold text-white">Side-by-Side Model Detections</h3>
-                        <span id="log-count" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-medium font-mono">0 Total</span>
+            <!-- Detection Records Table -->
+            <div class="lg:col-span-2 bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-3 min-h-[360px]">
+                <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Side-by-Side Model Detections</span>
+                        <span id="log-count" class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono border border-zinc-700">0 Total</span>
                     </div>
                     <button id="export-btn" onclick="downloadExport()" disabled
-                        class="px-3 py-1.5 text-xs font-semibold text-slate-200 bg-emerald-600/80 hover:bg-emerald-600 disabled:opacity-40 border border-emerald-700 rounded-lg flex items-center gap-1.5 transition-all">
-                        <span>Export Excel Comparison</span>
-                        <svg class="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
+                        class="px-2.5 py-1 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 border border-zinc-700 rounded flex items-center gap-1.5 transition-colors">
+                        <span>
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                        </span>
+                        <span>Export Excel Report</span>
                     </button>
                 </div>
 
                 <div class="grow overflow-x-auto">
-                    <table class="w-full text-left text-xs border-collapse">
+                    <table class="w-full text-left text-xs border-collapse font-mono">
                         <thead>
-                            <tr class="border-b border-slate-800/80 text-slate-400 select-none">
-                                <th class="py-3 px-2 font-semibold">ID</th>
-                                <th class="py-3 px-2 font-semibold">Time</th>
-                                <th class="py-3 px-2 font-semibold">Vehicle</th>
-                                <th class="py-3 px-2 font-semibold text-blue-400">EasyOCR Read</th>
-                                <th class="py-3 px-2 font-semibold text-purple-400">PyTesseract Read</th>
-                                <th class="py-3 px-2 font-semibold text-slate-300">Ground Truth</th>
-                                <th class="py-3 px-2 font-semibold text-amber-400">Winner</th>
+                            <tr class="border-b border-zinc-800/80 text-zinc-400 text-[11px] font-sans">
+                                <th class="py-2.5 px-2 font-semibold">ID</th>
+                                <th class="py-2.5 px-2 font-semibold">Time</th>
+                                <th class="py-2.5 px-2 font-semibold">Vehicle</th>
+                                <th class="py-2.5 px-2 font-semibold text-sky-400">EasyOCR Read</th>
+                                <th class="py-2.5 px-2 font-semibold text-indigo-400">PyTesseract Read</th>
+                                <th class="py-2.5 px-2 font-semibold text-zinc-300">Ground Truth</th>
+                                <th class="py-2.5 px-2 font-semibold text-zinc-400">Winner</th>
                             </tr>
                         </thead>
-                        <tbody id="log-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+                        <tbody id="log-table-body" class="divide-y divide-zinc-800/40 text-zinc-300">
                             <tr id="empty-log-row">
-                                <td colspan="7" class="text-center py-12 text-slate-500">No vehicle records populated. Run a dual-model process to compare.</td>
+                                <td colspan="7" class="text-center py-12 text-zinc-500 font-sans text-xs">No vehicle records populated. Run a process to benchmark.</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Bottom Right: Plate Crops Gallery -->
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-3">
-                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <h3 class="text-sm font-semibold text-white">Detected Plate Crops</h3>
+            <!-- Detected Plate Crops Gallery -->
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-3">
+                <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Plate Crops Gallery</span>
                 </div>
 
-                <div id="crop-gallery" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[420px] content-start" style="grid-auto-rows: minmax(80px, auto);">
-                    <div id="empty-gallery-msg" class="col-span-3 text-center py-16 text-slate-500 text-xs">
+                <div id="crop-gallery" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[380px] content-start" style="grid-auto-rows: minmax(75px, auto);">
+                    <div id="empty-gallery-msg" class="col-span-3 text-center py-16 text-zinc-500 text-xs">
                         No cropped plates currently parsed.
                     </div>
                 </div>
@@ -350,11 +348,11 @@
     </main>
 
     <!-- Footer -->
-    <footer class="border-t border-slate-800 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500 mt-auto">
-        ALPR Dual-Model Comparison Dashboard System
+    <footer class="border-t border-zinc-800 bg-zinc-950 py-3.5 px-6 text-center text-xs text-zinc-500 mt-auto">
+        ALPR Benchmarking System • FastAPI & Dual Model Architecture
     </footer>
 
-    <!-- Logic Script -->
+    <!-- Frontend Application Logic Script -->
     <script>
         const uploadZone = document.getElementById('upload-zone');
         const fileInput = document.getElementById('video-file-input');
@@ -396,24 +394,24 @@
         const statElapsed = document.getElementById('stat-elapsed');
 
         let selectedVideoPath = null;
-        let dualLogsMap = {}; // trackId -> { easy: rowData, tess: rowData }
+        let dualLogsMap = {};
         let isSyncingPlayback = false;
 
-        // ── Upload Handlers ──────────────────────────────────────────
+        // ── Upload Event Handlers ────────────────────────────────────
         uploadZone.addEventListener('click', () => fileInput.click());
 
         uploadZone.addEventListener('dragover', (e) => {
             e.preventDefault();
-            uploadZone.classList.add('border-blue-500', 'bg-blue-950/10');
+            uploadZone.classList.add('border-zinc-600', 'bg-zinc-900/60');
         });
 
         uploadZone.addEventListener('dragleave', () => {
-            uploadZone.classList.remove('border-blue-500', 'bg-blue-950/10');
+            uploadZone.classList.remove('border-zinc-600', 'bg-zinc-900/60');
         });
 
         uploadZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            uploadZone.classList.remove('border-blue-500', 'bg-blue-950/10');
+            uploadZone.classList.remove('border-zinc-600', 'bg-zinc-900/60');
             if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]);
         });
 
@@ -423,12 +421,12 @@
 
         async function handleFileSelect(file) {
             uploadZone.innerHTML = `
-                <div class="flex flex-col items-center gap-3">
-                    <svg class="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <div class="flex flex-col items-center gap-2">
+                    <svg class="animate-spin h-6 w-6 text-zinc-400" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span class="text-sm font-medium text-slate-300">Uploading video file...</span>
+                    <span class="text-xs font-medium text-zinc-300">Uploading video file to server...</span>
                 </div>
             `;
 
@@ -444,11 +442,13 @@
 
                 videoInfo.textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
                 uploadZone.innerHTML = `
-                    <svg class="h-10 w-10 text-emerald-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span class="text-sm font-semibold text-white">Video upload complete!</span>
-                    <span class="text-xs text-slate-400 mt-1 click-change underline cursor-pointer">Choose another file</span>
+                    <span class="text-emerald-400 mb-1">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </span>
+                    <span class="text-xs font-medium text-zinc-200">Video upload complete</span>
+                    <span class="text-[10px] text-zinc-400 mt-1 click-change underline cursor-pointer">Choose another file</span>
                 `;
 
                 uploadZone.querySelector('.click-change').addEventListener('click', (e) => {
@@ -457,12 +457,11 @@
                 });
 
                 processBtn.disabled = false;
-                processBtn.classList.remove('bg-blue-600/50', 'cursor-not-allowed');
-                processBtn.classList.add('bg-blue-600', 'hover:bg-blue-500');
+                processBtn.classList.remove('cursor-not-allowed');
 
             } catch (err) {
                 console.error(err);
-                uploadZone.innerHTML = `<span class="text-rose-400 text-sm font-semibold">Upload failed. Try again.</span>`;
+                uploadZone.innerHTML = `<span class="text-rose-400 text-xs font-medium">Upload failed. Try again.</span>`;
             }
         }
 
@@ -475,16 +474,13 @@
             isSyncingPlayback = !isSyncingPlayback;
             const btn = document.getElementById('sync-btn');
             const label = document.getElementById('sync-label');
-            const icon = document.getElementById('sync-icon');
 
             if (isSyncingPlayback) {
-                btn.className = "px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white border border-emerald-500 flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20";
+                btn.className = "px-2.5 py-1 text-xs font-medium rounded border border-emerald-800 bg-emerald-950/60 text-emerald-300 flex items-center gap-1.5 transition-colors";
                 label.textContent = "Sync Players: ON";
-                icon.textContent = "🔗";
             } else {
-                btn.className = "px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-all";
+                btn.className = "px-2.5 py-1 text-xs font-medium rounded border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 flex items-center gap-1.5 transition-colors";
                 label.textContent = "Sync Players: OFF";
-                icon.textContent = "🔓";
             }
         }
 
@@ -513,9 +509,9 @@
         });
 
         // ── Real-Time Frame Tracking Badges during Video Playback ────
-        [ { video: videoEasy, badge: badgeEasy, model: 'EasyOCR', card: document.getElementById('player-card-easyocr'), glowClass: 'active-easyocr-glow' },
-          { video: videoTess, badge: badgeTess, model: 'PyTesseract', card: document.getElementById('player-card-pytesseract'), glowClass: 'active-pytesseract-glow' }
-        ].forEach(({ video, badge, model, card, glowClass }) => {
+        [ { video: videoEasy, badge: badgeEasy, model: 'EasyOCR', card: document.getElementById('player-card-easyocr'), borderClass: 'active-easyocr-border' },
+          { video: videoTess, badge: badgeTess, model: 'PyTesseract', card: document.getElementById('player-card-pytesseract'), borderClass: 'active-pytesseract-border' }
+        ].forEach(({ video, badge, model, card, borderClass }) => {
             video.addEventListener('timeupdate', () => {
                 const curTime = video.currentTime;
                 let activeItem = null;
@@ -534,11 +530,11 @@
                 }
 
                 if (activeItem && activeItem.plate_number) {
-                    badge.innerHTML = `🚗 <span class="font-bold text-white">${activeItem.plate_number}</span> (${(activeItem.confidence * 100).toFixed(0)}%)`;
-                    card.classList.add(glowClass);
+                    badge.innerHTML = `Active: <span class="font-semibold text-zinc-100 font-mono">${activeItem.plate_number}</span> (${(activeItem.confidence * 100).toFixed(0)}%)`;
+                    card.classList.add(borderClass);
                 } else {
                     badge.textContent = 'Scanning video...';
-                    card.classList.remove(glowClass);
+                    card.classList.remove(borderClass);
                 }
             });
         });
@@ -560,7 +556,7 @@
             canvasEasy.classList.remove('hidden');
             canvasTess.classList.remove('hidden');
 
-            progressBox.classList.remove('opacity-50');
+            progressBox.classList.remove('opacity-60');
             processBtn.disabled = true;
             processBtn.textContent = 'Processing Dual Pipeline...';
 
@@ -627,9 +623,9 @@
                 let existingCard = document.getElementById(cropId);
 
                 const cardInner = `
-                    <img src="${data.url}" class="h-10 w-full object-contain filter contrast-125 select-none" draggable="false" />
-                    <span class="text-[9px] font-bold text-slate-300 mt-1 uppercase tracking-tight">${data.text}</span>
-                    <span class="text-[8px] font-semibold ${data.model === 'EasyOCR' ? 'text-blue-400' : 'text-purple-400'}">[${data.model}] #${data.track_id}</span>
+                    <img src="${data.url}" class="h-9 w-full object-contain filter contrast-125 select-none" draggable="false" />
+                    <span class="text-[9px] font-bold text-zinc-300 mt-1 uppercase font-mono tracking-tight">${data.text}</span>
+                    <span class="text-[8px] font-mono ${data.model === 'EasyOCR' ? 'text-sky-400' : 'text-indigo-400'}">[${data.model}] #${data.track_id}</span>
                 `;
 
                 if (existingCard) {
@@ -637,7 +633,7 @@
                 } else {
                     const card = document.createElement('div');
                     card.id = cropId;
-                    card.className = "bg-slate-950 p-1 border border-slate-800 rounded-lg flex flex-col items-center shadow-sm overflow-hidden";
+                    card.className = "bg-zinc-950 p-1 border border-zinc-800 rounded flex flex-col items-center shadow-sm overflow-hidden";
                     card.innerHTML = cardInner;
                     cropGallery.insertBefore(card, cropGallery.firstChild);
                     emptyGalleryMsg.classList.add('hidden');
@@ -666,7 +662,7 @@
                 progressEta.textContent = 'Done';
 
                 processBtn.disabled = false;
-                processBtn.textContent = '⚡ Run Dual-Model Comparison';
+                processBtn.textContent = 'Run Dual-Model Comparison';
 
                 if (data.metrics) {
                     updateMetricsCards(data.metrics);
@@ -678,17 +674,17 @@
                 eventSource.close();
                 progressStatus.textContent = 'Error during processing';
                 processBtn.disabled = false;
-                processBtn.textContent = '⚡ Run Dual-Model Comparison';
+                processBtn.textContent = 'Run Dual-Model Comparison';
             };
         });
 
         // ── Render Dual-Model Side-by-Side Comparison Table ─────────
         function renderDualTable() {
             const trackIds = Object.keys(dualLogsMap);
-            logCount.textContent = `${trackIds.length} Vehicles`;
+            logCount.textContent = `${trackIds.length} Total`;
 
             if (trackIds.length === 0) {
-                logTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-slate-500">No vehicle records.</td></tr>`;
+                logTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-zinc-500 font-sans text-xs">No vehicle records populated.</td></tr>`;
                 return;
             }
 
@@ -699,7 +695,7 @@
                 const tess = pair.tess || {};
 
                 const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-800/30 hover:bg-slate-900/30 transition-colors";
+                tr.className = "border-b border-zinc-800/30 hover:bg-zinc-900/40 transition-colors";
 
                 const timeStr = easy.timestamp || tess.timestamp || '--';
                 const vehicleStr = easy.vehicle_type || tess.vehicle_type || 'Vehicle';
@@ -709,27 +705,27 @@
                 const easyText = easy.plate_number ? `${easy.plate_number} (${(easy.confidence * 100).toFixed(0)}%)` : '--';
                 const tessText = tess.plate_number ? `${tess.plate_number} (${(tess.confidence * 100).toFixed(0)}%)` : '--';
 
-                let winnerBadge = '<span class="text-slate-500 font-mono">--</span>';
+                let winnerBadge = '<span class="text-zinc-600 font-mono">--</span>';
                 if (gtStr !== '--') {
                     const easyCer = easy.cer != null ? easy.cer : 1.0;
                     const tessCer = tess.cer != null ? tess.cer : 1.0;
                     if (easyCer < tessCer) {
-                        winnerBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">🏆 EasyOCR</span>`;
+                        winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50">EasyOCR</span>`;
                     } else if (tessCer < easyCer) {
-                        winnerBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">🏆 PyTesseract</span>`;
+                        winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50">PyTesseract</span>`;
                     } else {
-                        winnerBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">🤝 Match</span>`;
+                        winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50">Match</span>`;
                     }
                 }
 
                 tr.innerHTML = `
-                    <td class="py-3 px-2 font-semibold text-slate-400">#${trackId}</td>
-                    <td class="py-3 px-2 text-slate-500">${timeStr}</td>
-                    <td class="py-3 px-2 font-medium capitalize">${vehicleStr} ${colorStr ? `<span class="text-slate-500">(${colorStr})</span>` : ''}</td>
-                    <td class="py-3 px-2 font-bold text-blue-400 tracking-wide">${easyText}</td>
-                    <td class="py-3 px-2 font-bold text-purple-400 tracking-wide">${tessText}</td>
-                    <td class="py-3 px-2 font-mono text-slate-300">${gtStr}</td>
-                    <td class="py-3 px-2">${winnerBadge}</td>
+                    <td class="py-2.5 px-2 font-mono text-zinc-400">#${trackId}</td>
+                    <td class="py-2.5 px-2 text-zinc-500">${timeStr}</td>
+                    <td class="py-2.5 px-2 font-sans font-medium capitalize text-zinc-300">${vehicleStr} ${colorStr ? `<span class="text-zinc-500">(${colorStr})</span>` : ''}</td>
+                    <td class="py-2.5 px-2 font-semibold text-sky-400">${easyText}</td>
+                    <td class="py-2.5 px-2 font-semibold text-indigo-400">${tessText}</td>
+                    <td class="py-2.5 px-2 text-zinc-300 font-mono">${gtStr}</td>
+                    <td class="py-2.5 px-2">${winnerBadge}</td>
                 `;
                 logTableBody.appendChild(tr);
             });
@@ -744,11 +740,11 @@
             const winner = metrics.winner || '--';
 
             if (winner === 'EasyOCR') {
-                statWinner.innerHTML = `🏆 <span class="text-blue-400">EasyOCR</span>`;
+                statWinner.innerHTML = `<span class="text-sky-400">EasyOCR</span>`;
             } else if (winner === 'PyTesseract') {
-                statWinner.innerHTML = `🏆 <span class="text-purple-400">PyTesseract</span>`;
+                statWinner.innerHTML = `<span class="text-indigo-400">PyTesseract</span>`;
             } else {
-                statWinner.innerHTML = `🤝 <span class="text-emerald-400">Tie</span>`;
+                statWinner.innerHTML = `<span class="text-emerald-400">Tie</span>`;
             }
 
             statCerEasy.textContent = easy.average_cer != null ? `${(easy.average_cer * 100).toFixed(1)}%` : '--';
@@ -775,7 +771,7 @@
                     body: JSON.stringify({ plates })
                 });
                 const data = await res.json();
-                document.getElementById('gt-count').textContent = data.count || 0;
+                document.getElementById('gt-count').textContent = `${data.count || 0} plates`;
                 fetchCerSummary();
             } catch (e) {
                 console.error('Failed to save ground truth:', e);
@@ -790,7 +786,7 @@
             try {
                 const res = await fetch('/api/ground-truth/upload', { method: 'POST', body: formData });
                 const data = await res.json();
-                document.getElementById('gt-count').textContent = data.count || 0;
+                document.getElementById('gt-count').textContent = `${data.count || 0} plates`;
                 document.getElementById('gt-input').value = (data.plates || []).join('\n');
                 fetchCerSummary();
             } catch (e) {
@@ -803,7 +799,7 @@
                 const res = await fetch('/api/ground-truth');
                 const data = await res.json();
                 const plates = data.plates || [];
-                document.getElementById('gt-count').textContent = plates.length;
+                document.getElementById('gt-count').textContent = `${plates.length} plates`;
                 if (plates.length > 0) document.getElementById('gt-input').value = plates.join('\n');
                 fetchCerSummary();
             } catch (e) {
