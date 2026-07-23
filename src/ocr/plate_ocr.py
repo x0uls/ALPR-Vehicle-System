@@ -140,17 +140,15 @@ def preprocess_for_easyocr(cropped_plate_img):
 
     # Resize to standard width so character thickness matches EasyOCR model training patterns
     resized = _resize_keep_aspect(cropped_plate_img, TARGET_WIDTH, "width")
-    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY) if len(resized.shape) == 3 else resized
     
-    # Apply Contrast Limited Adaptive Histogram Equalization (CLAHE).
-    # Improves local contrast in dark/bright spots (shadows/highlights) without blowing out noise.
-    # clipLimit=2.0 limits maximum contrast boost, tileGridSize=(8, 8) divides image into local 8x8 blocks.
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    # Gentle contrast enhancement
+    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8)).apply(gray)
     processed = auto_deskew(clahe)
     
     # Add a 15-pixel white border so character edges don't touch the image boundaries
     final_img = cv2.copyMakeBorder(processed, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
-    return cv2.cvtColor(final_img, cv2.COLOR_GRAY2BGR)
+    return cv2.cvtColor(final_img, cv2.COLOR_GRAY2RGB)
 
 def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
     """
@@ -261,27 +259,22 @@ def _run_pytesseract_raw(processed):
     Executes raw PyTesseract image-to-text detection on a preprocessed image.
     """
     try:
-        # --psm 7: Treat the image as a single text line (perfect for license plates)
-        # --oem 1: Use LSTM neural network OCR engine (more accurate than legacy engines)
         config = f"--psm 7 --oem 1"
         data_dict = pytesseract.image_to_data(processed, config=config, output_type=pytesseract.Output.DICT)
         
         words_confs = []
         for word, confidence in zip(data_dict.get('text', []), data_dict.get('conf', [])):
-            # Clean up the output by removing special characters
             cleaned = PLATE_CHAR_PATTERN.sub('', str(word).strip().upper())
             if cleaned:
                 try:
                     val = int(float(confidence))
                 except (ValueError, TypeError):
                     val = -1
-                # If confidence is missing (-1), default to a neutral 50%
                 words_confs.append((cleaned, 50 if val == -1 else val))
         
         words = [word_confidence_pair[0] for word_confidence_pair in words_confs]
         confidences = [word_confidence_pair[1] for word_confidence_pair in words_confs]
         combined_text = " ".join(words)
-        # Scale PyTesseract 0-100 confidence ratings down to a float between 0.0 and 1.0
         avg_conf = (sum(confidences) / len(confidences) / 100.0) if confidences else 0.0
         return combined_text, avg_conf
     except Exception as e:
@@ -289,26 +282,21 @@ def _run_pytesseract_raw(processed):
 
 def _run_easyocr_raw(processed):
     """
-    Executes raw EasyOCR detection on a preprocessed image.
+    Executes raw EasyOCR detection on a preprocessed or raw image.
     """
-    # Allowlist restricts characters to uppercase letters and digits.
-    # Prevents OCR from misinterpreting letters/digits as punctuation (e.g. '/' or '-')
-    allowlist = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    # text_threshold=0.3: Minimum confidence score to accept characters.
-    # low_text=0.2: Threshold for grouping nearby letters together.
-    # mag_ratio=1.5: Upscales internal crop size to capture details in smaller text.
-    results = reader.readtext(processed, allowlist=allowlist, paragraph=False, text_threshold=0.3, low_text=0.2, mag_ratio=1.5)
-    if not results:
-        return '', 0.0
+    try:
+        # Run EasyOCR without aggressive allowlist restriction to capture full text line
+        results = reader.readtext(processed, detail=1, paragraph=False, text_threshold=0.2, low_text=0.2)
+        if not results:
+            return '', 0.0
 
-    # Sort results geometrically.
-    # round(y / 20) groups characters into lines (vertical layout checks) and sorts them left-to-right (x-coordinate)
-    results_sorted = sorted(results, key=lambda detection_result: (round(detection_result[0][0][1] / 20), detection_result[0][0][0]))
-    combined_text = PLATE_CHAR_PATTERN.sub('', " ".join(detection_result[1].upper().strip() for detection_result in results_sorted))
-    # Extract confidences (0.0 to 1.0 float returned by EasyOCR)
-    confidences = [float(detection_result[2]) for detection_result in results_sorted if len(detection_result) > 2]
-    avg_conf = np.mean(confidences) if confidences else 0.0
-    return combined_text, avg_conf
+        results_sorted = sorted(results, key=lambda detection_result: (round(detection_result[0][0][1] / 20), detection_result[0][0][0]))
+        combined_text = PLATE_CHAR_PATTERN.sub('', " ".join(detection_result[1].upper().strip() for detection_result in results_sorted))
+        confidences = [float(detection_result[2]) for detection_result in results_sorted if len(detection_result) > 2]
+        avg_conf = float(np.mean(confidences)) if confidences else 0.0
+        return combined_text, avg_conf
+    except Exception as e:
+        return '', 0.0
 
 def _run_ocr(processed, engine_name):
     """
@@ -323,15 +311,22 @@ def _run_ocr(processed, engine_name):
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """
     Core entry point to extract license plate text and confidences from a plate crop.
-    
-    If using PyTesseract, runs both adaptive and Otsu binarization and selects the best read.
     """
     if engine_name != "PyTesseract":
         processed = preprocess_for_easyocr(cropped_plate_img)
-        if processed is None:
-            return '', 0.0, engine_name, None
-        text, conf = _run_ocr(processed, engine_name)
-        return text, conf, engine_name, processed
+        if processed is not None:
+            text, conf = _run_ocr(processed, engine_name)
+            if text and conf > 0:
+                return text, conf, engine_name, processed
+        
+        # Fallback: run directly on raw cropped plate image if preprocessed read returned empty
+        if cropped_plate_img is not None and cropped_plate_img.size > 0:
+            raw_rgb = cv2.cvtColor(cropped_plate_img, cv2.COLOR_BGR2RGB)
+            text_raw, conf_raw = _run_ocr(raw_rgb, engine_name)
+            if text_raw:
+                return text_raw, conf_raw, engine_name, raw_rgb
+        
+        return '', 0.0, engine_name, processed
 
     candidates = []
     # Test both adaptive and Otsu thresholding for Tesseract since plate backgrounds

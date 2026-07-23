@@ -607,11 +607,21 @@
 
             eventSource.addEventListener('log', (e) => {
                 const rowData = JSON.parse(e.data);
-                const trackId = rowData.track_id;
+            eventSource.addEventListener('log', (e) => {
+                const rowData = JSON.parse(e.data);
                 const model = rowData.model;
+                
+                const plateNorm = (rowData.plate_number || '').replace(/\s+/g, '').toUpperCase();
+                const gtNorm = (rowData.matched_gt || '').replace(/\s+/g, '').toUpperCase();
+                const key = plateNorm || (gtNorm && gtNorm !== '--' ? gtNorm : `track-${rowData.track_id}`);
 
-                if (!dualLogsMap[trackId]) dualLogsMap[trackId] = {};
-                dualLogsMap[trackId][model === 'EasyOCR' ? 'easy' : 'tess'] = rowData;
+                if (!dualLogsMap[key]) dualLogsMap[key] = { track_id: rowData.track_id };
+                
+                const modelKey = model === 'EasyOCR' ? 'easy' : 'tess';
+                const existing = dualLogsMap[key][modelKey];
+                if (!existing || (rowData.confidence > (existing.confidence || 0))) {
+                    dualLogsMap[key][modelKey] = rowData;
+                }
 
                 renderDualTable();
                 if (exportBtn) exportBtn.disabled = false;
@@ -680,23 +690,24 @@
 
         // ── Render Dual-Model Side-by-Side Comparison Table ─────────
         function renderDualTable() {
-            const trackIds = Object.keys(dualLogsMap);
-            logCount.textContent = `${trackIds.length} Total`;
+            const keys = Object.keys(dualLogsMap);
+            logCount.textContent = `${keys.length} Vehicles`;
 
-            if (trackIds.length === 0) {
+            if (keys.length === 0) {
                 logTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-zinc-500 font-sans text-xs">No vehicle records populated.</td></tr>`;
                 return;
             }
 
             logTableBody.innerHTML = '';
-            trackIds.forEach(trackId => {
-                const pair = dualLogsMap[trackId];
+            keys.forEach(key => {
+                const pair = dualLogsMap[key];
                 const easy = pair.easy || {};
                 const tess = pair.tess || {};
 
                 const tr = document.createElement('tr');
                 tr.className = "border-b border-zinc-800/30 hover:bg-zinc-900/40 transition-colors";
 
+                const trackId = pair.track_id || easy.track_id || tess.track_id || '--';
                 const timeStr = easy.timestamp || tess.timestamp || '--';
                 const vehicleStr = easy.vehicle_type || tess.vehicle_type || 'Vehicle';
                 const colorStr = easy.color || tess.color || '';
@@ -707,15 +718,19 @@
 
                 let winnerBadge = '<span class="text-zinc-600 font-mono">--</span>';
                 if (gtStr !== '--') {
-                    const easyCer = easy.cer != null ? easy.cer : 1.0;
-                    const tessCer = tess.cer != null ? tess.cer : 1.0;
+                    const easyCer = (easy.plate_number && easy.cer != null) ? easy.cer : 1.0;
+                    const tessCer = (tess.plate_number && tess.cer != null) ? tess.cer : 1.0;
                     if (easyCer < tessCer) {
                         winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50">EasyOCR</span>`;
                     } else if (tessCer < easyCer) {
                         winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50">PyTesseract</span>`;
-                    } else {
+                    } else if (easyCer < 1.0 && tessCer < 1.0 && easyCer === tessCer) {
                         winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50">Match</span>`;
                     }
+                } else if (easy.plate_number && !tess.plate_number) {
+                    winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50">EasyOCR</span>`;
+                } else if (tess.plate_number && !easy.plate_number) {
+                    winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50">PyTesseract</span>`;
                 }
 
                 tr.innerHTML = `

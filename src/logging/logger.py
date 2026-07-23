@@ -63,6 +63,10 @@ def log_detection(track_id, vehicle_type, color, plate_number, confidence, snaps
         flush_log(log_path)
 
 
+def _normalize_plate_str(p):
+    return p.replace(" ", "").upper() if p else ""
+
+
 def flush_log(log_path=LOG_PATH):
     global _log_buffers
     buffer = _log_buffers.get(log_path, [])
@@ -81,12 +85,14 @@ def flush_log(log_path=LOG_PATH):
                 break
         
         if not updated and new_detection_row.get("plate_number"):
-            for i, row in enumerate(rows):
-                if row.get("plate_number") == new_detection_row["plate_number"]:
-                    if _safe_float(new_detection_row.get("confidence")) > _safe_float(row.get("confidence")):
-                        rows[i] = new_detection_row
-                    updated = True
-                    break
+            new_norm = _normalize_plate_str(new_detection_row["plate_number"])
+            if new_norm:
+                for i, row in enumerate(rows):
+                    if _normalize_plate_str(row.get("plate_number")) == new_norm:
+                        if _safe_float(new_detection_row.get("confidence")) > _safe_float(row.get("confidence")):
+                            rows[i] = new_detection_row
+                        updated = True
+                        break
                     
         if not updated:
             rows.append(new_detection_row)

@@ -278,24 +278,34 @@ def compute_dual_model_comparison(easyocr_detections, pytesseract_detections, gr
     easy_metrics = compute_comprehensive_metrics(easyocr_detections, ground_truth_list, easyocr_time)
     tess_metrics = compute_comprehensive_metrics(pytesseract_detections, ground_truth_list, pytesseract_time)
 
-    easy_cer = easy_metrics["average_cer"] if easy_metrics["average_cer"] is not None else 1.0
-    tess_cer = tess_metrics["average_cer"] if tess_metrics["average_cer"] is not None else 1.0
+    easy_count = easy_metrics.get("total_detections", 0)
+    tess_count = tess_metrics.get("total_detections", 0)
 
-    easy_exact = easy_metrics["exact_match_rate"]
-    tess_exact = tess_metrics["exact_match_rate"]
-
-    easy_prec = easy_metrics["precision"]
-    tess_prec = tess_metrics["precision"]
-
-    easy_score = (1.0 - easy_cer) * 0.4 + easy_exact * 0.4 + easy_prec * 0.2
-    tess_score = (1.0 - tess_cer) * 0.4 + tess_exact * 0.4 + tess_prec * 0.2
-
-    if abs(easy_score - tess_score) < 0.02:
-        winner = "Tie"
-    elif easy_score > tess_score:
-        winner = "EasyOCR"
-    else:
+    if easy_count == 0 and tess_count > 0:
         winner = "PyTesseract"
+    elif tess_count == 0 and easy_count > 0:
+        winner = "EasyOCR"
+    elif easy_count == 0 and tess_count == 0:
+        winner = "Tie"
+    else:
+        easy_cer = easy_metrics["average_cer"] if easy_metrics["average_cer"] is not None else 1.0
+        tess_cer = tess_metrics["average_cer"] if tess_metrics["average_cer"] is not None else 1.0
+
+        easy_exact = easy_metrics["exact_match_rate"]
+        tess_exact = tess_metrics["exact_match_rate"]
+
+        easy_prec = easy_metrics["precision"]
+        tess_prec = tess_metrics["precision"]
+
+        easy_score = (1.0 - easy_cer) * 0.4 + easy_exact * 0.4 + easy_prec * 0.2
+        tess_score = (1.0 - tess_cer) * 0.4 + tess_exact * 0.4 + tess_prec * 0.2
+
+        if abs(easy_score - tess_score) < 0.02:
+            winner = "Tie"
+        elif easy_score > tess_score:
+            winner = "EasyOCR"
+        else:
+            winner = "PyTesseract"
 
     return {
         "winner": winner,
@@ -303,3 +313,4 @@ def compute_dual_model_comparison(easyocr_detections, pytesseract_detections, gr
         "easyocr": easy_metrics,
         "pytesseract": tess_metrics
     }
+
