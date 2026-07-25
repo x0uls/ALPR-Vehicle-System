@@ -469,8 +469,6 @@
 
         const canvasEasy = document.getElementById('canvas-easyocr');
         const canvasTess = document.getElementById('canvas-pytesseract');
-        const videoEasy = document.getElementById('video-easyocr');
-        const videoTess = document.getElementById('video-pytesseract');
 
         const badgeEasy = document.getElementById('badge-easyocr');
         const badgeTess = document.getElementById('badge-pytesseract');
@@ -583,45 +581,6 @@
             window.location.href = '/api/export';
         }
 
-        // ── Video Playback Sync Control ──────────────────────────────
-        function togglePlaybackSync() {
-            isSyncingPlayback = !isSyncingPlayback;
-            const btn = document.getElementById('sync-btn');
-            const label = document.getElementById('sync-label');
-
-            if (isSyncingPlayback) {
-                btn.className = "px-2.5 py-1 text-xs font-medium rounded border border-emerald-800 bg-emerald-950/60 text-emerald-300 flex items-center gap-1.5 transition-colors";
-                label.textContent = "Sync Players: ON";
-            } else {
-                btn.className = "px-2.5 py-1 text-xs font-medium rounded border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 flex items-center gap-1.5 transition-colors";
-                label.textContent = "Sync Players: OFF";
-            }
-        }
-
-        videoEasy.addEventListener('play', () => {
-            if (isSyncingPlayback && videoTess.paused) videoTess.play();
-        });
-        videoEasy.addEventListener('pause', () => {
-            if (isSyncingPlayback && !videoTess.paused) videoTess.pause();
-        });
-        videoEasy.addEventListener('seeking', () => {
-            if (isSyncingPlayback && Math.abs(videoTess.currentTime - videoEasy.currentTime) > 0.3) {
-                videoTess.currentTime = videoEasy.currentTime;
-            }
-        });
-
-        videoTess.addEventListener('play', () => {
-            if (isSyncingPlayback && videoEasy.paused) videoEasy.play();
-        });
-        videoTess.addEventListener('pause', () => {
-            if (isSyncingPlayback && !videoEasy.paused) videoEasy.pause();
-        });
-        videoTess.addEventListener('seeking', () => {
-            if (isSyncingPlayback && Math.abs(videoEasy.currentTime - videoTess.currentTime) > 0.3) {
-                videoEasy.currentTime = videoTess.currentTime;
-            }
-        });
-
         badgeEasy.textContent = 'Ready';
         badgeTess.textContent = 'Ready';
 
@@ -637,10 +596,10 @@
             uploadZone.classList.add('hidden');
             dualPlayersContainer.classList.remove('hidden');
 
-            videoEasy.classList.add('hidden');
-            videoTess.classList.add('hidden');
             canvasEasy.classList.remove('hidden');
             canvasTess.classList.remove('hidden');
+            badgeEasy.textContent = 'Processing...';
+            badgeTess.textContent = 'Processing...';
 
             progressBox.classList.remove('opacity-60');
             processBtn.disabled = true;
