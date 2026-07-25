@@ -65,12 +65,15 @@ class DetectionTracker:
         active = []
         for t in self.tracks:
             if force_flush or (frame_idx - t["last_seen"] > TRACK_MAX_AGE):
+                easy_crop = t["engines"]["EasyOCR"].get("plate_crop_path")
+                tess_crop = t["engines"]["PyTesseract"].get("plate_crop_path")
+                shared_crop = easy_crop or tess_crop
+
                 for eng_name, log_p in [("EasyOCR", "outputs/logs/detections_easyocr.csv"), ("PyTesseract", "outputs/logs/detections_pytesseract.csv")]:
                     eng_data = t["engines"][eng_name]
-                    if eng_data.get("plate_crop_path") or (eng_data.get("best_plate") and eng_data.get("best_score", 0) > 0):
-                        crop_p = eng_data.get("plate_crop_path") or f"outputs/plate_crops/Processed/frame{t['last_seen']}_track{t['track_id']}_{eng_name.lower()}.jpg"
-                        v_time = eng_data.get("video_timestamp") or format_video_timestamp(t["last_seen"], frames_per_second)
-                        _log_track(t, eng_name, plate_crop_path=crop_p, video_timestamp=v_time, log_path=log_p)
+                    crop_p = eng_data.get("plate_crop_path") or shared_crop or f"outputs/plate_crops/Processed/frame{t['last_seen']}_track{t['track_id']}_{eng_name.lower()}.jpg"
+                    v_time = eng_data.get("video_timestamp") or format_video_timestamp(t["last_seen"], frames_per_second)
+                    _log_track(t, eng_name, plate_crop_path=crop_p, video_timestamp=v_time, log_path=log_p)
             else:
                 active.append(t)
         self.tracks = active
