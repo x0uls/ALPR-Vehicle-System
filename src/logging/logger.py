@@ -1,12 +1,14 @@
 import csv
 import os
 
-LOG_PATH = "outputs/logs/detections.csv"
+# Standard CSV file structure field names
+LOG_PATH = "outputs/logs/detections_easyocr.csv"
 FIELDNAMES = ["track_id", "timestamp", "vehicle_type", "color", "plate_number", "confidence", "snapshot_path", "plate_crop_path"]
 _log_buffers = {}
 
 
 def _safe_float(val, default=0.0):
+    """Safely converts string or numerical inputs to a float with a default fallback."""
     try:
         return float(val)
     except (ValueError, TypeError):
@@ -15,9 +17,10 @@ def _safe_float(val, default=0.0):
 
 def init_log(log_path=LOG_PATH):
     """
-    Resets the specified CSV file and clears output crop image directories.
+    Resets the specified CSV file and initializes output crop image directories.
+    
+    Creates CSV header rows and ensures output directories for processed crops and snapshots exist.
     """
-    global _log_buffers
     _log_buffers[log_path] = []
     
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -25,11 +28,12 @@ def init_log(log_path=LOG_PATH):
         writer = csv.writer(f)
         writer.writerow(FIELDNAMES)
 
-    for folder in ["outputs/plate_crops/Raw", "outputs/plate_crops/Processed", "outputs/snapshots"]:
+    for folder in ["outputs/plate_crops/Processed", "outputs/snapshots"]:
         os.makedirs(folder, exist_ok=True)
 
 
 def _read_all_rows(log_path=LOG_PATH):
+    """Reads all existing records from the specified CSV file into a list of dictionaries."""
     if not os.path.exists(log_path):
         return []
     with open(log_path, "r", newline="") as f:
@@ -38,6 +42,7 @@ def _read_all_rows(log_path=LOG_PATH):
 
 
 def _write_all_rows(rows, log_path=LOG_PATH):
+    """Overwrites the CSV file with the updated list of detection records."""
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     with open(log_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
@@ -46,6 +51,11 @@ def _write_all_rows(rows, log_path=LOG_PATH):
 
 
 def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, plate_crop_path="", video_timestamp="", log_path=LOG_PATH):
+    """
+    Buffers a new vehicle detection event in memory.
+    
+    Flushes records to CSV file when buffer reaches 20 items to minimize disk I/O latency.
+    """
     if log_path not in _log_buffers:
         _log_buffers[log_path] = []
 
@@ -64,11 +74,17 @@ def log_detection(track_id, vehicle_type, color, plate_number, confidence, snaps
 
 
 def _normalize_plate_str(p):
+    """Normalizes plate string by stripping spaces and converting to uppercase for deduplication."""
     return p.replace(" ", "").upper() if p else ""
 
 
 def flush_log(log_path=LOG_PATH):
-    global _log_buffers
+    """
+    Flushes buffered detection logs from memory to disk.
+    
+    Applies deduplication: if a track or plate number already exists in the log, updates the record
+    only if the new detection achieved a higher OCR confidence score.
+    """
     buffer = _log_buffers.get(log_path, [])
     if not buffer:
         return
@@ -77,6 +93,7 @@ def flush_log(log_path=LOG_PATH):
 
     for new_detection_row in buffer:
         updated = False
+        # Rule 1: Match by unique track_id
         for i, row in enumerate(rows):
             if row.get("track_id") == new_detection_row["track_id"]:
                 if _safe_float(new_detection_row.get("confidence")) > _safe_float(row.get("confidence")):
@@ -84,6 +101,7 @@ def flush_log(log_path=LOG_PATH):
                 updated = True
                 break
         
+        # Rule 2: Deduplicate identical plate text reads by keeping the highest confidence entry
         if not updated and new_detection_row.get("plate_number"):
             new_norm = _normalize_plate_str(new_detection_row["plate_number"])
             if new_norm:

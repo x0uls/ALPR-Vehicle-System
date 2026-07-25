@@ -5,26 +5,24 @@
 # Core Deep Learning Weights (Pulled securely from cu124)
 torch
 torchvision
-torchaudio
 
 # Computer Vision Architecture & Tools
 ultralytics
-roboflow
-fiftyone
 opencv-python
 
-# Text Extraction Frameworks
+# Text Extraction Frameworks & Metrics
 easyocr
 pytesseract
 deskew
 scikit-image
 jiwer
 
-
-# Data Analytics & Mathematical Foundations
+# Data Analytics
 numpy
-matplotlib
 pandas
 scikit-learn
-pyyaml
-openpyxl
+
+# Web Server
+fastapi
+uvicorn
+python-multipart

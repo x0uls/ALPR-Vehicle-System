@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ALPR Benchmarking Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -287,6 +288,40 @@
 
         </section>
 
+        <!-- 4.5 Benchmark Analytics & Visualizations Section -->
+        <section id="charts-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Benchmark Analytics & Accuracy Comparison</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700">Live Visualizations</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Chart 1: Model Performance Summary Bar Chart -->
+                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">Overall Model Benchmark (%)</span>
+                        <span class="text-[10px] text-zinc-500 font-sans">Higher = Better (except CER)</span>
+                    </div>
+                    <div class="relative h-[220px] w-full">
+                        <canvas id="chart-overall"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Per-Vehicle Character Error Rate (CER) -->
+                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">Per-Vehicle Character Error Rate (CER %)</span>
+                        <span class="text-[10px] text-zinc-500 font-sans">Lower = Better</span>
+                    </div>
+                    <div class="relative h-[220px] w-full">
+                        <canvas id="chart-vehicle-cer"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- 5. Bottom Section: Detection Records Table & Crops Gallery -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -471,6 +506,7 @@
         let selectedVideoPath = null;
         let dualLogsMap = {};
         let isSyncingPlayback = false;
+        let lastMetrics = null;
 
         // ── Upload Event Handlers ────────────────────────────────────
         uploadZone.addEventListener('click', () => fileInput.click());
@@ -837,6 +873,8 @@
                 `;
                 logTableBody.appendChild(tr);
             });
+
+            if (lastMetrics) renderCharts(lastMetrics);
         }
 
         // ── Modal Controller Functions ────────────────────────────────
@@ -948,6 +986,132 @@
 
             statConfEasy.textContent = `${(easy.average_confidence * 100).toFixed(0)}%`;
             statConfTess.textContent = `${(tess.average_confidence * 100).toFixed(0)}%`;
+
+            lastMetrics = metrics;
+            renderCharts(metrics);
+        }
+
+        // ── Render Chart.js Analytics & Visualizations ──────────────
+        let chartOverallInstance = null;
+        let chartVehicleCerInstance = null;
+
+        function renderCharts(metrics) {
+            if (!metrics || typeof Chart === 'undefined') return;
+
+            const easy = metrics.easyocr || {};
+            const tess = metrics.pytesseract || {};
+
+            // 1. Overall Model Benchmark Bar Chart
+            const ctxOverall = document.getElementById('chart-overall');
+            if (ctxOverall) {
+                if (chartOverallInstance) chartOverallInstance.destroy();
+
+                chartOverallInstance = new Chart(ctxOverall.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Exact Match', 'GT Recall', 'Precision', 'Avg Conf', 'Avg CER'],
+                        datasets: [
+                            {
+                                label: 'EasyOCR',
+                                data: [
+                                    (easy.exact_match_rate || 0) * 100,
+                                    (easy.gt_recall || 0) * 100,
+                                    (easy.precision || 0) * 100,
+                                    (easy.average_confidence || 0) * 100,
+                                    (easy.average_cer != null ? easy.average_cer : 0) * 100
+                                ],
+                                backgroundColor: 'rgba(56, 189, 248, 0.75)',
+                                borderColor: '#38bdf8',
+                                borderWidth: 1.5
+                            },
+                            {
+                                label: 'PyTesseract',
+                                data: [
+                                    (tess.exact_match_rate || 0) * 100,
+                                    (tess.gt_recall || 0) * 100,
+                                    (tess.precision || 0) * 100,
+                                    (tess.average_confidence || 0) * 100,
+                                    (tess.average_cer != null ? tess.average_cer : 0) * 100
+                                ],
+                                backgroundColor: 'rgba(129, 140, 248, 0.75)',
+                                borderColor: '#818cf8',
+                                borderWidth: 1.5
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
+                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` } }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 } }, grid: { color: '#27272a' } },
+                            y: { min: 0, max: 100, ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 }, callback: v => v + '%' }, grid: { color: '#27272a' } }
+                        }
+                    }
+                });
+            }
+
+            // 2. Per-Vehicle Character Error Rate (CER %) Bar Chart
+            const ctxCer = document.getElementById('chart-vehicle-cer');
+            if (ctxCer) {
+                const keys = Object.keys(dualLogsMap);
+                if (keys.length > 0) {
+                    const vehicleLabels = [];
+                    const easyCerData = [];
+                    const tessCerData = [];
+
+                    keys.forEach(key => {
+                        const pair = dualLogsMap[key];
+                        const e = pair.easy || {};
+                        const t = pair.tess || {};
+                        const label = e.plate_number || t.plate_number || `Track #${pair.track_id}`;
+                        
+                        vehicleLabels.push(label);
+                        easyCerData.push((e.cer != null ? e.cer : 1.0) * 100);
+                        tessCerData.push((t.cer != null ? t.cer : 1.0) * 100);
+                    });
+
+                    if (chartVehicleCerInstance) chartVehicleCerInstance.destroy();
+
+                    chartVehicleCerInstance = new Chart(ctxCer.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: vehicleLabels,
+                            datasets: [
+                                {
+                                    label: 'EasyOCR CER %',
+                                    data: easyCerData,
+                                    backgroundColor: 'rgba(56, 189, 248, 0.75)',
+                                    borderColor: '#38bdf8',
+                                    borderWidth: 1.5
+                                },
+                                {
+                                    label: 'PyTesseract CER %',
+                                    data: tessCerData,
+                                    backgroundColor: 'rgba(129, 140, 248, 0.75)',
+                                    borderColor: '#818cf8',
+                                    borderWidth: 1.5
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
+                                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` } }
+                            },
+                            scales: {
+                                x: { ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 } }, grid: { color: '#27272a' } },
+                                y: { min: 0, max: 100, ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 }, callback: v => v + '%' }, grid: { color: '#27272a' } }
+                            }
+                        }
+                    });
+                }
+            }
         }
 
         // ── Ground Truth Management ───────────────────────────────────

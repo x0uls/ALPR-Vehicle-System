@@ -29,43 +29,31 @@ CER uses the Levenshtein Distance (a.k.a. Edit Distance) algorithm:
 import os
 import json
 import jiwer
+import numpy as np
 
-
-# Path to the ground truth storage file
 GROUND_TRUTH_PATH = "outputs/logs/ground_truth.json"
 
 
 def _normalize_plate(plate):
-    """
-    Normalizes plate text for fair CER comparison.
-    
-    Strips spaces and converts to uppercase so 'WND 1234' and 'wnd1234' are treated identically.
-    """
-    if not plate:
-        return ""
-    return plate.replace(" ", "").upper()
+    """Normalizes plate text by stripping spaces and converting to uppercase."""
+    return plate.replace(" ", "").upper() if plate else ""
 
 
 def compute_cer(prediction, ground_truth):
     """
-    Computes Character Error Rate between a predicted plate string and ground truth.
-    
-    Uses jiwer.cer() which computes the Levenshtein-based character error rate internally.
-    
-    Returns a float between 0.0 (perfect) and potentially >1.0 (more errors than characters).
-    Returns None if the ground truth is empty (CER is undefined for empty references).
+    Computes Character Error Rate (CER) between predicted plate and ground truth.
+    Returns float (0.0 = perfect match).
     """
     pred_normalized = _normalize_plate(prediction)
     truth_normalized = _normalize_plate(ground_truth)
     
     if not truth_normalized:
-        return None  # CER undefined when ground truth is empty
-    
+        return None
     if not pred_normalized:
-        return 1.0  # Empty prediction against non-empty truth = 100% error
+        return 1.0
     
-    # jiwer.cer() expects string inputs and returns the character error rate as a float
-    return jiwer.cer(truth_normalized, pred_normalized)
+    # jiwer.cer(truth, pred): Levenshtein character error rate
+    return float(jiwer.cer(truth_normalized, pred_normalized))
 
 
 def find_best_ground_truth_match(prediction, ground_truth_list):
@@ -147,49 +135,29 @@ def compute_edit_distance(prediction, ground_truth):
     return output.substitutions + output.deletions + output.insertions
 
 
-def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_time_seconds=0.0):
-    """
-    Computes comprehensive Ground Truth evaluation metrics for an OCR model's detections.
-    """
-    if not detections_list:
-        return {
-            "average_cer": None,
-            "exact_match_count": 0,
-            "exact_match_rate": 0.0,
-            "gt_recall": 0.0,
-            "precision": 0.0,
-            "total_edit_distance": 0,
-            "average_confidence": 0.0,
-            "correct_confidence": 0.0,
-            "incorrect_confidence": 0.0,
-            "total_detections": 0,
-            "matched_count": 0,
-            "execution_time_seconds": execution_time_seconds,
-            "latency_per_plate_ms": 0.0,
-            "per_detection": []
-        }
+def _empty_metrics(execution_time_seconds=0.0, total_detections=0, avg_conf=0.0):
+    """Returns a zeroed-out metrics dictionary for edge cases (no detections or no ground truth)."""
+    latency = (execution_time_seconds * 1000 / total_detections) if total_detections else 0.0
+    return {
+        "average_cer": None,
+        "exact_match_count": 0,
+        "exact_match_rate": 0.0,
+        "gt_recall": 0.0,
+        "precision": 0.0,
+        "total_edit_distance": 0,
+        "average_confidence": round(avg_conf, 4),
+        "correct_confidence": 0.0,
+        "incorrect_confidence": 0.0,
+        "total_detections": total_detections,
+        "matched_count": 0,
+        "execution_time_seconds": round(execution_time_seconds, 2),
+        "latency_per_plate_ms": round(latency, 1),
+        "per_detection": []
+    }
 
-    confidences = [float(d.get("confidence", 0.0)) for d in detections_list if d.get("confidence") is not None]
-    avg_conf = (sum(confidences) / len(confidences)) if confidences else 0.0
 
-    if not ground_truth_list:
-        return {
-            "average_cer": None,
-            "exact_match_count": 0,
-            "exact_match_rate": 0.0,
-            "gt_recall": 0.0,
-            "precision": 0.0,
-            "total_edit_distance": 0,
-            "average_confidence": round(avg_conf, 4),
-            "correct_confidence": 0.0,
-            "incorrect_confidence": 0.0,
-            "total_detections": len(detections_list),
-            "matched_count": 0,
-            "execution_time_seconds": round(execution_time_seconds, 2),
-            "latency_per_plate_ms": round((execution_time_seconds * 1000 / len(detections_list)), 1) if detections_list else 0.0,
-            "per_detection": []
-        }
-
+def _match_detections(detections_list, ground_truth_list):
+    """Matches each detection to its closest ground truth and returns per-detection results."""
     per_detection = []
     total_cer = 0.0
     matched_count = 0
@@ -233,7 +201,40 @@ def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_
                 "confidence": round(conf, 4)
             })
 
-    average_cer = (total_cer / matched_count) if matched_count > 0 else None
+    return {
+        "per_detection": per_detection,
+        "total_cer": total_cer,
+        "matched_count": matched_count,
+        "exact_match_count": exact_match_count,
+        "total_edit_distance": total_edit_distance,
+        "correct_confs": correct_confs,
+        "incorrect_confs": incorrect_confs,
+        "matched_gt_set": matched_gt_set,
+    }
+
+
+def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_time_seconds=0.0):
+    """
+    Computes comprehensive Ground Truth evaluation metrics for an OCR model's detections.
+    Orchestrates: early return → match → aggregate.
+    """
+    if not detections_list:
+        return _empty_metrics(execution_time_seconds)
+
+    confidences = [float(d.get("confidence", 0.0)) for d in detections_list if d.get("confidence") is not None]
+    avg_conf = float(np.mean(confidences)) if confidences else 0.0
+
+    if not ground_truth_list:
+        return _empty_metrics(execution_time_seconds, len(detections_list), avg_conf)
+
+    results = _match_detections(detections_list, ground_truth_list)
+
+    matched_count = results["matched_count"]
+    exact_match_count = results["exact_match_count"]
+    per_detection = results["per_detection"]
+    matched_gt_set = results["matched_gt_set"]
+
+    average_cer = (results["total_cer"] / matched_count) if matched_count > 0 else None
     exact_match_rate = (exact_match_count / matched_count) if matched_count > 0 else 0.0
     
     gt_norm_set = set(_normalize_plate(g) for g in ground_truth_list if g)
@@ -241,8 +242,8 @@ def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_
     
     precision = (len([p for p in per_detection if p["cer"] <= 0.3]) / len(per_detection)) if per_detection else 0.0
 
-    avg_correct_conf = (sum(correct_confs) / len(correct_confs)) if correct_confs else 0.0
-    avg_incorrect_conf = (sum(incorrect_confs) / len(incorrect_confs)) if incorrect_confs else 0.0
+    avg_correct_conf = float(np.mean(results["correct_confs"])) if results["correct_confs"] else 0.0
+    avg_incorrect_conf = float(np.mean(results["incorrect_confs"])) if results["incorrect_confs"] else 0.0
     latency_per_plate_ms = (execution_time_seconds * 1000 / len(detections_list)) if detections_list else 0.0
 
     return {
@@ -251,7 +252,7 @@ def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_
         "exact_match_rate": round(exact_match_rate, 4),
         "gt_recall": round(gt_recall, 4),
         "precision": round(precision, 4),
-        "total_edit_distance": total_edit_distance,
+        "total_edit_distance": results["total_edit_distance"],
         "average_confidence": round(avg_conf, 4),
         "correct_confidence": round(avg_correct_conf, 4),
         "incorrect_confidence": round(avg_incorrect_conf, 4),
@@ -263,11 +264,27 @@ def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_
     }
 
 
-def compute_average_cer(detections_list, ground_truth_list):
-    """
-    Backwards-compatible wrapper that invokes compute_comprehensive_metrics.
-    """
-    return compute_comprehensive_metrics(detections_list, ground_truth_list)
+def _determine_model_winner(easy_metrics, tess_metrics):
+    """Computes weighted composite scores and returns the winning model name."""
+    easy_count = easy_metrics.get("total_detections", 0)
+    tess_count = tess_metrics.get("total_detections", 0)
+
+    if easy_count == 0 and tess_count > 0:
+        return "PyTesseract"
+    if tess_count == 0 and easy_count > 0:
+        return "EasyOCR"
+    if easy_count == 0 and tess_count == 0:
+        return "Tie"
+
+    easy_cer = easy_metrics["average_cer"] if easy_metrics["average_cer"] is not None else 1.0
+    tess_cer = tess_metrics["average_cer"] if tess_metrics["average_cer"] is not None else 1.0
+
+    easy_score = (1.0 - easy_cer) * 0.4 + easy_metrics["exact_match_rate"] * 0.4 + easy_metrics["precision"] * 0.2
+    tess_score = (1.0 - tess_cer) * 0.4 + tess_metrics["exact_match_rate"] * 0.4 + tess_metrics["precision"] * 0.2
+
+    if abs(easy_score - tess_score) < 0.02:
+        return "Tie"
+    return "EasyOCR" if easy_score > tess_score else "PyTesseract"
 
 
 def compute_dual_model_comparison(easyocr_detections, pytesseract_detections, ground_truth_list, easyocr_time=0.0, pytesseract_time=0.0):
@@ -278,39 +295,9 @@ def compute_dual_model_comparison(easyocr_detections, pytesseract_detections, gr
     easy_metrics = compute_comprehensive_metrics(easyocr_detections, ground_truth_list, easyocr_time)
     tess_metrics = compute_comprehensive_metrics(pytesseract_detections, ground_truth_list, pytesseract_time)
 
-    easy_count = easy_metrics.get("total_detections", 0)
-    tess_count = tess_metrics.get("total_detections", 0)
-
-    if easy_count == 0 and tess_count > 0:
-        winner = "PyTesseract"
-    elif tess_count == 0 and easy_count > 0:
-        winner = "EasyOCR"
-    elif easy_count == 0 and tess_count == 0:
-        winner = "Tie"
-    else:
-        easy_cer = easy_metrics["average_cer"] if easy_metrics["average_cer"] is not None else 1.0
-        tess_cer = tess_metrics["average_cer"] if tess_metrics["average_cer"] is not None else 1.0
-
-        easy_exact = easy_metrics["exact_match_rate"]
-        tess_exact = tess_metrics["exact_match_rate"]
-
-        easy_prec = easy_metrics["precision"]
-        tess_prec = tess_metrics["precision"]
-
-        easy_score = (1.0 - easy_cer) * 0.4 + easy_exact * 0.4 + easy_prec * 0.2
-        tess_score = (1.0 - tess_cer) * 0.4 + tess_exact * 0.4 + tess_prec * 0.2
-
-        if abs(easy_score - tess_score) < 0.02:
-            winner = "Tie"
-        elif easy_score > tess_score:
-            winner = "EasyOCR"
-        else:
-            winner = "PyTesseract"
-
     return {
-        "winner": winner,
+        "winner": _determine_model_winner(easy_metrics, tess_metrics),
         "ground_truth_count": len(ground_truth_list) if ground_truth_list else 0,
         "easyocr": easy_metrics,
         "pytesseract": tess_metrics
     }
-
