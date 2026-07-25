@@ -166,6 +166,11 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
             scale = 1920 / width
             width, height = 1920, int(height * scale)
 
+        os.makedirs("outputs", exist_ok=True)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out_easy = cv2.VideoWriter("outputs/annotated_easyocr.mp4", fourcc, frames_per_second, (width, height))
+        out_tess = cv2.VideoWriter("outputs/annotated_pytesseract.mp4", fourcc, frames_per_second, (width, height))
+
         from concurrent.futures import ThreadPoolExecutor
         easyocr_pool = ThreadPoolExecutor(max_workers=2)
         pytesseract_pool = ThreadPoolExecutor(max_workers=min(os.cpu_count() or 2, 6))
@@ -221,6 +226,10 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
                 pending_pytesseract_futures,
                 fps=frames_per_second
             )
+
+            for fe, ft in zip(processed_easy_frames, processed_tess_frames):
+                out_easy.write(fe)
+                out_tess.write(ft)
 
             processed_frames_count += len(processed_easy_frames)
 
@@ -281,6 +290,8 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
         easyocr_pool.shutdown(wait=True)
         pytesseract_pool.shutdown(wait=True)
 
+        out_easy.release()
+        out_tess.release()
         video_capture.release()
 
         final_elapsed = time.time() - start_time
@@ -295,7 +306,9 @@ async def process_video_sse(video_path, ocr_engine="dual", frame_skip="dynamic")
         yield f"event: progress\ndata: {json.dumps({'frame_idx': total_frames, 'total_frames': total_frames, 'percent': 100, 'elapsed_str': _format_elapsed(final_elapsed), 'eta': 'Done', 'fps': final_fps})}\n\n"
 
         complete_payload = {
-            'metrics': comparison_metrics
+            'metrics': comparison_metrics,
+            'video_easyocr_url': '/outputs/annotated_easyocr.mp4',
+            'video_pytesseract_url': '/outputs/annotated_pytesseract.mp4'
         }
         yield f"event: complete\ndata: {json.dumps(complete_payload)}\n\n"
 

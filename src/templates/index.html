@@ -50,14 +50,17 @@
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="h-7 w-7 rounded border border-zinc-700 bg-zinc-900 flex items-center justify-center">
-                    <svg class="w-4 h-4 text-zinc-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                    <svg class="w-4 h-4 text-zinc-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
                     </svg>
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
                         <h1 class="text-sm font-semibold text-zinc-100 tracking-tight">ALPR Benchmarking System</h1>
-                        <span class="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">v2.4</span>
+                        <span
+                            class="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">v2.4</span>
                     </div>
                     <p class="text-[11px] text-zinc-500">Automated Dual-Model Recognition & Ground Truth Analysis</p>
                 </div>
@@ -68,7 +71,8 @@
                 class="px-2.5 py-1 text-xs font-medium rounded border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 flex items-center gap-1.5 transition-colors">
                 <span class="text-zinc-500">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                     </svg>
                 </span>
                 <span id="sync-label">Sync Players: OFF</span>
@@ -81,18 +85,22 @@
 
         <!-- 1. Controller & Ground Truth Panel (2-Column Grid) -->
         <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
+
             <!-- Execution Controller -->
             <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col justify-between gap-4">
                 <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Execution Controller</span>
-                    <span class="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">Dual Pipeline</span>
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Execution
+                        Controller</span>
+                    <span
+                        class="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">Dual
+                        Pipeline</span>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div class="flex flex-col gap-1">
                         <label class="text-[11px] text-zinc-400">Pipeline Mode</label>
-                        <div class="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 font-mono">
+                        <div
+                            class="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 font-mono">
                             Parallel (EasyOCR + PyTesseract)
                         </div>
                     </div>
@@ -114,7 +122,8 @@
                     class="w-full bg-zinc-100 hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-500 text-zinc-950 font-medium rounded py-2 text-xs transition-colors cursor-not-allowed disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
                     <span>
                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
                         </svg>
                     </span>
                     <span>Run Dual-Model Comparison</span>
@@ -124,35 +133,44 @@
             <!-- Ground Truth Input Panel -->
             <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col justify-between gap-3">
                 <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ground Truth Registry</span>
-                    <span id="gt-count" class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">0 plates</span>
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ground Truth
+                        Registry</span>
+                    <span id="gt-count"
+                        class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">0
+                        plates</span>
                 </div>
-                
+
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 grow">
-                    <textarea id="gt-input" rows="3" placeholder="Enter target plate numbers (one per line)&#10;e.g.&#10;WND1234&#10;ABC5678" 
+                    <textarea id="gt-input" rows="3"
+                        placeholder="Enter target plate numbers (one per line)&#10;e.g.&#10;WND1234&#10;ABC5678"
                         class="sm:col-span-2 w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-200 font-mono focus:outline-none focus:border-zinc-600 transition-colors resize-none min-h-[70px]"></textarea>
-                    
+
                     <div class="flex flex-col justify-between gap-2">
                         <button id="gt-save-btn" onclick="saveGroundTruth()"
                             class="w-full py-1.5 text-xs font-medium text-zinc-100 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded transition-colors">
                             Save Registry
                         </button>
-                        <label class="w-full py-1.5 text-xs font-medium text-zinc-400 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded text-center cursor-pointer transition-colors">
+                        <label
+                            class="w-full py-1.5 text-xs font-medium text-zinc-400 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded text-center cursor-pointer transition-colors">
                             Import File
-                            <input type="file" id="gt-file-input" accept=".txt,.csv" class="hidden" onchange="importGroundTruth(event)">
+                            <input type="file" id="gt-file-input" accept=".txt,.csv" class="hidden"
+                                onchange="importGroundTruth(event)">
                         </label>
                     </div>
                 </div>
-                <p class="text-[10px] text-zinc-500">Normalizes spaces and casing automatically before CER calculation.</p>
+                <p class="text-[10px] text-zinc-500">Normalizes spaces and casing automatically before CER calculation.
+                </p>
             </div>
 
         </section>
 
         <!-- 2. Full-Width Horizontal Pipeline Status Tracker -->
-        <section id="progress-box" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col gap-2.5 opacity-60 transition-opacity">
+        <section id="progress-box"
+            class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col gap-2.5 opacity-60 transition-opacity">
             <div class="flex items-center justify-between text-xs">
                 <div class="flex items-center gap-2.5">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Pipeline Status</span>
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Pipeline
+                        Status</span>
                     <span id="progress-status" class="text-xs font-mono text-zinc-300">System Idle</span>
                 </div>
                 <div class="flex items-center gap-5 text-xs font-mono text-zinc-400">
@@ -163,7 +181,7 @@
                     <span id="progress-percent" class="text-zinc-100 font-semibold font-mono">0%</span>
                 </div>
             </div>
-            
+
             <div class="w-full bg-zinc-950 rounded-sm h-1.5 overflow-hidden border border-zinc-900">
                 <div id="progress-bar-fill" class="bg-zinc-300 h-full w-0 transition-all duration-150"></div>
             </div>
@@ -173,7 +191,8 @@
         <section class="bg-zinc-900/40 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
             <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
                 <div class="flex items-center gap-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Stream & Video Inspection</span>
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Stream & Video
+                        Inspection</span>
                     <span id="video-info" class="text-xs text-zinc-500 font-mono">No active video source</span>
                 </div>
             </div>
@@ -184,19 +203,23 @@
                 <input type="file" id="video-file-input" accept="video/*" class="hidden">
                 <span class="text-zinc-500 mb-2">
                     <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                     </svg>
                 </span>
-                <span class="text-xs font-medium text-zinc-300">Drop traffic video file here, or <span class="text-zinc-100 underline">browse</span></span>
+                <span class="text-xs font-medium text-zinc-300">Drop traffic video file here, or <span
+                        class="text-zinc-100 underline">browse</span></span>
                 <span class="text-[10px] text-zinc-500 mt-1">Concurrently benchmarks EasyOCR & PyTesseract</span>
             </div>
 
             <!-- Dual Players Container (Stacked Above & Below) -->
             <div id="dual-players-container" class="hidden flex flex-col gap-5 w-full">
-                
+
                 <!-- EasyOCR Player Card (Top) -->
-                <div id="player-card-easyocr" class="bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors">
-                    <div class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
+                <div id="player-card-easyocr"
+                    class="bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors">
+                    <div
+                        class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
                         <span class="font-medium text-sky-400 flex items-center gap-1.5">
                             <span class="h-1.5 w-1.5 rounded-full bg-sky-400"></span> EasyOCR Pipeline Stream
                         </span>
@@ -204,12 +227,16 @@
                     </div>
                     <div class="w-full flex justify-center bg-black rounded overflow-hidden border border-zinc-900">
                         <canvas id="canvas-easyocr" class="w-full max-h-[460px] object-contain rounded"></canvas>
+                        <video id="video-easyocr" class="hidden w-full max-h-[460px] object-contain rounded"
+                            controls></video>
                     </div>
                 </div>
 
                 <!-- PyTesseract Player Card (Bottom) -->
-                <div id="player-card-pytesseract" class="bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors">
-                    <div class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
+                <div id="player-card-pytesseract"
+                    class="bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors">
+                    <div
+                        class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
                         <span class="font-medium text-indigo-400 flex items-center gap-1.5">
                             <span class="h-1.5 w-1.5 rounded-full bg-indigo-400"></span> PyTesseract Pipeline Stream
                         </span>
@@ -217,103 +244,46 @@
                     </div>
                     <div class="w-full flex justify-center bg-black rounded overflow-hidden border border-zinc-900">
                         <canvas id="canvas-pytesseract" class="w-full max-h-[460px] object-contain rounded"></canvas>
+                        <video id="video-pytesseract" class="hidden w-full max-h-[460px] object-contain rounded"
+                            controls></video>
                     </div>
                 </div>
 
             </div>
         </section>
 
-        <!-- 4. Ground Truth Metrics Header Cards (Below Streams) -->
-        <section class="grid grid-cols-2 md:grid-cols-6 gap-3">
-            
-            <!-- Accuracy Winner -->
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
-                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Accuracy Leader</span>
-                <div id="stat-winner" class="text-base font-semibold text-amber-400 mt-1 flex items-center gap-1 font-mono">--</div>
-                <span class="text-[10px] text-zinc-500 mt-1">Ground Truth Winner</span>
-            </div>
-
-            <!-- CER Card -->
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
-                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Avg CER (Lower Better)</span>
-                <div class="flex items-baseline justify-between mt-1 font-mono">
-                    <span id="stat-cer-easy" class="text-base font-semibold text-sky-400">--</span>
-                    <span class="text-xs text-zinc-600">vs</span>
-                    <span id="stat-cer-tess" class="text-base font-semibold text-indigo-400">--</span>
-                </div>
-                <span id="stat-cer-label" class="text-[10px] text-zinc-500 mt-1">EasyOCR vs PyTesseract</span>
-            </div>
-
-            <!-- Exact Match Rate -->
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
-                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Exact Matches (CER=0)</span>
-                <div class="flex items-baseline justify-between mt-1 font-mono">
-                    <span id="stat-exact-easy" class="text-base font-semibold text-sky-400">--</span>
-                    <span class="text-xs text-zinc-600">vs</span>
-                    <span id="stat-exact-tess" class="text-base font-semibold text-indigo-400">--</span>
-                </div>
-                <span class="text-[10px] text-zinc-500 mt-1">Perfect Reads Rate</span>
-            </div>
-
-            <!-- GT Recall -->
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
-                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">GT Recall (Coverage)</span>
-                <div class="flex items-baseline justify-between mt-1 font-mono">
-                    <span id="stat-recall-easy" class="text-base font-semibold text-sky-400">--</span>
-                    <span class="text-xs text-zinc-600">vs</span>
-                    <span id="stat-recall-tess" class="text-base font-semibold text-indigo-400">--</span>
-                </div>
-                <span class="text-[10px] text-zinc-500 mt-1">Target Detection %</span>
-            </div>
-
-            <!-- Avg Confidence -->
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
-                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Avg Confidence</span>
-                <div class="flex items-baseline justify-between mt-1 font-mono">
-                    <span id="stat-conf-easy" class="text-base font-semibold text-sky-400">--</span>
-                    <span class="text-xs text-zinc-600">vs</span>
-                    <span id="stat-conf-tess" class="text-base font-semibold text-indigo-400">--</span>
-                </div>
-                <span class="text-[10px] text-zinc-500 mt-1">Model Predict Score</span>
-            </div>
-
-            <!-- Speed & Frames -->
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col justify-between">
-                <span class="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Processing FPS</span>
-                <div id="stat-fps-bottom" class="text-base font-semibold text-emerald-400 mt-1 font-mono">--</div>
-                <div id="stat-elapsed-bottom" class="text-[10px] text-zinc-500 mt-1">0s total</div>
-            </div>
-
-        </section>
-
-        <!-- 4.5 Benchmark Analytics & Visualizations Section -->
+        <!-- 4. Benchmark Analytics & Visualizations Section -->
         <section id="charts-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
             <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                <div class="flex items-center gap-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Benchmark Analytics & Accuracy Comparison</span>
+                <div class="flex items-center gap-2.5">
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Benchmark Analytics & Model Comparison</span>
                     <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700">Live Visualizations</span>
+                </div>
+                <div id="stat-winner-badge" class="px-2.5 py-1 rounded text-xs font-mono font-semibold bg-zinc-800 border border-zinc-700 text-amber-400 flex items-center gap-1.5">
+                    <span>Accuracy Leader:</span>
+                    <span id="stat-winner-name" class="text-zinc-200">--</span>
                 </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Chart 1: Model Performance Summary Bar Chart -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3 flex flex-col gap-2">
+                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-semibold text-zinc-300 font-mono">Overall Model Benchmark (%)</span>
                         <span class="text-[10px] text-zinc-500 font-sans">Higher = Better (except CER)</span>
                     </div>
-                    <div class="relative h-[220px] w-full">
+                    <div class="relative h-[230px] w-full">
                         <canvas id="chart-overall"></canvas>
                     </div>
                 </div>
 
-                <!-- Chart 2: Per-Vehicle Character Error Rate (CER) -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3 flex flex-col gap-2">
+                <!-- Chart 2: Per-Vehicle Character Error Rate (CER %) -->
+                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-semibold text-zinc-300 font-mono">Per-Vehicle Character Error Rate (CER %)</span>
                         <span class="text-[10px] text-zinc-500 font-sans">Lower = Better</span>
                     </div>
-                    <div class="relative h-[220px] w-full">
+                    <div class="relative h-[230px] w-full">
                         <canvas id="chart-vehicle-cer"></canvas>
                     </div>
                 </div>
@@ -324,21 +294,16 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
             <!-- Detection Records Table -->
-            <div class="lg:col-span-2 bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-3 min-h-[360px]">
+            <div
+                class="lg:col-span-2 bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-3 min-h-[360px]">
                 <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
                     <div class="flex items-center gap-2.5">
-                        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Side-by-Side Model Detections</span>
-                        <span id="log-count" class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono border border-zinc-700">0 Total</span>
+                        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Side-by-Side
+                            Model Detections</span>
+                        <span id="log-count"
+                            class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono border border-zinc-700">0
+                            Total</span>
                     </div>
-                    <button id="export-btn" onclick="downloadExport()" disabled
-                        class="px-2.5 py-1 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 border border-zinc-700 rounded flex items-center gap-1.5 transition-colors">
-                        <span>
-                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                            </svg>
-                        </span>
-                        <span>Export Excel Report</span>
-                    </button>
                 </div>
 
                 <div class="grow overflow-x-auto">
@@ -356,7 +321,8 @@
                         </thead>
                         <tbody id="log-table-body" class="divide-y divide-zinc-800/40 text-zinc-300">
                             <tr id="empty-log-row">
-                                <td colspan="7" class="text-center py-12 text-zinc-500 font-sans text-xs">No vehicle records populated. Run a process to benchmark.</td>
+                                <td colspan="7" class="text-center py-12 text-zinc-500 font-sans text-xs">No vehicle
+                                    records populated. Run a process to benchmark.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -366,10 +332,12 @@
             <!-- Detected Plate Crops Gallery -->
             <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-3">
                 <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Plate Crops Gallery</span>
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Plate Crops
+                        Gallery</span>
                 </div>
 
-                <div id="crop-gallery" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[380px] content-start" style="grid-auto-rows: minmax(75px, auto);">
+                <div id="crop-gallery" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-[380px] content-start"
+                    style="grid-auto-rows: minmax(75px, auto);">
                     <div id="empty-gallery-msg" class="col-span-3 text-center py-16 text-zinc-500 text-xs">
                         No cropped plates currently parsed.
                     </div>
@@ -381,9 +349,12 @@
     </main>
 
     <!-- Dual-Model Comparison Detail Modal -->
-    <div id="detail-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-        <div class="bg-zinc-950 border border-zinc-800 rounded-lg max-w-2xl w-full p-5 shadow-2xl flex flex-col gap-4 relative">
-            <button onclick="closeDetailModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-100 p-1 rounded-md hover:bg-zinc-900 transition-colors">
+    <div id="detail-modal"
+        class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div
+            class="bg-zinc-950 border border-zinc-800 rounded-lg max-w-2xl w-full p-5 shadow-2xl flex flex-col gap-4 relative">
+            <button onclick="closeDetailModal()"
+                class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-100 p-1 rounded-md hover:bg-zinc-900 transition-colors">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -391,7 +362,8 @@
 
             <!-- Modal Header -->
             <div class="flex items-center gap-3 border-b border-zinc-800 pb-3">
-                <div class="h-8 w-8 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 font-mono font-bold text-xs" id="modal-track-id">#--</div>
+                <div class="h-8 w-8 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 font-mono font-bold text-xs"
+                    id="modal-track-id">#--</div>
                 <div>
                     <h3 class="text-sm font-semibold text-zinc-100 flex items-center gap-2">
                         <span>Vehicle Telemetry & Dual Recognition Analysis</span>
@@ -401,9 +373,12 @@
             </div>
 
             <!-- Full Snapshot Image -->
-            <div class="bg-zinc-900 border border-zinc-800/80 rounded overflow-hidden flex items-center justify-center min-h-[160px] max-h-[220px]">
-                <img id="modal-snapshot-img" src="" alt="Vehicle Snapshot" class="object-contain max-h-[220px] w-full hidden">
-                <span id="modal-snapshot-placeholder" class="text-zinc-600 text-xs font-mono">No snapshot image available</span>
+            <div
+                class="bg-zinc-900 border border-zinc-800/80 rounded overflow-hidden flex items-center justify-center min-h-[160px] max-h-[220px]">
+                <img id="modal-snapshot-img" src="" alt="Vehicle Snapshot"
+                    class="object-contain max-h-[220px] w-full hidden">
+                <span id="modal-snapshot-placeholder" class="text-zinc-600 text-xs font-mono">No snapshot image
+                    available</span>
             </div>
 
             <!-- Side-by-Side Model Detections -->
@@ -414,9 +389,11 @@
                         <span class="text-xs font-semibold text-sky-400 font-mono">EasyOCR Engine</span>
                         <span class="text-[10px] font-mono text-zinc-400" id="modal-easy-conf">--% conf</span>
                     </div>
-                    <div class="bg-zinc-950 border border-zinc-800 rounded p-2 flex items-center justify-center min-h-[50px]">
+                    <div
+                        class="bg-zinc-950 border border-zinc-800 rounded p-2 flex items-center justify-center min-h-[50px]">
                         <img id="modal-easy-crop" src="" class="max-h-[45px] object-contain hidden">
-                        <span id="modal-easy-crop-empty" class="text-[11px] text-zinc-600 font-mono">No crop image</span>
+                        <span id="modal-easy-crop-empty" class="text-[11px] text-zinc-600 font-mono">No crop
+                            image</span>
                     </div>
                     <div class="flex flex-col text-xs font-mono gap-1 mt-1">
                         <div class="flex justify-between">
@@ -436,9 +413,11 @@
                         <span class="text-xs font-semibold text-indigo-400 font-mono">PyTesseract Engine</span>
                         <span class="text-[10px] font-mono text-zinc-400" id="modal-tess-conf">--% conf</span>
                     </div>
-                    <div class="bg-zinc-950 border border-zinc-800 rounded p-2 flex items-center justify-center min-h-[50px]">
+                    <div
+                        class="bg-zinc-950 border border-zinc-800 rounded p-2 flex items-center justify-center min-h-[50px]">
                         <img id="modal-tess-crop" src="" class="max-h-[45px] object-contain hidden">
-                        <span id="modal-tess-crop-empty" class="text-[11px] text-zinc-600 font-mono">No crop image</span>
+                        <span id="modal-tess-crop-empty" class="text-[11px] text-zinc-600 font-mono">No crop
+                            image</span>
                     </div>
                     <div class="flex flex-col text-xs font-mono gap-1 mt-1">
                         <div class="flex justify-between">
@@ -457,7 +436,7 @@
 
     <!-- Footer -->
     <footer class="border-t border-zinc-800 bg-zinc-950 py-3.5 px-6 text-center text-xs text-zinc-500 mt-auto">
-        ALPR Benchmarking System • FastAPI & Dual Model Architecture
+        ALPR Benchmarking System
     </footer>
 
     <!-- Frontend Application Logic Script -->
@@ -469,6 +448,8 @@
 
         const canvasEasy = document.getElementById('canvas-easyocr');
         const canvasTess = document.getElementById('canvas-pytesseract');
+        const videoEasy = document.getElementById('video-easyocr');
+        const videoTess = document.getElementById('video-pytesseract');
 
         const badgeEasy = document.getElementById('badge-easyocr');
         const badgeTess = document.getElementById('badge-pytesseract');
@@ -484,18 +465,6 @@
         const emptyGalleryMsg = document.getElementById('empty-gallery-msg');
         const videoInfo = document.getElementById('video-info');
         const logCount = document.getElementById('log-count');
-        const exportBtn = document.getElementById('export-btn');
-
-        // Metrics elements
-        const statWinner = document.getElementById('stat-winner');
-        const statCerEasy = document.getElementById('stat-cer-easy');
-        const statCerTess = document.getElementById('stat-cer-tess');
-        const statExactEasy = document.getElementById('stat-exact-easy');
-        const statExactTess = document.getElementById('stat-exact-tess');
-        const statRecallEasy = document.getElementById('stat-recall-easy');
-        const statRecallTess = document.getElementById('stat-recall-tess');
-        const statConfEasy = document.getElementById('stat-conf-easy');
-        const statConfTess = document.getElementById('stat-conf-tess');
         const statFps = document.getElementById('stat-fps');
         const statElapsed = document.getElementById('stat-elapsed');
 
@@ -577,9 +546,6 @@
             }
         }
 
-        function downloadExport() {
-            window.location.href = '/api/export';
-        }
 
         badgeEasy.textContent = 'Ready';
         badgeTess.textContent = 'Ready';
@@ -653,13 +619,13 @@
             eventSource.addEventListener('log', (e) => {
                 const rowData = JSON.parse(e.data);
                 const model = rowData.model;
-                
+
                 const gtNorm = (rowData.matched_gt || '').replace(/\s+/g, '').toUpperCase();
                 const plateNorm = (rowData.plate_number || '').replace(/\s+/g, '').toUpperCase();
                 const key = (gtNorm && gtNorm !== '--') ? `gt-${gtNorm}` : (plateNorm ? `plate-${plateNorm}` : `track-${rowData.track_id}`);
 
                 if (!dualLogsMap[key]) dualLogsMap[key] = { track_id: rowData.track_id };
-                
+
                 const modelKey = model === 'EasyOCR' ? 'easy' : 'tess';
                 const existing = dualLogsMap[key][modelKey];
                 if (!existing || (rowData.confidence > (existing.confidence || 0))) {
@@ -697,6 +663,20 @@
             eventSource.addEventListener('complete', (e) => {
                 const data = JSON.parse(e.data);
                 eventSource.close();
+
+                if (data.video_easyocr_url && data.video_pytesseract_url) {
+                    canvasEasy.classList.add('hidden');
+                    canvasTess.classList.add('hidden');
+
+                    videoEasy.src = data.video_easyocr_url + '?t=' + Date.now();
+                    videoTess.src = data.video_pytesseract_url + '?t=' + Date.now();
+
+                    videoEasy.classList.remove('hidden');
+                    videoTess.classList.remove('hidden');
+
+                    videoEasy.play().catch(() => { });
+                    videoTess.play().catch(() => { });
+                }
 
                 badgeEasy.textContent = 'Completed';
                 badgeTess.textContent = 'Completed';
@@ -883,29 +863,17 @@
         function updateMetricsCards(metrics) {
             if (!metrics) return;
 
-            const easy = metrics.easyocr || {};
-            const tess = metrics.pytesseract || {};
             const winner = metrics.winner || '--';
-
-            if (winner === 'EasyOCR') {
-                statWinner.innerHTML = `<span class="text-sky-400">EasyOCR</span>`;
-            } else if (winner === 'PyTesseract') {
-                statWinner.innerHTML = `<span class="text-indigo-400">PyTesseract</span>`;
-            } else {
-                statWinner.innerHTML = `<span class="text-emerald-400">Tie</span>`;
+            const statWinnerName = document.getElementById('stat-winner-name');
+            if (statWinnerName) {
+                if (winner === 'EasyOCR') {
+                    statWinnerName.innerHTML = `<span class="text-sky-400">EasyOCR</span>`;
+                } else if (winner === 'PyTesseract') {
+                    statWinnerName.innerHTML = `<span class="text-indigo-400">PyTesseract</span>`;
+                } else {
+                    statWinnerName.innerHTML = `<span class="text-emerald-400">Tie</span>`;
+                }
             }
-
-            statCerEasy.textContent = easy.average_cer != null ? `${(easy.average_cer * 100).toFixed(1)}%` : '--';
-            statCerTess.textContent = tess.average_cer != null ? `${(tess.average_cer * 100).toFixed(1)}%` : '--';
-
-            statExactEasy.textContent = `${(easy.exact_match_rate * 100).toFixed(0)}%`;
-            statExactTess.textContent = `${(tess.exact_match_rate * 100).toFixed(0)}%`;
-
-            statRecallEasy.textContent = `${(easy.gt_recall * 100).toFixed(0)}%`;
-            statRecallTess.textContent = `${(tess.gt_recall * 100).toFixed(0)}%`;
-
-            statConfEasy.textContent = `${(easy.average_confidence * 100).toFixed(0)}%`;
-            statConfTess.textContent = `${(tess.average_confidence * 100).toFixed(0)}%`;
 
             lastMetrics = metrics;
             renderCharts(metrics);
@@ -989,7 +957,7 @@
                         const t = pair.tess || {};
                         const gtLabel = (e.matched_gt && e.matched_gt !== '--') ? e.matched_gt : ((t.matched_gt && t.matched_gt !== '--') ? t.matched_gt : null);
                         const label = gtLabel || e.plate_number || t.plate_number || `Track #${pair.track_id}`;
-                        
+
                         vehicleLabels.push(label);
                         easyCerData.push((e.cer != null ? e.cer : 1.0) * 100);
                         tessCerData.push((t.cer != null ? t.cer : 1.0) * 100);

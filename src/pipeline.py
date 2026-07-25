@@ -46,9 +46,9 @@ def _log_track(track_dict, engine_name, plate_crop_path="", video_timestamp="", 
         track_dict["track_id"],
         track_dict["vehicle_type"],
         track_dict["color"],
-        eng_data["best_plate"],
-        eng_data["best_ocr_conf"],
-        eng_data["snapshot_path"],
+        eng_data.get("best_plate"),
+        eng_data.get("best_ocr_conf", 0.0),
+        eng_data.get("snapshot_path"),
         plate_crop_path=plate_crop_path or eng_data.get("plate_crop_path", ""),
         video_timestamp=video_timestamp or eng_data.get("video_timestamp", ""),
         log_path=log_path
@@ -67,8 +67,8 @@ class DetectionTracker:
             if force_flush or (frame_idx - t["last_seen"] > TRACK_MAX_AGE):
                 for eng_name, log_p in [("EasyOCR", "outputs/logs/detections_easyocr.csv"), ("PyTesseract", "outputs/logs/detections_pytesseract.csv")]:
                     eng_data = t["engines"][eng_name]
-                    if eng_data["best_plate"] and eng_data["best_score"] > 0:
-                        crop_p = eng_data.get("plate_crop_path") or f"outputs/plate_crops/Processed/frame{t['last_seen']}_track{t['track_id']}_processed.jpg"
+                    if eng_data.get("plate_crop_path") or (eng_data.get("best_plate") and eng_data.get("best_score", 0) > 0):
+                        crop_p = eng_data.get("plate_crop_path") or f"outputs/plate_crops/Processed/frame{t['last_seen']}_track{t['track_id']}_{eng_name.lower()}.jpg"
                         v_time = eng_data.get("video_timestamp") or format_video_timestamp(t["last_seen"], frames_per_second)
                         _log_track(t, eng_name, plate_crop_path=crop_p, video_timestamp=v_time, log_path=log_p)
             else:
@@ -146,30 +146,33 @@ class DetectionTracker:
         score *= (len(plate_text.replace(" ", "")) / 7.0)
         return score
 
-    def update_plate(self, track_dict, engine_name, plate_text, ocr_conf, plate_area, snapshot_path, frame_idx, video_timestamp=""):
+    def update_plate(self, track_dict, engine_name, plate_text, ocr_conf, plate_area, snapshot_path, frame_idx, video_timestamp="", crop_path=""):
         eng_data = track_dict["engines"][engine_name]
-        score = self._compute_plate_quality_score(plate_text, ocr_conf, plate_area)
-        compact_text = plate_text.replace(" ", "")
+        score = self._compute_plate_quality_score(plate_text or "", ocr_conf, plate_area)
+        compact_text = (plate_text or "").replace(" ", "")
 
-        plate_votes = eng_data.setdefault("plate_votes", {})
-        plate_votes[compact_text] = plate_votes.get(compact_text, 0) + 1
+        if compact_text:
+            plate_votes = eng_data.setdefault("plate_votes", {})
+            plate_votes[compact_text] = plate_votes.get(compact_text, 0) + 1
 
         curr_best = (eng_data.get("best_plate") or "").replace(" ", "")
         should_replace = (
             eng_data.get("best_plate") is None
+            or not eng_data.get("plate_crop_path")
             or (ocr_conf > 0.10 and eng_data.get("best_ocr_conf", 0) <= 0.01)
-            or (compact_text == curr_best and score > eng_data.get("best_score", 0))
-            or (plate_votes.get(compact_text, 0) >= 2 and score > eng_data.get("best_score", 0))
+            or (compact_text and compact_text == curr_best and score > eng_data.get("best_score", 0))
+            or (compact_text and plate_votes.get(compact_text, 0) >= 2 and score > eng_data.get("best_score", 0))
             or (score > eng_data.get("best_score", 0) * 2.0)
         )
 
         if should_replace:
-            eng_data["best_plate"] = plate_text
-            eng_data["best_score"] = max(score, eng_data.get("best_score", 0))
-            eng_data["best_ocr_conf"] = ocr_conf
+            if plate_text and len(plate_text.strip()) > 0:
+                eng_data["best_plate"] = plate_text
+                eng_data["best_score"] = max(score, eng_data.get("best_score", 0))
+                eng_data["best_ocr_conf"] = ocr_conf
             eng_data["snapshot_path"] = snapshot_path
             eng_data["video_timestamp"] = video_timestamp
-            eng_data["plate_crop_path"] = f"outputs/plate_crops/Processed/frame{frame_idx}_track{track_dict['track_id']}_processed.jpg"
+            eng_data["plate_crop_path"] = crop_path or f"outputs/plate_crops/Processed/frame{frame_idx}_track{track_dict['track_id']}_{engine_name.lower()}.jpg"
             return True
         return False
 
@@ -191,15 +194,16 @@ def _ocr_worker(plate_crop_image, vehicle_crop_image, ocr_engine_name, track_id,
     plate_text, ocr_conf, engine, processed_crop = read_plate(plate_crop_image, ocr_engine_name)
 
     os.makedirs("outputs/plate_crops/Processed", exist_ok=True)
-    processed_crop_path = f"outputs/plate_crops/Processed/frame{frame_idx}_track{track_id}_processed.jpg"
-    if processed_crop is not None:
+    processed_crop_path = f"outputs/plate_crops/Processed/frame{frame_idx}_track{track_id}_{ocr_engine_name.lower()}.jpg"
+    if processed_crop is not None and processed_crop.size > 0:
         cv2.imwrite(processed_crop_path, processed_crop)
+    else:
+        cv2.imwrite(processed_crop_path, plate_crop_image)
 
-    snapshot_path = None
-    if plate_text and ocr_conf > 0:
-        os.makedirs("outputs/snapshots", exist_ok=True)
-        snapshot_path = f"outputs/snapshots/frame{frame_idx}_{plate_text.replace(' ', '_')}.jpg"
-        cv2.imwrite(snapshot_path, vehicle_crop_image)
+    os.makedirs("outputs/snapshots", exist_ok=True)
+    safe_text = (plate_text or "no_read").replace(' ', '_')
+    snapshot_path = f"outputs/snapshots/frame{frame_idx}_track{track_id}_{safe_text}.jpg"
+    cv2.imwrite(snapshot_path, vehicle_crop_image)
 
     video_timestamp = format_video_timestamp(frame_idx, fps)
     return ocr_engine_name, plate_text, ocr_conf, track_id, plate_pixel_area, frame_idx, snapshot_path, video_timestamp, processed_crop_path
@@ -208,14 +212,20 @@ def _ocr_worker(plate_crop_image, vehicle_crop_image, ocr_engine_name, track_id,
 def _apply_ocr_result(ocr_future):
     try:
         engine_name, text, conf, track_id, plate_pixel_area, frame_idx_ocr, snapshot_path, video_timestamp, crop_path = ocr_future.result()
-        if text and conf > 0 and snapshot_path:
-            track = vehicle_tracker.find_by_id(track_id)
-            if track:
-                eng_data = track["engines"][engine_name]
-                eng_data["max_plate_area"] = max(eng_data.get("max_plate_area", 0), plate_pixel_area)
-                if vehicle_tracker.update_plate(track, engine_name, text, conf, plate_pixel_area, snapshot_path, frame_idx_ocr, video_timestamp=video_timestamp):
-                    log_path = f"outputs/logs/detections_{engine_name.lower()}.csv"
-                    _log_track(track, engine_name, plate_crop_path=crop_path, video_timestamp=video_timestamp, log_path=log_path)
+        track = vehicle_tracker.find_by_id(track_id)
+        if track:
+            eng_data = track["engines"][engine_name]
+            eng_data["max_plate_area"] = max(eng_data.get("max_plate_area", 0), plate_pixel_area)
+
+            # Always save crop and snapshot paths so preprocessed image is accessible in UI
+            if not eng_data.get("plate_crop_path"):
+                eng_data["plate_crop_path"] = crop_path
+            if not eng_data.get("snapshot_path"):
+                eng_data["snapshot_path"] = snapshot_path
+
+            if vehicle_tracker.update_plate(track, engine_name, text, conf, plate_pixel_area, snapshot_path, frame_idx_ocr, video_timestamp=video_timestamp, crop_path=crop_path):
+                log_path = f"outputs/logs/detections_{engine_name.lower()}.csv"
+                _log_track(track, engine_name, plate_crop_path=crop_path, video_timestamp=video_timestamp, log_path=log_path)
     except Exception as e:
         print(f"[OCR] Worker failed: {e}")
 
