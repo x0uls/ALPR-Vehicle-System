@@ -204,7 +204,6 @@
                     </div>
                     <div class="w-full flex justify-center bg-black rounded overflow-hidden border border-zinc-900">
                         <canvas id="canvas-easyocr" class="w-full max-h-[460px] object-contain rounded"></canvas>
-                        <video id="video-easyocr" class="hidden w-full max-h-[460px] object-contain rounded" controls></video>
                     </div>
                 </div>
 
@@ -218,7 +217,6 @@
                     </div>
                     <div class="w-full flex justify-center bg-black rounded overflow-hidden border border-zinc-900">
                         <canvas id="canvas-pytesseract" class="w-full max-h-[460px] object-contain rounded"></canvas>
-                        <video id="video-pytesseract" class="hidden w-full max-h-[460px] object-contain rounded" controls></video>
                     </div>
                 </div>
 
@@ -624,36 +622,8 @@
             }
         });
 
-        // ── Real-Time Frame Tracking Badges during Video Playback ────
-        [ { video: videoEasy, badge: badgeEasy, model: 'EasyOCR', card: document.getElementById('player-card-easyocr'), borderClass: 'active-easyocr-border' },
-          { video: videoTess, badge: badgeTess, model: 'PyTesseract', card: document.getElementById('player-card-pytesseract'), borderClass: 'active-pytesseract-border' }
-        ].forEach(({ video, badge, model, card, borderClass }) => {
-            video.addEventListener('timeupdate', () => {
-                const curTime = video.currentTime;
-                let activeItem = null;
-                for (const trackId in dualLogsMap) {
-                    const item = dualLogsMap[trackId][model === 'EasyOCR' ? 'easy' : 'tess'];
-                    if (item && item.timestamp) {
-                        const parts = item.timestamp.split(':');
-                        if (parts.length === 2) {
-                            const secs = parseInt(parts[0]) * 60 + parseFloat(parts[1]);
-                            if (Math.abs(secs - curTime) <= 1.5) {
-                                activeItem = item;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (activeItem && activeItem.plate_number) {
-                    badge.innerHTML = `Active: <span class="font-semibold text-zinc-100 font-mono">${activeItem.plate_number}</span> (${(activeItem.confidence * 100).toFixed(0)}%)`;
-                    card.classList.add(borderClass);
-                } else {
-                    badge.textContent = 'Scanning video...';
-                    card.classList.remove(borderClass);
-                }
-            });
-        });
+        badgeEasy.textContent = 'Ready';
+        badgeTess.textContent = 'Ready';
 
         // ── Main Dual-Model Execution Listener ────────────────────────
         processBtn.addEventListener('click', () => {
@@ -769,17 +739,8 @@
                 const data = JSON.parse(e.data);
                 eventSource.close();
 
-                canvasEasy.classList.add('hidden');
-                canvasTess.classList.add('hidden');
-
-                videoEasy.src = data.video_easyocr_url;
-                videoTess.src = data.video_pytesseract_url;
-
-                videoEasy.classList.remove('hidden');
-                videoTess.classList.remove('hidden');
-
-                videoEasy.play();
-                videoTess.play();
+                badgeEasy.textContent = 'Completed';
+                badgeTess.textContent = 'Completed';
 
                 progressStatus.textContent = 'Dual Processing Finished';
                 progressPercent.textContent = '100%';
@@ -1067,7 +1028,8 @@
                         const pair = dualLogsMap[key];
                         const e = pair.easy || {};
                         const t = pair.tess || {};
-                        const label = e.plate_number || t.plate_number || `Track #${pair.track_id}`;
+                        const gtLabel = (e.matched_gt && e.matched_gt !== '--') ? e.matched_gt : ((t.matched_gt && t.matched_gt !== '--') ? t.matched_gt : null);
+                        const label = gtLabel || e.plate_number || t.plate_number || `Track #${pair.track_id}`;
                         
                         vehicleLabels.push(label);
                         easyCerData.push((e.cer != null ? e.cer : 1.0) * 100);
