@@ -96,25 +96,11 @@
                         Pipeline</span>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="flex flex-col gap-1">
-                        <label class="text-[11px] text-zinc-400">Pipeline Mode</label>
-                        <div
-                            class="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 font-mono">
-                            Parallel (EasyOCR + PyTesseract)
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col gap-1">
-                        <label class="text-[11px] text-zinc-400">Frame Skip Mode</label>
-                        <select id="frame-skip-select"
-                            class="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 transition-colors">
-                            <option value="dynamic">Dynamic (Auto Velocity)</option>
-                            <option value="1">Process All Frames (1:1)</option>
-                            <option value="2">Skip Every 2nd Frame</option>
-                            <option value="3">Skip Every 3rd Frame</option>
-                            <option value="5">Skip Every 5th Frame</option>
-                        </select>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[11px] text-zinc-400">Pipeline Mode</label>
+                    <div
+                        class="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 font-mono">
+                        Parallel (EasyOCR + PyTesseract)
                     </div>
                 </div>
 
@@ -126,7 +112,7 @@
                                 d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
                         </svg>
                     </span>
-                    <span>Run Dual-Model Comparison</span>
+                    <span>Process Images</span>
                 </button>
             </div>
 
@@ -174,10 +160,8 @@
                     <span id="progress-status" class="text-xs font-mono text-zinc-300">System Idle</span>
                 </div>
                 <div class="flex items-center gap-5 text-xs font-mono text-zinc-400">
-                    <div>ETA: <span id="progress-eta" class="text-zinc-200 font-medium">--</span></div>
                     <div>Elapsed: <span id="stat-elapsed" class="text-zinc-200 font-medium">0s</span></div>
-                    <div>Speed: <span id="stat-fps" class="text-emerald-400 font-medium">--</span></div>
-                    <div>Frames: <span id="stat-frames" class="text-zinc-200 font-medium">--</span></div>
+                    <div>Batch: <span id="stat-images" class="text-zinc-200 font-medium">0 images</span></div>
                     <span id="progress-percent" class="text-zinc-100 font-semibold font-mono">0%</span>
                 </div>
             </div>
@@ -187,68 +171,32 @@
             </div>
         </section>
 
-        <!-- 3. Dual Video Players Stacked Above and Below -->
+        <!-- 3. Batch Image Inspection & Dual-Model Results -->
         <section class="bg-zinc-900/40 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
             <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
                 <div class="flex items-center gap-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Stream & Video
-                        Inspection</span>
-                    <span id="video-info" class="text-xs text-zinc-500 font-mono">No active video source</span>
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Image Results</span>
+                    <span id="image-info" class="text-xs text-zinc-500 font-mono">No images selected</span>
                 </div>
             </div>
 
             <!-- Upload Zone -->
             <div id="upload-zone"
                 class="w-full min-h-[180px] flex flex-col items-center justify-center p-6 border border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-950 transition-all cursor-pointer rounded">
-                <input type="file" id="video-file-input" accept="video/*" class="hidden">
+                <input type="file" id="image-file-input" accept="image/*" multiple class="hidden">
                 <span class="text-zinc-500 mb-2">
                     <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
                         <path stroke-linecap="round" stroke-linejoin="round"
                             d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                     </svg>
                 </span>
-                <span class="text-xs font-medium text-zinc-300">Drop traffic video file here, or <span
+                <span class="text-xs font-medium text-zinc-300">Drop vehicle image files here, or <span
                         class="text-zinc-100 underline">browse</span></span>
                 <span class="text-[10px] text-zinc-500 mt-1">Concurrently benchmarks EasyOCR & PyTesseract</span>
             </div>
 
-            <!-- Dual Players Container (Stacked Above & Below) -->
-            <div id="dual-players-container" class="hidden flex flex-col gap-5 w-full">
-
-                <!-- EasyOCR Player Card (Top) -->
-                <div id="player-card-easyocr"
-                    class="bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors">
-                    <div
-                        class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
-                        <span class="font-medium text-sky-400 flex items-center gap-1.5">
-                            <span class="h-1.5 w-1.5 rounded-full bg-sky-400"></span> EasyOCR Pipeline Stream
-                        </span>
-                        <span id="badge-easyocr" class="font-mono text-xs text-zinc-400">Standby...</span>
-                    </div>
-                    <div class="w-full flex justify-center bg-black rounded overflow-hidden border border-zinc-900">
-                        <canvas id="canvas-easyocr" class="w-full max-h-[460px] object-contain rounded"></canvas>
-                        <video id="video-easyocr" class="hidden w-full max-h-[460px] object-contain rounded"
-                            controls></video>
-                    </div>
-                </div>
-
-                <!-- PyTesseract Player Card (Bottom) -->
-                <div id="player-card-pytesseract"
-                    class="bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors">
-                    <div
-                        class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
-                        <span class="font-medium text-indigo-400 flex items-center gap-1.5">
-                            <span class="h-1.5 w-1.5 rounded-full bg-indigo-400"></span> PyTesseract Pipeline Stream
-                        </span>
-                        <span id="badge-pytesseract" class="font-mono text-xs text-zinc-400">Standby...</span>
-                    </div>
-                    <div class="w-full flex justify-center bg-black rounded overflow-hidden border border-zinc-900">
-                        <canvas id="canvas-pytesseract" class="w-full max-h-[460px] object-contain rounded"></canvas>
-                        <video id="video-pytesseract" class="hidden w-full max-h-[460px] object-contain rounded"
-                            controls></video>
-                    </div>
-                </div>
-
+            <!-- Image Results Container -->
+            <div id="image-results-container" class="hidden flex flex-col gap-5 w-full overflow-y-auto max-h-[800px]">
             </div>
         </section>
 
@@ -445,35 +393,23 @@
     <!-- Frontend Application Logic Script -->
     <script>
         const uploadZone = document.getElementById('upload-zone');
-        const fileInput = document.getElementById('video-file-input');
+        const fileInput = document.getElementById('image-file-input');
         const processBtn = document.getElementById('process-btn');
-        const dualPlayersContainer = document.getElementById('dual-players-container');
-
-        const canvasEasy = document.getElementById('canvas-easyocr');
-        const canvasTess = document.getElementById('canvas-pytesseract');
-        const videoEasy = document.getElementById('video-easyocr');
-        const videoTess = document.getElementById('video-pytesseract');
-
-        const badgeEasy = document.getElementById('badge-easyocr');
-        const badgeTess = document.getElementById('badge-pytesseract');
+        const imageResultsContainer = document.getElementById('image-results-container');
 
         const progressBox = document.getElementById('progress-box');
         const progressStatus = document.getElementById('progress-status');
         const progressPercent = document.getElementById('progress-percent');
         const progressFill = document.getElementById('progress-bar-fill');
-        const progressEta = document.getElementById('progress-eta');
+        const statElapsed = document.getElementById('stat-elapsed');
+        const statImages = document.getElementById('stat-images');
 
         const logTableBody = document.getElementById('log-table-body');
-        const cropGallery = document.getElementById('crop-gallery');
-        const emptyGalleryMsg = document.getElementById('empty-gallery-msg');
-        const videoInfo = document.getElementById('video-info');
+        const imageInfo = document.getElementById('image-info');
         const logCount = document.getElementById('log-count');
-        const statFps = document.getElementById('stat-fps');
-        const statElapsed = document.getElementById('stat-elapsed');
 
-        let selectedVideoPath = null;
+        let selectedFiles = [];
         let dualLogsMap = {};
-        let isSyncingPlayback = false;
         let lastMetrics = null;
 
         // ── Upload Event Handlers ────────────────────────────────────
@@ -491,229 +427,144 @@
         uploadZone.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadZone.classList.remove('border-zinc-600', 'bg-zinc-900/60');
-            if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]);
+            if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files);
         });
 
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+            if (e.target.files.length > 0) handleFileSelect(e.target.files);
         });
 
-        async function handleFileSelect(file) {
+        function handleFileSelect(files) {
+            selectedFiles = Array.from(files);
+            imageInfo.textContent = `${selectedFiles.length} images selected`;
+            if (statImages) statImages.textContent = `${selectedFiles.length} images`;
+            
             uploadZone.innerHTML = `
-                <div class="flex flex-col items-center gap-2">
-                    <svg class="animate-spin h-6 w-6 text-zinc-400" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <span class="text-emerald-400 mb-1">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span class="text-xs font-medium text-zinc-300">Uploading video file to server...</span>
-                </div>
+                </span>
+                <span class="text-xs font-medium text-zinc-200">${selectedFiles.length} images loaded</span>
+                <span class="text-[10px] text-zinc-400 mt-1 click-change underline cursor-pointer">Choose different files</span>
             `;
 
-            const formData = new FormData();
-            formData.append('file', file);
+            uploadZone.querySelector('.click-change').addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileInput.click();
+            });
 
-            try {
-                const response = await fetch('/api/upload', { method: 'POST', body: formData });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Upload failed');
-
-                selectedVideoPath = data.filepath;
-
-                videoInfo.textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
-                uploadZone.innerHTML = `
-                    <span class="text-emerald-400 mb-1">
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </span>
-                    <span class="text-xs font-medium text-zinc-200">Video upload complete</span>
-                    <span class="text-[10px] text-zinc-400 mt-1 click-change underline cursor-pointer">Choose another file</span>
-                `;
-
-                uploadZone.querySelector('.click-change').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    fileInput.click();
-                });
-
-                processBtn.disabled = false;
-                processBtn.classList.remove('cursor-not-allowed');
-
-            } catch (err) {
-                console.error(err);
-                uploadZone.innerHTML = `
-                    <div class="flex flex-col items-center gap-1">
-                        <span class="text-rose-400 text-xs font-medium">Upload Error: ${err.message}</span>
-                        <span class="text-[10px] text-zinc-400 underline cursor-pointer hover:text-zinc-200" onclick="fileInput.click()">Click here to retry file upload</span>
-                    </div>
-                `;
-            }
+            processBtn.disabled = false;
+            processBtn.classList.remove('cursor-not-allowed');
         }
 
-
-        badgeEasy.textContent = 'Ready';
-        badgeTess.textContent = 'Ready';
-
         // ── Main Dual-Model Execution Listener ────────────────────────
-        processBtn.addEventListener('click', () => {
-            if (!selectedVideoPath) return;
+        processBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
 
             dualLogsMap = {};
             logTableBody.innerHTML = '';
-            cropGallery.innerHTML = '';
-            emptyGalleryMsg.classList.remove('hidden');
-
             uploadZone.classList.add('hidden');
-            dualPlayersContainer.classList.remove('hidden');
-
-            canvasEasy.classList.remove('hidden');
-            canvasTess.classList.remove('hidden');
-            badgeEasy.textContent = 'Processing...';
-            badgeTess.textContent = 'Processing...';
+            imageResultsContainer.innerHTML = '';
+            imageResultsContainer.classList.remove('hidden');
 
             progressBox.classList.remove('opacity-60');
             processBtn.disabled = true;
-            processBtn.textContent = 'Processing Dual Pipeline...';
+            processBtn.textContent = 'Processing Images...';
+            progressStatus.textContent = 'Uploading and processing images...';
+            progressPercent.textContent = '0%';
+            progressFill.style.width = '0%';
 
-            const skipMode = document.getElementById('frame-skip-select').value;
-            const eventSource = new EventSource(`/api/stream-process?video_path=${encodeURIComponent(selectedVideoPath)}&ocr_engine=dual&frame_skip=${skipMode}`);
-
-            const ctxEasy = canvasEasy.getContext('2d');
-            const ctxTess = canvasTess.getContext('2d');
-            const imgEasy = new Image();
-            const imgTess = new Image();
-
-            eventSource.addEventListener('frame', (e) => {
-                const data = JSON.parse(e.data);
-
-                if (canvasEasy.width === 0) {
-                    canvasEasy.width = 1280; canvasEasy.height = 720;
-                    canvasTess.width = 1280; canvasTess.height = 720;
-                }
-
-                if (data.image_easyocr) {
-                    imgEasy.onload = () => ctxEasy.drawImage(imgEasy, 0, 0, canvasEasy.width, canvasEasy.height);
-                    imgEasy.src = 'data:image/jpeg;base64,' + data.image_easyocr;
-                }
-                if (data.image_pytesseract) {
-                    imgTess.onload = () => ctxTess.drawImage(imgTess, 0, 0, canvasTess.width, canvasTess.height);
-                    imgTess.src = 'data:image/jpeg;base64,' + data.image_pytesseract;
-                }
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
             });
 
-            eventSource.addEventListener('progress', (e) => {
-                const data = JSON.parse(e.data);
-                progressStatus.textContent = `Processing frame ${data.frame_idx} / ${data.total_frames}`;
-                progressPercent.textContent = `${data.percent}%`;
-                progressFill.style.width = `${data.percent}%`;
-                progressEta.textContent = data.eta;
+            try {
+                const response = await fetch('/api/process-images', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Processing failed');
 
-                const framesElem = document.getElementById('stat-frames');
-                if (framesElem) framesElem.textContent = `${data.frame_idx} / ${data.total_frames}`;
-
-                if (statElapsed) statElapsed.textContent = `${data.elapsed_str}`;
-                const statElapsedBottom = document.getElementById('stat-elapsed-bottom');
-                if (statElapsedBottom) statElapsedBottom.textContent = `${data.elapsed_str} total`;
-
-                if (statFps) statFps.textContent = `${data.fps} FPS`;
-                const statFpsBottom = document.getElementById('stat-fps-bottom');
-                if (statFpsBottom) statFpsBottom.textContent = `${data.fps} FPS`;
-            });
-
-            eventSource.addEventListener('log', (e) => {
-                const rowData = JSON.parse(e.data);
-                const model = rowData.model;
-
-                const gtNorm = (rowData.matched_gt || '').replace(/\s+/g, '').toUpperCase();
-                const plateNorm = (rowData.plate_number || '').replace(/\s+/g, '').toUpperCase();
-                const key = (gtNorm && gtNorm !== '--') ? `gt-${gtNorm}` : (plateNorm ? `plate-${plateNorm}` : `track-${rowData.track_id}`);
-
-                if (!dualLogsMap[key]) dualLogsMap[key] = { track_id: rowData.track_id };
-
-                const modelKey = model === 'EasyOCR' ? 'easy' : 'tess';
-                const existing = dualLogsMap[key][modelKey];
-                if (!existing || (rowData.confidence > (existing.confidence || 0))) {
-                    dualLogsMap[key][modelKey] = rowData;
-                }
-
-                renderDualTable();
-                if (exportBtn) exportBtn.disabled = false;
-            });
-
-            eventSource.addEventListener('crop', (e) => {
-                const data = JSON.parse(e.data);
-                const cropId = `crop-card-${data.model}-${data.track_id}`;
-                let existingCard = document.getElementById(cropId);
-
-                const cardInner = `
-                    <img src="${data.url}" class="h-9 w-full object-contain filter contrast-125 select-none" draggable="false" />
-                    <span class="text-[9px] font-bold text-zinc-300 mt-1 uppercase font-mono tracking-tight">${data.text}</span>
-                    <span class="text-[8px] font-mono ${data.model === 'EasyOCR' ? 'text-sky-400' : 'text-indigo-400'}">[${data.model}] #${data.track_id}</span>
-                `;
-
-                if (existingCard) {
-                    existingCard.innerHTML = cardInner;
-                } else {
-                    const card = document.createElement('div');
-                    card.id = cropId;
-                    card.className = "bg-zinc-950 p-1 border border-zinc-800 rounded flex flex-col items-center shadow-sm overflow-hidden cursor-pointer hover:border-zinc-600 hover:scale-105 transition-all";
-                    card.onclick = () => openDetailModalByTrack(data.track_id);
-                    card.innerHTML = cardInner;
-                    cropGallery.insertBefore(card, cropGallery.firstChild);
-                    emptyGalleryMsg.classList.add('hidden');
-                }
-            });
-
-            eventSource.addEventListener('complete', (e) => {
-                const data = JSON.parse(e.data);
-                eventSource.close();
-
-                if (data.video_easyocr_url && data.video_pytesseract_url) {
-                    canvasEasy.classList.add('hidden');
-                    canvasTess.classList.add('hidden');
-
-                    videoEasy.src = data.video_easyocr_url + '?t=' + Date.now();
-                    videoTess.src = data.video_pytesseract_url + '?t=' + Date.now();
-
-                    videoEasy.classList.remove('hidden');
-                    videoTess.classList.remove('hidden');
-
-                    videoEasy.play().catch(() => { });
-                    videoTess.play().catch(() => { });
-                }
-
-                badgeEasy.textContent = 'Completed';
-                badgeTess.textContent = 'Completed';
-
-                progressStatus.textContent = 'Dual Processing Finished';
+                progressStatus.textContent = 'Processing Finished';
                 progressPercent.textContent = '100%';
                 progressFill.style.width = '100%';
-                progressEta.textContent = 'Done';
-
-                processBtn.disabled = false;
-                processBtn.textContent = 'Run Dual-Model Comparison';
-
+                if (data.elapsed) statElapsed.textContent = data.elapsed;
+                
+                if (data.results) {
+                    data.results.forEach((res, i) => {
+                        const card = document.createElement('div');
+                        card.className = 'bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors';
+                        card.innerHTML = `
+                            <div class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
+                                <span class="font-medium text-zinc-300">${res.original_filename}</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[10px] font-mono text-sky-400 mb-1">EasyOCR</span>
+                                    <img src="${res.easyocr_annotated_url}" class="max-h-[300px] object-contain rounded border border-zinc-900" />
+                                </div>
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[10px] font-mono text-indigo-400 mb-1">PyTesseract</span>
+                                    <img src="${res.pytesseract_annotated_url}" class="max-h-[300px] object-contain rounded border border-zinc-900" />
+                                </div>
+                            </div>
+                        `;
+                        imageResultsContainer.appendChild(card);
+                        
+                        // Populate dualLogsMap
+                        res.detections.forEach(det => {
+                            const trackId = det.det_id + '-' + i;
+                            const modelEasy = det.easyocr;
+                            const modelTess = det.pytesseract;
+                            
+                            dualLogsMap[trackId] = {
+                                track_id: trackId,
+                                easy: {
+                                    track_id: trackId,
+                                    vehicle_type: det.vehicle_type,
+                                    color: det.color,
+                                    plate_number: modelEasy.plate_text,
+                                    confidence: modelEasy.conf,
+                                    snapshot_url: modelEasy.snapshot_url,
+                                    plate_crop_url: modelEasy.crop_url
+                                },
+                                tess: {
+                                    track_id: trackId,
+                                    vehicle_type: det.vehicle_type,
+                                    color: det.color,
+                                    plate_number: modelTess.plate_text,
+                                    confidence: modelTess.conf,
+                                    snapshot_url: modelTess.snapshot_url,
+                                    plate_crop_url: modelTess.crop_url
+                                }
+                            };
+                        });
+                    });
+                }
+                
                 if (data.metrics) {
                     updateMetricsCards(data.metrics);
                 }
-            });
-
-            eventSource.addEventListener('error_msg', (e) => {
-                const data = JSON.parse(e.data);
-                eventSource.close();
-                progressStatus.textContent = `Error: ${data.error}`;
-                processBtn.disabled = false;
-                processBtn.textContent = 'Run Dual-Model Comparison';
-            });
-
-            eventSource.onerror = (err) => {
-                console.error("SSE Connection Error", err);
-                eventSource.close();
-                if (!progressStatus.textContent.startsWith('Error:')) {
-                    progressStatus.textContent = 'Connection Closed / Error during processing';
+                
+                const cerRes = await fetch('/api/cer-summary');
+                const cerData = await cerRes.json();
+                if (cerData.easyocr || cerData.pytesseract) {
+                    updateMetricsCards(cerData);
                 }
+
+                renderDualTable();
+                
+            } catch (err) {
+                console.error(err);
+                progressStatus.textContent = \`Error: \${err.message}\`;
+            } finally {
                 processBtn.disabled = false;
-                processBtn.textContent = 'Run Dual-Model Comparison';
-            };
+                processBtn.textContent = 'Process Images';
+            }
         });
 
         // ── Render Dual-Model Side-by-Side Comparison Table ─────────
