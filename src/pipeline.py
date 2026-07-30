@@ -3,9 +3,10 @@ os.environ["OMP_THREAD_LIMIT"] = "1"
 import cv2
 import torch
 from ultralytics import YOLO
+from ultralytics.utils.plotting import Annotator
 
 from src.color.color_detector import detect_dominant_color
-from src.logging.logger import log_detection
+from src.logging.logger import log_detection, flush_all_logs
 from src.ocr.plate_ocr import read_plate
 
 VEHICLE_CLASSES = {2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
@@ -33,14 +34,12 @@ def _is_valid_plate_crop(crop):
 def _ocr_worker(plate_crop_image, vehicle_crop_image, ocr_engine_name, img_id, det_id):
     plate_text, ocr_conf, engine, processed_crop = read_plate(plate_crop_image, ocr_engine_name)
 
-    os.makedirs("outputs/plate_crops/Processed", exist_ok=True)
     processed_crop_path = f"outputs/plate_crops/Processed/img{img_id}_det{det_id}_{ocr_engine_name.lower()}.jpg"
     if processed_crop is not None and processed_crop.size > 0:
         cv2.imwrite(processed_crop_path, processed_crop)
     else:
         cv2.imwrite(processed_crop_path, plate_crop_image)
 
-    os.makedirs("outputs/snapshots", exist_ok=True)
     safe_text = (plate_text or "no_read").replace(' ', '_')
     snapshot_path = f"outputs/snapshots/img{img_id}_det{det_id}_{safe_text}.jpg"
     cv2.imwrite(snapshot_path, vehicle_crop_image)
@@ -57,34 +56,22 @@ def _ocr_worker(plate_crop_image, vehicle_crop_image, ocr_engine_name, img_id, d
 
 
 def _draw_overlay(frame, bbox, vehicle_type, color, plate_text, conf, local_plate_bbox, model_theme="EasyOCR"):
-    x1, y1, x2, y2 = bbox
-    w, h = x2 - x1, y2 - y1
-    primary_color = (255, 0, 200) if model_theme == "PyTesseract" else (255, 200, 0)
-
-    cv2.rectangle(frame, (x1, y1), (x2, y2), primary_color, 2)
-    corner_len = min(22, max(8, int(min(w, h) * 0.2)))
-    for (px, py), (dx, dy) in [((x1, y1), (1, 1)), ((x2, y1), (-1, 1)), ((x1, y2), (1, -1)), ((x2, y2), (-1, -1))]:
-        cv2.line(frame, (px, py), (px + dx * corner_len, py), primary_color, 3)
-        cv2.line(frame, (px, py), (px, py + dy * corner_len), primary_color, 3)
+    primary_color = (200, 0, 255) if model_theme == "PyTesseract" else (0, 200, 255)
+    annotator = Annotator(frame, line_width=2)
 
     parts = [vehicle_type.capitalize()]
     if color:
         parts.append(color.capitalize())
-    parts.append(f"• {plate_text} ({int(conf * 100)}%)" if plate_text else "• Scanning...")
+    if plate_text:
+        parts.append(f"• {plate_text} ({int(conf * 100)}%)")
 
-    label_str = " " + " ".join(parts) + " "
-    font, scale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.52, 2
-    (tw, th), _ = cv2.getTextSize(label_str, font, scale, thick)
-    badge_y1, badge_y2 = max(0, y1 - th - 12), y1
-    badge_x2 = min(frame.shape[1], x1 + tw + 10)
-
-    cv2.rectangle(frame, (x1, badge_y1), (badge_x2, badge_y2), (15, 23, 42), -1)
-    cv2.rectangle(frame, (x1, badge_y1), (badge_x2, badge_y2), primary_color, 1)
-    cv2.putText(frame, label_str, (x1 + 4, badge_y2 - 6), font, scale, primary_color, thick, cv2.LINE_AA)
+    label_str = " ".join(parts)
+    annotator.box_label(bbox, label_str, color=primary_color)
 
     if local_plate_bbox:
+        x1, y1, _, _ = bbox
         lpx1, lpy1, lpx2, lpy2 = local_plate_bbox
-        cv2.rectangle(frame, (x1 + lpx1, y1 + lpy1), (x1 + lpx2, y1 + lpy2), (50, 50, 255), 2)
+        annotator.box_label((x1 + lpx1, y1 + lpy1, x1 + lpx2, y1 + lpy2), label="Plate", color=(50, 50, 255))
 
 
 def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
@@ -106,6 +93,9 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
     if not frames:
         return []
 
+    # Create output directories once before processing
+    for d in ["outputs/plate_crops/Processed", "outputs/snapshots", "outputs/annotated"]:
+        os.makedirs(d, exist_ok=True)
     # Detect Vehicles in batch
     batch_vehicle_results = vehicle_model(frames, verbose=False, conf=MIN_VEHICLE_CONFIDENCE)
 
@@ -191,7 +181,6 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
         ocr_by_det[did][res["engine"]] = res
 
     # Annotate and save images, structure final output
-    os.makedirs("outputs/annotated", exist_ok=True)
     
     final_output = []
 
@@ -249,5 +238,8 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             "pytesseract_annotated_url": "/" + tess_path,
             "detections": img_detections
         })
+
+    # Flush all CSV logs in a single batch write
+    flush_all_logs()
 
     return final_output

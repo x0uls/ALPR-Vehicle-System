@@ -1,6 +1,5 @@
 import os
 import time
-import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
@@ -13,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from src.pipeline import process_bulk_images
 from src.logging.logger import init_log
 from src.metrics.cer import (
-    find_best_ground_truth_match, save_ground_truth, load_ground_truth,
+    save_ground_truth, load_ground_truth,
     compute_dual_model_comparison
 )
 
@@ -46,7 +45,7 @@ async def serve_dashboard():
     with open("src/templates/index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
-from typing import List
+
 
 @app.post("/api/process-images")
 async def process_images_api(files: List[UploadFile] = File(...)):

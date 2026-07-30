@@ -3,7 +3,7 @@ import os
 
 # Standard CSV file structure field names
 LOG_PATH = "outputs/logs/detections_easyocr.csv"
-FIELDNAMES = ["track_id", "timestamp", "vehicle_type", "color", "plate_number", "confidence", "snapshot_path", "plate_crop_path"]
+FIELDNAMES = ["track_id", "vehicle_type", "color", "plate_number", "confidence", "snapshot_path", "plate_crop_path"]
 _log_buffers = {}
 
 
@@ -50,16 +50,16 @@ def _write_all_rows(rows, log_path=LOG_PATH):
         writer.writerows(rows)
 
 
-def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, plate_crop_path="", timestamp="", log_path=LOG_PATH):
+def log_detection(track_id, vehicle_type, color, plate_number, confidence, snapshot_path, plate_crop_path="", log_path=LOG_PATH):
     """
-    Buffers a new vehicle detection event in memory and flushes to CSV.
+    Buffers a new vehicle detection event in memory.
+    Call flush_all_logs() after processing a batch to write to disk.
     """
     if log_path not in _log_buffers:
         _log_buffers[log_path] = []
 
     _log_buffers[log_path].append({
         "track_id": str(track_id),
-        "timestamp": timestamp,
         "vehicle_type": vehicle_type,
         "color": color,
         "plate_number": plate_number,
@@ -67,7 +67,12 @@ def log_detection(track_id, vehicle_type, color, plate_number, confidence, snaps
         "snapshot_path": snapshot_path,
         "plate_crop_path": plate_crop_path,
     })
-    flush_log(log_path)
+
+
+def flush_all_logs():
+    """Flushes all buffered log paths to disk in a single pass."""
+    for log_path in list(_log_buffers.keys()):
+        flush_log(log_path)
 
 
 def _normalize_plate_str(p):
