@@ -204,60 +204,14 @@
             </div>
 
             <!-- Matplotlib Rendered Dashboard Card -->
-            <div id="matplotlib-card" class="hidden bg-zinc-950 border border-zinc-800 rounded-md p-3 flex flex-col gap-2">
+            <div id="matplotlib-card" class="bg-zinc-950 border border-zinc-800 rounded-md p-3 flex flex-col gap-2">
                 <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
-                    <span class="text-xs font-semibold text-zinc-300 font-mono">Matplotlib Rendered Benchmark Dashboard</span>
-                    <span class="text-[10px] text-emerald-400 font-mono">High-Res Figure</span>
+                    <span class="text-xs font-semibold text-zinc-300 font-mono">Matplotlib Benchmark Analytics Dashboard</span>
+                    <span class="text-[10px] text-emerald-400 font-mono">High-Res Analytics Figure</span>
                 </div>
-                <div class="w-full flex items-center justify-center bg-zinc-950 rounded overflow-hidden">
-                    <img id="matplotlib-img" src="" alt="Matplotlib Benchmark" class="w-full h-auto object-contain rounded border border-zinc-900" />
-                </div>
-            </div>
-
-            <!-- 2x2 Grid Charts (Matching Strategy Mockup) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Chart 1: Accuracy Distribution -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">Chart 1: Accuracy Distribution</span>
-                        <span class="text-[10px] text-zinc-500 font-sans">Accuracy vs CER %</span>
-                    </div>
-                    <div class="relative h-[240px] w-full">
-                        <canvas id="chart-vehicle-cer"></canvas>
-                    </div>
-                </div>
-
-                <!-- Chart 2: Confidence vs Accuracy Scatter -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">Chart 2: Confidence vs Accuracy</span>
-                        <span class="text-[10px] text-zinc-500 font-sans">Scatter Correlation</span>
-                    </div>
-                    <div class="relative h-[240px] w-full">
-                        <canvas id="chart-confidence"></canvas>
-                    </div>
-                </div>
-
-                <!-- Chart 3: Error Category Analysis -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">Chart 3: Error Category Analysis</span>
-                        <span class="text-[10px] text-zinc-500 font-sans">Substitutions, Insertions, Deletions</span>
-                    </div>
-                    <div class="relative h-[240px] w-full">
-                        <canvas id="chart-exact-match"></canvas>
-                    </div>
-                </div>
-
-                <!-- Chart 4: Overall Macro Performance -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">Chart 4: Overall Macro Performance</span>
-                        <span class="text-[10px] text-zinc-500 font-sans">Precision, Recall, Accuracy</span>
-                    </div>
-                    <div class="relative h-[240px] w-full">
-                        <canvas id="chart-overall"></canvas>
-                    </div>
+                <div class="w-full flex items-center justify-center bg-zinc-950 rounded overflow-hidden p-1">
+                    <img id="matplotlib-img" src="" alt="Matplotlib Benchmark" class="w-full h-auto object-contain rounded border border-zinc-900 hidden" />
+                    <span id="matplotlib-placeholder" class="py-12 text-zinc-600 text-xs font-mono">Run a process to generate Matplotlib analytics figure.</span>
                 </div>
             </div>
         </section>
@@ -952,186 +906,19 @@ card.appendChild(gridDiv);
             const totalTimeEl = document.getElementById('summary-total-time');
             if (totalTimeEl) totalTimeEl.textContent = (easy.execution_time_seconds || tess.execution_time_seconds || 0) + 's';
 
-            // Handle Matplotlib Plot Image Card
-            const mpCard = document.getElementById('matplotlib-card');
+            // Handle Matplotlib Plot Image Display
             const mpImg = document.getElementById('matplotlib-img');
-            if (metrics.chart_url && mpCard && mpImg) {
+            const mpPlaceholder = document.getElementById('matplotlib-placeholder');
+            if (metrics.chart_url && mpImg) {
                 mpImg.src = metrics.chart_url + '?t=' + Date.now();
-                mpCard.classList.remove('hidden');
+                mpImg.classList.remove('hidden');
+                if (mpPlaceholder) mpPlaceholder.classList.add('hidden');
             }
 
             lastMetrics = metrics;
-            renderCharts(metrics);
         }
 
-        // ── Render Chart.js Analytics & Visualizations ──────────────
-        let chartOverallInstance = null;
-        let chartVehicleCerInstance = null;
-        let chartExactMatchInstance = null;
-        let chartConfidenceInstance = null;
 
-        function renderCharts(metrics) {
-            if (!metrics || typeof Chart === 'undefined') return;
-
-            const easy = metrics.easyocr || {};
-            const tess = metrics.pytesseract || {};
-
-            // Extract per-detection data points
-            const easyDets = easy.per_detection || [];
-            const tessDets = tess.per_detection || [];
-
-            // 1. Chart 1: Accuracy Distribution (Horizontal Bar Chart)
-            const ctxCer = document.getElementById('chart-vehicle-cer');
-            if (ctxCer) {
-                if (chartVehicleCerInstance) chartVehicleCerInstance.destroy();
-                const easyCerPct = (easy.average_cer != null ? easy.average_cer : 0) * 100;
-                const tessCerPct = (tess.average_cer != null ? tess.average_cer : 0) * 100;
-                const easyCrrPct = easy.crr != null ? easy.crr : (100 - easyCerPct);
-                const tessCrrPct = tess.crr != null ? tess.crr : (100 - tessCerPct);
-
-                chartVehicleCerInstance = new Chart(ctxCer.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['EasyOCR', 'PyTesseract'],
-                        datasets: [
-                            { label: 'Accuracy (CRR %)', data: [easyCrrPct, tessCrrPct], backgroundColor: 'rgba(56, 189, 248, 0.8)', borderColor: '#38bdf8', borderWidth: 1 },
-                            { label: 'Error Rate (CER %)', data: [easyCerPct, tessCerPct], backgroundColor: 'rgba(244, 63, 94, 0.8)', borderColor: '#f43f5e', borderWidth: 1 }
-                        ]
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 10 } } },
-                            tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw.toFixed(1)}%` } }
-                        },
-                        scales: {
-                            x: { min: 0, max: 100, ticks: { color: '#a1a1aa', callback: v => v + '%' }, grid: { color: '#27272a' } },
-                            y: { ticks: { color: '#e4e4e7', font: { family: 'Inter', weight: 'bold' } }, grid: { color: '#27272a' } }
-                        }
-                    }
-                });
-            }
-
-            // 2. Chart 2: Confidence vs Accuracy Scatter Plot
-            const ctxConf = document.getElementById('chart-confidence');
-            if (ctxConf) {
-                if (chartConfidenceInstance) chartConfidenceInstance.destroy();
-                const scatterEasy = easyDets.map(d => ({ x: (d.cer || 0) * 100, y: (d.confidence || 0) * 100 }));
-                const scatterTess = tessDets.map(d => ({ x: (d.cer || 0) * 100, y: (d.confidence || 0) * 100 }));
-
-                chartConfidenceInstance = new Chart(ctxConf.getContext('2d'), {
-                    type: 'scatter',
-                    data: {
-                        datasets: [
-                            { label: 'EasyOCR', data: scatterEasy, backgroundColor: '#38bdf8', pointRadius: 5 },
-                            { label: 'PyTesseract', data: scatterTess, backgroundColor: '#818cf8', pointRadius: 5, pointStyle: 'rectRot' }
-                        ]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 10 } } },
-                            tooltip: { callbacks: { label: (c) => `Conf: ${c.raw.y.toFixed(0)}% | CER: ${c.raw.x.toFixed(1)}%` } }
-                        },
-                        scales: {
-                            x: { title: { display: true, text: 'CER % (0% = Perfect Match)', color: '#a1a1aa', font: { size: 10 } }, min: 0, max: 100, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
-                            y: { title: { display: true, text: 'Confidence (%)', color: '#a1a1aa', font: { size: 10 } }, min: 0, max: 100, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
-                        }
-                    }
-                });
-            }
-
-            // 3. Chart 3: Error Category Analysis (Substitutions, Insertions, Deletions)
-            const ctxExact = document.getElementById('chart-exact-match');
-            if (ctxExact) {
-                if (chartExactMatchInstance) chartExactMatchInstance.destroy();
-
-                function sumErrors(dets) {
-                    let subs = 0, ins = 0, dels = 0;
-                    dets.forEach(d => {
-                        const dist = d.edit_distance || 0;
-                        subs += Math.floor(dist * 0.6);
-                        dels += Math.floor(dist * 0.25);
-                        ins += Math.max(0, dist - Math.floor(dist * 0.6) - Math.floor(dist * 0.25));
-                    });
-                    return [subs, ins, dels];
-                }
-
-                const easyErr = sumErrors(easyDets);
-                const tessErr = sumErrors(tessDets);
-
-                chartExactMatchInstance = new Chart(ctxExact.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['Substitutions', 'Insertions', 'Deletions'],
-                        datasets: [
-                            { label: 'EasyOCR', data: easyErr, backgroundColor: 'rgba(56, 189, 248, 0.8)', borderColor: '#38bdf8', borderWidth: 1 },
-                            { label: 'PyTesseract', data: tessErr, backgroundColor: 'rgba(129, 140, 248, 0.8)', borderColor: '#818cf8', borderWidth: 1 }
-                        ]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 10 } } }
-                        },
-                        scales: {
-                            x: { ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
-                            y: { ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
-                        }
-                    }
-                });
-            }
-
-            // 4. Chart 4: Overall Macro Performance
-            const ctxOverall = document.getElementById('chart-overall');
-            if (ctxOverall) {
-                if (chartOverallInstance) chartOverallInstance.destroy();
-                chartOverallInstance = new Chart(ctxOverall.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['Exact Match', 'Precision', 'Recall', 'Avg Conf'],
-                        datasets: [
-                            {
-                                label: 'EasyOCR Macro',
-                                data: [
-                                    (easy.exact_match_rate || 0) * 100,
-                                    (easy.precision || 0) * 100,
-                                    (easy.gt_recall || 0) * 100,
-                                    (easy.average_confidence || 0) * 100
-                                ],
-                                backgroundColor: 'rgba(56, 189, 248, 0.8)',
-                                borderColor: '#38bdf8',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'PyTesseract Macro',
-                                data: [
-                                    (tess.exact_match_rate || 0) * 100,
-                                    (tess.precision || 0) * 100,
-                                    (tess.gt_recall || 0) * 100,
-                                    (tess.average_confidence || 0) * 100
-                                ],
-                                backgroundColor: 'rgba(129, 140, 248, 0.8)',
-                                borderColor: '#818cf8',
-                                borderWidth: 1
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 10 } } },
-                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` } }
-                        },
-                        scales: {
-                            x: { ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 } }, grid: { color: '#27272a' } },
-                            y: { min: 0, max: 100, ticks: { color: '#a1a1aa', callback: v => v + '%' }, grid: { color: '#27272a' } }
-                        }
-                    }
-                });
-            }
-        }
 
         // ── Ground Truth Management Helpers ───────────────────────────
         async function saveGroundTruth() {

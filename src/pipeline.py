@@ -177,7 +177,13 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
                 best_p = max(valid_plates, key=lambda p: p[4] * (p[2]-p[0])*(p[3]-p[1]))
                 lx1, ly1, lx2, ly2, _ = best_p
                 det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
-                padded_crop = v_crop[max(0, ly1-5):min(v_h, ly2+5), max(0, lx1-5):min(v_w, lx2+5)]
+                
+                # Proportional padding (10% horizontal, 18% vertical, min 12px) from rehaul branch
+                px = max(12, int((lx2 - lx1) * 0.10))
+                py = max(10, int((ly2 - ly1) * 0.18))
+                px1, py1 = max(0, lx1 - px), max(0, ly1 - py)
+                px2, py2 = min(v_w, lx2 + px), min(v_h, ly2 + py)
+                padded_crop = v_crop[py1:py2, px1:px2]
 
         # 2. Fallback: Lower 40% bumper region if no bounding box detected
         if padded_crop is None or padded_crop.size == 0:

@@ -95,8 +95,28 @@ def auto_deskew(img):
     return (rotated * 255).astype(np.uint8)
 
 
+def preprocess_raw_bgr(cropped_plate_img, target_height=140):
+    """
+    High-resolution clean BGR crop with 15px border padding.
+    Preserves natural color, font edges, and subtle gradients without harsh binarization.
+    """
+    if cropped_plate_img is None or cropped_plate_img.size == 0:
+        return None
+    h, w = cropped_plate_img.shape[:2]
+    aspect = w / h
+    target_width = int(target_height * aspect)
+    resized = cv2.resize(cropped_plate_img, (target_width, target_height), interpolation=cv2.INTER_CUBIC)
+    
+    if len(resized.shape) == 3:
+        padded = cv2.copyMakeBorder(resized, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=[255, 255, 255])
+        return padded
+    else:
+        padded = cv2.copyMakeBorder(resized, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
+        return cv2.cvtColor(padded, cv2.COLOR_GRAY2BGR)
+
+
 def preprocess_for_easyocr(cropped_plate_img):
-    """Preprocesses raw plate image optimized for EasyOCR."""
+    """Preprocesses raw plate image optimized for EasyOCR with CLAHE contrast boost."""
     if cropped_plate_img is None or cropped_plate_img.size == 0:
         return None
 
@@ -174,25 +194,34 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
 def _postprocess_ocr_text(combined_text, avg_conf):
     """
     Validates the OCR string format and scales confidence values.
-    
-    Normalizes spelling, applies plate rules, and discards reads that violate the regex patterns.
+    Supports relaxed fallback to prevent dropping valid detections to empty strings.
     """
-    compact = ''.join(combined_text.split())
-    # Reject strings that are too short (under 4) or too long (over 10)
+    compact = PLATE_CHAR_PATTERN.sub('', combined_text.strip().upper())
     if len(compact) < MIN_PLATE_LENGTH or len(compact) > MAX_PLATE_LENGTH:
         return '', 0.0
 
-    # Scale confidence. If the plate is short, reduce confidence since short reads have a higher chance of error.
-    # len(compact)/7.0 applies a linear penalty if length is under 7 characters.
-    adjusted_conf = max(0.01, avg_conf * min(1.0, len(compact) / 7.0)) if combined_text.strip() else 0.0
+    adjusted_conf = max(0.01, avg_conf * min(1.0, len(compact) / 7.0)) if compact else 0.0
     text = _fix_plate_format(combined_text)
+    clean_no_spaces = text.replace(' ', '')
 
-    # Discard OCR readings that fail the Malaysian plate regex pattern
-    if not MALAYSIAN_PLATE_REGEX.match(text.replace(' ', '')):
-        return '', 0.0
+    # 1. Exact Malaysian Regex match
+    if MALAYSIAN_PLATE_REGEX.match(clean_no_spaces):
+        return text, min(1.0, adjusted_conf * 1.15)
 
-    # Apply a 15% confidence boost (capped at 1.0) because passing the regex is a strong indicator of validity.
-    return text, min(1.0, adjusted_conf * 1.15)
+    # 2. Trim single artifact character at start or end
+    if len(clean_no_spaces) >= 4:
+        trimmed_start = clean_no_spaces[1:]
+        if MALAYSIAN_PLATE_REGEX.match(trimmed_start):
+            return _fix_plate_format(trimmed_start), min(1.0, adjusted_conf * 1.10)
+        trimmed_end = clean_no_spaces[:-1]
+        if MALAYSIAN_PLATE_REGEX.match(trimmed_end):
+            return _fix_plate_format(trimmed_end), min(1.0, adjusted_conf * 1.10)
+
+    # 3. Fallback: Accept cleaned alphanumeric string if 3-9 chars long
+    if 3 <= len(clean_no_spaces) <= 9:
+        return text, max(0.25, adjusted_conf * 0.85)
+
+    return '', 0.0
 
 def _run_pytesseract_raw(processed):
     """
@@ -264,28 +293,45 @@ def _run_ocr(processed, engine_name):
 
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """
-    Core entry point to extract license plate text and confidences from a plate crop.
-    Restored from optimize branch for highest recognition accuracy.
+    Multi-Pass OCR Recognition Engine.
+    Pass 1: Clean high-res BGR image with margin padding (Best for deep learning models).
+    Pass 2: Engine-specific CLAHE / Contrast / Binarized preprocessing.
     """
-    if engine_name != "PyTesseract":
-        processed = preprocess_for_easyocr(cropped_plate_img)
-        if processed is None:
-            return '', 0.0, engine_name, None
-        text, conf = _run_ocr(processed, engine_name)
-        return text, conf, engine_name, processed
+    if cropped_plate_img is None or cropped_plate_img.size == 0:
+        return '', 0.0, engine_name, None
 
     candidates = []
-    for thresh_method in ("adaptive", "otsu"):
-        processed = preprocess_for_tesseract(cropped_plate_img, thresh_method)
+
+    # Pass 1: Raw high-resolution BGR crop with margin padding
+    raw_img = preprocess_raw_bgr(cropped_plate_img)
+    if raw_img is not None:
+        text, conf = _run_ocr(raw_img, engine_name)
+        if text and conf >= 0.60:
+            return text, conf, engine_name, raw_img
+        if text:
+            candidates.append((text, conf, raw_img))
+
+    # Pass 2: Engine-specific CLAHE / Contrast / Binarized crop
+    if engine_name != "PyTesseract":
+        processed = preprocess_for_easyocr(cropped_plate_img)
         if processed is not None:
             text, conf = _run_ocr(processed, engine_name)
-            if text and conf >= 0.50:
+            if text and conf >= 0.60:
                 return text, conf, engine_name, processed
-            candidates.append((text, conf, processed))
+            if text:
+                candidates.append((text, conf, processed))
+    else:
+        for thresh_method in ("adaptive", "otsu"):
+            processed = preprocess_for_tesseract(cropped_plate_img, thresh_method)
+            if processed is not None:
+                text, conf = _run_ocr(processed, engine_name)
+                if text and conf >= 0.60:
+                    return text, conf, engine_name, processed
+                if text:
+                    candidates.append((text, conf, processed))
 
-    valid = [c for c in candidates if c[0].strip()]
-    if valid:
-        best = max(valid, key=lambda x: x[1])
+    if candidates:
+        best = max(candidates, key=lambda x: x[1])
         return best[0], best[1], engine_name, best[2]
-        
-    return '', 0.0, engine_name, None
+
+    return '', 0.0, engine_name, raw_img if raw_img is not None else cropped_plate_img
