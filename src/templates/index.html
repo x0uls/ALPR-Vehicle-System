@@ -59,8 +59,7 @@
                 <div>
                     <div class="flex items-center gap-2">
                         <h1 class="text-sm font-semibold text-zinc-100 tracking-tight">ALPR Benchmarking System</h1>
-                        <span
-                            class="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">v2.4</span>
+                        <span class="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">v2.4</span>
                     </div>
                     <p class="text-[11px] text-zinc-500">Automated Dual-Model Recognition & Ground Truth Analysis</p>
                 </div>
@@ -83,71 +82,28 @@
     <!-- Main Workspace Container -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-5 flex flex-col gap-5">
 
-        <!-- 1. Controller & Ground Truth Panel (2-Column Grid) -->
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-            <!-- Execution Controller -->
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col justify-between gap-4">
-                <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Execution
-                        Controller</span>
-                    <span
-                        class="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">Dual
-                        Pipeline</span>
-                </div>
-
-                <div class="flex flex-col gap-1">
-                    <label class="text-[11px] text-zinc-400">Pipeline Mode</label>
-                    <div
-                        class="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 font-mono">
-                        Parallel (EasyOCR + PyTesseract)
+        <!-- 1. Controller Panel -->
+        <section class="w-full">
+            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-4 w-full sm:w-auto">
+                    <div class="flex flex-col">
+                        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Execution Controller</span>
+                        <span class="text-xs text-zinc-300 font-mono mt-0.5">Parallel (EasyOCR + PyTesseract)</span>
                     </div>
+                    <span class="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">Dual Pipeline</span>
                 </div>
 
                 <button id="process-btn" disabled
-                    class="w-full bg-zinc-100 hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-500 text-zinc-950 font-medium rounded py-2 text-xs transition-colors cursor-not-allowed disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                    class="w-full sm:w-auto px-6 bg-zinc-100 hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-500 text-zinc-950 font-medium rounded py-2 text-xs transition-colors cursor-not-allowed disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
                     <span>
                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round"
                                 d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
                         </svg>
                     </span>
-                    <span>Process Images</span>
+                    <span>Process & Benchmark Dataset</span>
                 </button>
             </div>
-
-            <!-- Ground Truth Input Panel -->
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col justify-between gap-3">
-                <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ground Truth
-                        Registry</span>
-                    <span id="gt-count"
-                        class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">0
-                        plates</span>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 grow">
-                    <textarea id="gt-input" rows="3"
-                        placeholder="Enter target plate numbers (one per line)&#10;e.g.&#10;WND1234&#10;ABC5678"
-                        class="sm:col-span-2 w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-200 font-mono focus:outline-none focus:border-zinc-600 transition-colors resize-none min-h-[70px]"></textarea>
-
-                    <div class="flex flex-col justify-between gap-2">
-                        <button id="gt-save-btn" onclick="saveGroundTruth()"
-                            class="w-full py-1.5 text-xs font-medium text-zinc-100 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded transition-colors">
-                            Save Registry
-                        </button>
-                        <label
-                            class="w-full py-1.5 text-xs font-medium text-zinc-400 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded text-center cursor-pointer transition-colors">
-                            Import File
-                            <input type="file" id="gt-file-input" accept=".txt,.csv" class="hidden"
-                                onchange="importGroundTruth(event)">
-                        </label>
-                    </div>
-                </div>
-                <p class="text-[10px] text-zinc-500">Normalizes spaces and casing automatically before CER calculation.
-                </p>
-            </div>
-
         </section>
 
         <!-- 2. Full-Width Horizontal Pipeline Status Tracker -->
@@ -182,17 +138,57 @@
 
             <!-- Upload Zone -->
             <div id="upload-zone"
-                class="w-full min-h-[180px] flex flex-col items-center justify-center p-6 border border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-950 transition-all cursor-pointer rounded">
-                <input type="file" id="image-file-input" accept="image/*" multiple class="hidden">
-                <span class="text-zinc-500 mb-2">
-                    <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                </span>
-                <span class="text-xs font-medium text-zinc-300">Drop vehicle image files here, or <span
-                        class="text-zinc-100 underline">browse</span></span>
-                <span class="text-[10px] text-zinc-500 mt-1">Concurrently benchmarks EasyOCR & PyTesseract</span>
+                class="w-full min-h-[200px] flex flex-col items-center justify-center p-6 border border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-950 transition-all rounded">
+                <input type="file" id="image-file-input" webkitdirectory directory multiple class="hidden">
+                <input type="file" id="single-file-input" accept="image/*,.csv" multiple class="hidden">
+                
+                <div id="upload-idle-state" class="flex flex-col items-center justify-center cursor-pointer" onclick="document.getElementById('image-file-input').click()">
+                    <span class="text-zinc-500 mb-2">
+                        <svg class="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M2.25 12.75l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12.75M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" />
+                        </svg>
+                    </span>
+                    <span class="text-xs font-medium text-zinc-300">Drop dataset folder here, or <span
+                            class="text-zinc-100 underline">browse dataset folder</span></span>
+                    <p class="text-[11px] text-zinc-500 mt-1.5 text-center">
+                        Uploaded folder must contain an <span class="font-mono text-zinc-400 font-semibold">images/</span> directory and a <span class="font-mono text-zinc-400 font-semibold">csv/</span> directory
+                    </p>
+                </div>
+
+                <div id="upload-status-card" class="hidden w-full max-w-lg flex flex-col gap-3">
+                    <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+                        <span id="folder-name-display" class="text-xs font-semibold font-mono text-zinc-200 truncate">Dataset Folder</span>
+                        <button onclick="resetUploadZone(event)" class="text-[10px] text-zinc-400 hover:text-zinc-200 underline">Choose different folder</button>
+                    </div>
+
+                    <!-- Status Badges Grid -->
+                    <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+                        <!-- Image Count Status -->
+                        <div id="badge-images-container" class="bg-zinc-900 border border-zinc-800 rounded p-2.5 flex flex-col gap-1">
+                            <span class="text-[10px] text-zinc-400 font-sans uppercase tracking-wider">Detected Images</span>
+                            <div id="badge-images-content" class="flex items-center gap-1.5 font-semibold text-emerald-400">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span id="text-images-count">0 images</span>
+                            </div>
+                        </div>
+
+                        <!-- CSV File Status -->
+                        <div id="badge-csv-container" class="bg-zinc-900 border border-zinc-800 rounded p-2.5 flex flex-col gap-1">
+                            <span class="text-[10px] text-zinc-400 font-sans uppercase tracking-wider">Ground Truth CSV</span>
+                            <div id="badge-csv-content" class="flex items-center gap-1.5 font-semibold text-emerald-400">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span id="text-csv-name">ground_truth.csv</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Validation Error Message Banner -->
+                    <div id="upload-error-banner" class="hidden bg-rose-950/50 border border-rose-800/80 rounded p-2.5 text-xs text-rose-300 font-sans flex items-start gap-2">
+                        <svg class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        <span id="upload-error-text">Upload folder must contain both an 'images/' folder and a 'csv/' folder.</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Image Results Container -->
@@ -204,10 +200,13 @@
         <section id="charts-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
             <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
                 <div class="flex items-center gap-2.5">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Benchmark Analytics & Model Comparison</span>
-                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700">Live Visualizations</span>
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Benchmark Analytics &
+                        Model Comparison</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700">Live
+                        Visualizations</span>
                 </div>
-                <div id="stat-winner-badge" class="px-2.5 py-1 rounded text-xs font-mono font-semibold bg-zinc-800 border border-zinc-700 text-amber-400 flex items-center gap-1.5">
+                <div id="stat-winner-badge"
+                    class="px-2.5 py-1 rounded text-xs font-mono font-semibold bg-zinc-800 border border-zinc-700 text-amber-400 flex items-center gap-1.5">
                     <span>Accuracy Leader:</span>
                     <span id="stat-winner-name" class="text-zinc-200">--</span>
                 </div>
@@ -217,7 +216,8 @@
                 <!-- Chart 1: Per-Vehicle Character Error Rate (CER %) -->
                 <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2 overflow-hidden">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">1. Character Error Rate (CER %)</span>
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">1. Character Error Rate (CER
+                            %)</span>
                         <span class="text-[10px] text-zinc-500 font-sans">Lower = Better (0% is perfect)</span>
                     </div>
                     <div class="w-full overflow-x-auto pb-1">
@@ -230,7 +230,8 @@
                 <!-- Chart 2: Per-Vehicle Exact Match Rate -->
                 <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2 overflow-hidden">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">2. Exact Match Accuracy per Plate</span>
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">2. Exact Match Accuracy per
+                            Plate</span>
                         <span class="text-[10px] text-zinc-500 font-sans">100% = Perfect Read</span>
                     </div>
                     <div class="w-full overflow-x-auto pb-1">
@@ -243,7 +244,8 @@
                 <!-- Chart 3: Detection Confidence Score (%) -->
                 <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2 overflow-hidden">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">3. Detection Confidence Score (%)</span>
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">3. Detection Confidence Score
+                            (%)</span>
                         <span class="text-[10px] text-zinc-500 font-sans">Higher = Higher Certainty</span>
                     </div>
                     <div class="w-full overflow-x-auto pb-1">
@@ -256,7 +258,8 @@
                 <!-- Chart 4: Overall Model Summary Benchmark -->
                 <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">4. Overall Model Performance Summary</span>
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">4. Overall Model Performance
+                            Summary</span>
                         <span class="text-[10px] text-zinc-500 font-sans">Macro Benchmarks</span>
                     </div>
                     <div class="relative h-[240px] w-full">
@@ -267,11 +270,15 @@
         </section>
 
         <!-- 5. Bottom Section: Side-by-Side Model Detections Table -->
-        <section id="table-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-3 min-h-[360px] w-full">
+        <section id="table-section"
+            class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-3 min-h-[360px] w-full">
             <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
                 <div class="flex items-center gap-2.5">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Side-by-Side Model Detections</span>
-                    <span id="log-count" class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono border border-zinc-700">0 Total</span>
+                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Side-by-Side Model
+                        Detections</span>
+                    <span id="log-count"
+                        class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono border border-zinc-700">0
+                        Total</span>
                 </div>
             </div>
 
@@ -290,7 +297,8 @@
                     </thead>
                     <tbody id="log-table-body" class="divide-y divide-zinc-800/40 text-zinc-300">
                         <tr id="empty-log-row">
-                            <td colspan="7" class="text-center py-12 text-zinc-500 font-sans text-xs">No vehicle records populated. Run a process to benchmark.</td>
+                            <td colspan="7" class="text-center py-12 text-zinc-500 font-sans text-xs">No vehicle records
+                                populated. Run a process to benchmark.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -377,190 +385,341 @@
                         </div>
                         <div class="flex justify-between">
                             <span class="text-zinc-500">CER Error:</span>
-                            <span class="text-zinc-300" id="modal-tess-cer">--</span>
                         </div>
                     </div>
                 </div>
+                </section>
             </div>
-        </div>
-    </div>
 
-    <!-- Footer -->
-    <footer class="border-t border-zinc-800 bg-zinc-950 py-3.5 px-6 text-center text-xs text-zinc-500 mt-auto">
-        ALPR Benchmarking System
-    </footer>
+            <!-- Footer -->
+            <footer class="border-t border-zinc-800 bg-zinc-950 py-3.5 px-6 text-center text-xs text-zinc-500 mt-auto">
+                ALPR Benchmarking System
+            </footer>
 
-    <!-- Frontend Application Logic Script -->
-    <script>
-        const uploadZone = document.getElementById('upload-zone');
-        const fileInput = document.getElementById('image-file-input');
-        const processBtn = document.getElementById('process-btn');
-        const imageResultsContainer = document.getElementById('image-results-container');
+            <!-- Frontend Application Logic Script -->
+            <script>
+                const uploadZone = document.getElementById('upload-zone');
+                const fileInput = document.getElementById('image-file-input');
+                const singleFileInput = document.getElementById('single-file-input');
+                const processBtn = document.getElementById('process-btn');
+                const imageResultsContainer = document.getElementById('image-results-container');
 
-        const progressBox = document.getElementById('progress-box');
-        const progressStatus = document.getElementById('progress-status');
-        const progressPercent = document.getElementById('progress-percent');
-        const progressFill = document.getElementById('progress-bar-fill');
-        const statElapsed = document.getElementById('stat-elapsed');
-        const statImages = document.getElementById('stat-images');
+                const progressBox = document.getElementById('progress-box');
+                const progressStatus = document.getElementById('progress-status');
+                const progressPercent = document.getElementById('progress-percent');
+                const progressFill = document.getElementById('progress-bar-fill');
+                const statElapsed = document.getElementById('stat-elapsed');
+                const statImages = document.getElementById('stat-images');
 
-        const logTableBody = document.getElementById('log-table-body');
-        const imageInfo = document.getElementById('image-info');
-        const logCount = document.getElementById('log-count');
+                const logTableBody = document.getElementById('log-table-body');
+                const imageInfo = document.getElementById('image-info');
+                const logCount = document.getElementById('log-count');
 
-        let selectedFiles = [];
-        let dualLogsMap = {};
-        let lastMetrics = null;
+                const uploadIdleState = document.getElementById('upload-idle-state');
+                const uploadStatusCard = document.getElementById('upload-status-card');
+                const folderNameDisplay = document.getElementById('folder-name-display');
 
-        // ── Upload Event Handlers ────────────────────────────────────
-        uploadZone.addEventListener('click', () => fileInput.click());
+                const badgeImagesContent = document.getElementById('badge-images-content');
+                const textImagesCount = document.getElementById('text-images-count');
+                const badgeCsvContent = document.getElementById('badge-csv-content');
+                const textCsvName = document.getElementById('text-csv-name');
+                const uploadErrorBanner = document.getElementById('upload-error-banner');
+                const uploadErrorText = document.getElementById('upload-error-text');
 
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('border-zinc-600', 'bg-zinc-900/60');
-        });
+                let selectedFiles = [];
+                let dualLogsMap = {};
+                let lastMetrics = null;
 
-        uploadZone.addEventListener('dragleave', () => {
-            uploadZone.classList.remove('border-zinc-600', 'bg-zinc-900/60');
-        });
-
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('border-zinc-600', 'bg-zinc-900/60');
-            if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files);
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) handleFileSelect(e.target.files);
-        });
-
-        function handleFileSelect(files) {
-            selectedFiles = Array.from(files);
-            imageInfo.textContent = `${selectedFiles.length} images selected`;
-            if (statImages) statImages.textContent = `${selectedFiles.length} images`;
-            
-            uploadZone.innerHTML = `
-                <span class="text-emerald-400 mb-1">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </span>
-                <span class="text-xs font-medium text-zinc-200">${selectedFiles.length} images loaded</span>
-                <span class="text-[10px] text-zinc-400 mt-1 click-change underline cursor-pointer">Choose different files</span>
-            `;
-
-            uploadZone.querySelector('.click-change').addEventListener('click', (e) => {
-                e.stopPropagation();
-                fileInput.click();
-            });
-
-            processBtn.disabled = false;
-            processBtn.classList.remove('cursor-not-allowed');
-        }
-
-        // ── Main Dual-Model Execution Listener ────────────────────────
-        processBtn.addEventListener('click', async () => {
-            if (selectedFiles.length === 0) return;
-
-            dualLogsMap = {};
-            logTableBody.innerHTML = '';
-            uploadZone.classList.add('hidden');
-            imageResultsContainer.innerHTML = '';
-            imageResultsContainer.classList.remove('hidden');
-
-            progressBox.classList.remove('opacity-60');
-            processBtn.disabled = true;
-            processBtn.textContent = 'Processing Images...';
-            progressStatus.textContent = 'Uploading and processing images...';
-            progressPercent.textContent = '0%';
-            progressFill.style.width = '0%';
-
-            const formData = new FormData();
-            selectedFiles.forEach(file => {
-                formData.append('files', file);
-            });
-
-            try {
-                const response = await fetch('/api/process-images', {
-                    method: 'POST',
-                    body: formData
+                // ── Upload Event Handlers ────────────────────────────────────
+                uploadZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadZone.classList.add('border-zinc-600', 'bg-zinc-900/60');
                 });
-                
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Processing failed');
 
-                progressStatus.textContent = 'Processing Finished';
-                progressPercent.textContent = '100%';
-                progressFill.style.width = '100%';
-                if (data.elapsed) statElapsed.textContent = data.elapsed;
-                
-                if (data.results) {
-                    data.results.forEach((res, i) => {
-                        const card = document.createElement('div');
-                        card.className = 'bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors';
-                        card.innerHTML = `
-                            <div class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
-                                <span class="font-medium text-zinc-300">${res.original_filename}</span>
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-[10px] font-mono text-sky-400 mb-1">EasyOCR</span>
-                                    <img src="${res.easyocr_annotated_url}" class="max-h-[300px] object-contain rounded border border-zinc-900" />
-                                </div>
-                                <div class="flex flex-col items-center">
-                                    <span class="text-[10px] font-mono text-indigo-400 mb-1">PyTesseract</span>
-                                    <img src="${res.pytesseract_annotated_url}" class="max-h-[300px] object-contain rounded border border-zinc-900" />
-                                </div>
-                            </div>
-                        `;
-                        imageResultsContainer.appendChild(card);
-                        
-                        // Populate dualLogsMap
-                        res.detections.forEach(det => {
-                            const trackId = det.det_id + '-' + i;
-                            const modelEasy = det.easyocr;
-                            const modelTess = det.pytesseract;
-                            
-                            dualLogsMap[trackId] = {
-                                track_id: trackId,
-                                easy: {
-                                    track_id: trackId,
-                                    vehicle_type: det.vehicle_type,
-                                    color: det.color,
-                                    plate_number: modelEasy.plate_text,
-                                    confidence: modelEasy.conf,
-                                    snapshot_url: modelEasy.snapshot_url,
-                                    plate_crop_url: modelEasy.crop_url
-                                },
-                                tess: {
-                                    track_id: trackId,
-                                    vehicle_type: det.vehicle_type,
-                                    color: det.color,
-                                    plate_number: modelTess.plate_text,
-                                    confidence: modelTess.conf,
-                                    snapshot_url: modelTess.snapshot_url,
-                                    plate_crop_url: modelTess.crop_url
-                                }
-                            };
+                uploadZone.addEventListener('dragleave', () => {
+                    uploadZone.classList.remove('border-zinc-600', 'bg-zinc-900/60');
+                });
+
+                uploadZone.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    uploadZone.classList.remove('border-zinc-600', 'bg-zinc-900/60');
+                    const files = await getAllFilesFromDataTransfer(e.dataTransfer);
+                    if (files.length > 0) handleFileSelect(files);
+                });
+
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) handleFileSelect(Array.from(e.target.files));
+                });
+
+                singleFileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) handleFileSelect(Array.from(e.target.files));
+                });
+
+                function resetUploadZone(e) {
+                    if (e) e.stopPropagation();
+                    selectedFiles = [];
+                    fileInput.value = '';
+                    singleFileInput.value = '';
+                    uploadIdleState.classList.remove('hidden');
+                    uploadStatusCard.classList.add('hidden');
+                    uploadErrorBanner.classList.add('hidden');
+                    processBtn.disabled = true;
+                    processBtn.classList.add('cursor-not-allowed');
+                    imageInfo.textContent = 'No images selected';
+                    if (statImages) statImages.textContent = '0 images';
+                }
+
+                async function getAllFilesFromDataTransfer(dataTransfer) {
+                    const files = [];
+                    const items = dataTransfer.items;
+
+                    async function traverseFileTree(item, path = '') {
+                        return new Promise((resolve) => {
+                            if (item.isFile) {
+                                item.file((file) => {
+                                    Object.defineProperty(file, 'webkitRelativePath', {
+                                        value: path + file.name,
+                                        writable: false
+                                    });
+                                    files.push(file);
+                                    resolve();
+                                });
+                            } else if (item.isDirectory) {
+                                const dirReader = item.createReader();
+                                dirReader.readEntries(async (entries) => {
+                                    for (let i = 0; i < entries.length; i++) {
+                                        await traverseFileTree(entries[i], path + item.name + '/');
+                                    }
+                                    resolve();
+                                });
+                            } else {
+                                resolve();
+                            }
                         });
-                    });
-                }
-                
-                if (data.metrics) {
-                    updateMetricsCards(data.metrics);
-                }
-                
-                const cerRes = await fetch('/api/cer-summary');
-                const cerData = await cerRes.json();
-                if (cerData.easyocr || cerData.pytesseract) {
-                    updateMetricsCards(cerData);
+                    }
+
+                    if (items && items.length > 0) {
+                        const promises = [];
+                        for (let i = 0; i < items.length; i++) {
+                            const item = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+                            if (item) promises.push(traverseFileTree(item));
+                        }
+                        await Promise.all(promises);
+                    }
+
+                    if (files.length === 0 && dataTransfer.files.length > 0) {
+                        return Array.from(dataTransfer.files);
+                    }
+                    return files;
                 }
 
-                renderDualTable();
-                
-            } catch (err) {
-                console.error(err);
-                progressStatus.textContent = \`Error: \${err.message}\`;
+                function handleFileSelect(files) {
+                    selectedFiles = files;
+
+                    let detectedImagesCount = 0;
+                    let csvFilesFound = [];
+                    let rootFolderName = 'Uploaded Dataset';
+
+                    selectedFiles.forEach(file => {
+                        const path = (file.webkitRelativePath || file.name).replace(/\\/g, '/').toLowerCase();
+                        const pathParts = path.split('/');
+                        if (pathParts.length > 1 && pathParts[0]) {
+                            rootFolderName = file.webkitRelativePath.split('/')[0];
+                        }
+
+                        const isImageExt = path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png') || path.endsWith('.bmp') || path.endsWith('.webp');
+                        const isCsvExt = path.endsWith('.csv');
+
+                        const isInImagesFolder = path.includes('/images/') || path.startsWith('images/');
+                        const isInCsvFolder = path.includes('/csv/') || path.startsWith('csv/');
+
+                        if ((isInImagesFolder && isImageExt) || (isImageExt && pathParts.length === 1)) {
+                            detectedImagesCount++;
+                        }
+
+                        if ((isInCsvFolder && isCsvExt) || (isCsvExt && pathParts.length === 1)) {
+                            csvFilesFound.push(file.name);
+                        }
+                    });
+
+                    uploadIdleState.classList.add('hidden');
+                    uploadStatusCard.classList.remove('hidden');
+                    folderNameDisplay.textContent = rootFolderName;
+
+                    // Render Images Status Badge
+                    if (detectedImagesCount > 0) {
+                        badgeImagesContent.className = 'flex items-center gap-1.5 font-semibold text-emerald-400';
+                        badgeImagesContent.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>${detectedImagesCount} image${detectedImagesCount === 1 ? '' : 's'} detected in /images</span>`;
+                    } else {
+                        badgeImagesContent.className = 'flex items-center gap-1.5 font-semibold text-rose-400';
+                        badgeImagesContent.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg><span>0 images found in /images</span>`;
+                    }
+
+                    // Render CSV Status Badge
+                    if (csvFilesFound.length > 0) {
+                        badgeCsvContent.className = 'flex items-center gap-1.5 font-semibold text-emerald-400';
+                        badgeCsvContent.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span class="truncate">${csvFilesFound[0]} present</span>`;
+                    } else {
+                        badgeCsvContent.className = 'flex items-center gap-1.5 font-semibold text-rose-400';
+                        badgeCsvContent.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg><span>Missing CSV file in /csv</span>`;
+                    }
+
+                    // Validation Checks
+                    let hasError = false;
+                    let errorMessage = '';
+
+                    if (detectedImagesCount === 0 && csvFilesFound.length === 0) {
+                        hasError = true;
+                        errorMessage = "Uploaded folder must contain an 'images/' folder with image files and a 'csv/' folder with ground_truth.csv.";
+                    } else if (detectedImagesCount === 0) {
+                        hasError = true;
+                        errorMessage = "Missing 'images/' folder or no vehicle images found inside /images subfolder.";
+                    } else if (csvFilesFound.length === 0) {
+                        hasError = true;
+                        errorMessage = "Missing 'csv/' folder or no ground_truth.csv found inside /csv subfolder.";
+                    }
+
+                    if (hasError) {
+                        uploadErrorBanner.classList.remove('hidden');
+                        uploadErrorText.textContent = errorMessage;
+                        processBtn.disabled = true;
+                        processBtn.classList.add('cursor-not-allowed');
+                    } else {
+                        uploadErrorBanner.classList.add('hidden');
+                        processBtn.disabled = false;
+                        processBtn.classList.remove('cursor-not-allowed');
+                    }
+
+                    imageInfo.textContent = `${detectedImagesCount} images selected`;
+                    if (statImages) statImages.textContent = `${detectedImagesCount} images`;
+                }
+
+                // ── Main Dual-Model Execution Listener ────────────────────────
+                processBtn.addEventListener('click', async () => {
+                    if (selectedFiles.length === 0 || processBtn.disabled) return;
+
+                    dualLogsMap = {};
+                    logTableBody.innerHTML = '';
+                    uploadZone.classList.add('hidden');
+                    imageResultsContainer.innerHTML = '';
+                    imageResultsContainer.classList.remove('hidden');
+
+                    progressBox.classList.remove('opacity-60');
+                    processBtn.disabled = true;
+                    processBtn.textContent = 'Processing Images...';
+                    progressStatus.textContent = 'Uploading and processing dataset...';
+                    progressPercent.textContent = '0%';
+                    progressFill.style.width = '0%';
+
+                    const formData = new FormData();
+                    selectedFiles.forEach(file => {
+                        const relPath = file.webkitRelativePath || file.name;
+                        formData.append('files', file, relPath);
+                    });
+
+                    try {
+                        const response = await fetch('/api/process-images', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.error || 'Processing failed');
+
+                        progressStatus.textContent = 'Processing Finished';
+                        progressPercent.textContent = '100%';
+                        progressFill.style.width = '100%';
+                        if (data.elapsed) statElapsed.textContent = data.elapsed;
+
+                        if (data.results) {
+                            data.results.forEach((res, i) => {
+                                const card = document.createElement('div');
+                                card.className = 'bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors';
+                                const headerDiv = document.createElement('div');
+headerDiv.className = 'flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs';
+const fnameSpan = document.createElement('span');
+fnameSpan.className = 'font-medium text-zinc-300';
+fnameSpan.textContent = res.original_filename;
+headerDiv.appendChild(fnameSpan);
+
+const gridDiv = document.createElement('div');
+gridDiv.className = 'grid grid-cols-2 gap-4';
+
+const col1 = document.createElement('div');
+col1.className = 'flex flex-col items-center';
+const label1 = document.createElement('span');
+label1.className = 'text-[10px] font-mono text-sky-400 mb-1';
+label1.textContent = 'EasyOCR';
+const img1 = document.createElement('img');
+img1.src = res.easyocr_annotated_url;
+img1.className = 'max-h-[300px] object-contain rounded border border-zinc-900';
+col1.appendChild(label1);
+col1.appendChild(img1);
+
+const col2 = document.createElement('div');
+col2.className = 'flex flex-col items-center';
+const label2 = document.createElement('span');
+label2.className = 'text-[10px] font-mono text-indigo-400 mb-1';
+label2.textContent = 'PyTesseract';
+const img2 = document.createElement('img');
+img2.src = res.pytesseract_annotated_url;
+img2.className = 'max-h-[300px] object-contain rounded border border-zinc-900';
+col2.appendChild(label2);
+col2.appendChild(img2);
+
+gridDiv.appendChild(col1);
+gridDiv.appendChild(col2);
+
+card.appendChild(headerDiv);
+card.appendChild(gridDiv);
+                                imageResultsContainer.appendChild(card);
+
+                                // Populate dualLogsMap
+                                res.detections.forEach(det => {
+                                    const trackId = det.det_id + '-' + i;
+                                    const modelEasy = det.easyocr;
+                                    const modelTess = det.pytesseract;
+
+                                    dualLogsMap[trackId] = {
+                                        track_id: trackId,
+                                        easy: {
+                                            track_id: trackId,
+                                            vehicle_type: det.vehicle_type,
+                                            color: det.color,
+                                            plate_number: modelEasy.plate_text,
+                                            confidence: modelEasy.conf,
+                                            snapshot_url: modelEasy.snapshot_url,
+                                            plate_crop_url: modelEasy.crop_url
+                                        },
+                                        tess: {
+                                            track_id: trackId,
+                                            vehicle_type: det.vehicle_type,
+                                            color: det.color,
+                                            plate_number: modelTess.plate_text,
+                                            confidence: modelTess.conf,
+                                            snapshot_url: modelTess.snapshot_url,
+                                            plate_crop_url: modelTess.crop_url
+                                        }
+                                    };
+                                });
+                            });
+                        }
+
+                        if (data.metrics) {
+                            updateMetricsCards(data.metrics);
+                        }
+
+                        const cerRes = await fetch('/api/cer-summary');
+                        const cerData = await cerRes.json();
+                        if (cerData.easyocr || cerData.pytesseract) {
+                            updateMetricsCards(cerData);
+                        }
+
+                        renderDualTable();
+
+                    } catch (err) {
+                        console.error(err);
+                        progressStatus.textContent = "Error: " + err.message;
             } finally {
                 processBtn.disabled = false;
                 processBtn.textContent = 'Process Images';
@@ -570,10 +729,17 @@
         // ── Render Dual-Model Side-by-Side Comparison Table ─────────
         function renderDualTable() {
             const keys = Object.keys(dualLogsMap);
-            logCount.textContent = `${keys.length} Vehicles`;
+            logCount.textContent = keys.length + " Vehicles";
 
             if (keys.length === 0) {
-                logTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-zinc-500 font-sans text-xs">No vehicle records populated.</td></tr>`;
+                logTableBody.innerHTML = '';
+                const emptyTr = document.createElement('tr');
+                const emptyTd = document.createElement('td');
+                emptyTd.colSpan = 7;
+                emptyTd.className = 'text-center py-10 text-zinc-500 font-sans text-xs';
+                emptyTd.textContent = 'No vehicle records populated.';
+                emptyTr.appendChild(emptyTd);
+                logTableBody.appendChild(emptyTr);
                 return;
             }
 
@@ -593,38 +759,86 @@
                 const colorStr = easy.color || tess.color || '';
                 const gtStr = easy.matched_gt || tess.matched_gt || '--';
 
-                const easyText = easy.plate_number ? `${easy.plate_number} (${(easy.confidence * 100).toFixed(0)}%)` : '--';
-                const tessText = tess.plate_number ? `${tess.plate_number} (${(tess.confidence * 100).toFixed(0)}%)` : '--';
+                const easyText = easy.plate_number ? (easy.plate_number + ' (' + Math.round(easy.confidence * 100) + '%)') : '--';
+                const tessText = tess.plate_number ? (tess.plate_number + ' (' + Math.round(tess.confidence * 100) + '%)') : '--';
 
-                let winnerBadge = '<span class="text-zinc-600 font-mono">--</span>';
+                // Track ID Cell
+                const tdTrack = document.createElement('td');
+                tdTrack.className = "py-2.5 px-2 font-mono text-zinc-400";
+                tdTrack.textContent = '#' + trackId;
+
+                // Time Cell
+                const tdTime = document.createElement('td');
+                tdTime.className = "py-2.5 px-2 text-zinc-500";
+                tdTime.textContent = timeStr;
+
+                // Vehicle & Color Cell
+                const tdVehicle = document.createElement('td');
+                tdVehicle.className = "py-2.5 px-2 font-sans font-medium capitalize text-zinc-300";
+                tdVehicle.textContent = vehicleStr + (colorStr ? ' (' + colorStr + ')' : '');
+
+                // EasyOCR Cell
+                const tdEasy = document.createElement('td');
+                tdEasy.className = "py-2.5 px-2 font-semibold text-sky-400 group-hover:underline";
+                tdEasy.textContent = easyText;
+
+                // PyTesseract Cell
+                const tdTess = document.createElement('td');
+                tdTess.className = "py-2.5 px-2 font-semibold text-indigo-400 group-hover:underline";
+                tdTess.textContent = tessText;
+
+                // Ground Truth Cell
+                const tdGt = document.createElement('td');
+                tdGt.className = "py-2.5 px-2 text-zinc-300 font-mono";
+                tdGt.textContent = gtStr;
+
+                // Winner & Details Cell
+                const tdWinner = document.createElement('td');
+                tdWinner.className = "py-2.5 px-2 flex items-center gap-2";
+
+                const badgeSpan = document.createElement('span');
                 if (gtStr !== '--') {
                     const easyCer = (easy.plate_number && easy.cer != null) ? easy.cer : 1.0;
                     const tessCer = (tess.plate_number && tess.cer != null) ? tess.cer : 1.0;
                     if (easyCer < tessCer) {
-                        winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50">EasyOCR</span>`;
+                        badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50";
+                        badgeSpan.textContent = "EasyOCR";
                     } else if (tessCer < easyCer) {
-                        winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50">PyTesseract</span>`;
+                        badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50";
+                        badgeSpan.textContent = "PyTesseract";
                     } else if (easyCer < 1.0 && tessCer < 1.0 && easyCer === tessCer) {
-                        winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50">Match</span>`;
+                        badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50";
+                        badgeSpan.textContent = "Match";
+                    } else {
+                        badgeSpan.className = "text-zinc-600 font-mono";
+                        badgeSpan.textContent = "--";
                     }
                 } else if (easy.plate_number && !tess.plate_number) {
-                    winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50">EasyOCR</span>`;
+                    badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50";
+                    badgeSpan.textContent = "EasyOCR";
                 } else if (tess.plate_number && !easy.plate_number) {
-                    winnerBadge = `<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50">PyTesseract</span>`;
+                    badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50";
+                    badgeSpan.textContent = "PyTesseract";
+                } else {
+                    badgeSpan.className = "text-zinc-600 font-mono";
+                    badgeSpan.textContent = "--";
                 }
 
-                tr.innerHTML = `
-                    <td class="py-2.5 px-2 font-mono text-zinc-400">#${trackId}</td>
-                    <td class="py-2.5 px-2 text-zinc-500">${timeStr}</td>
-                    <td class="py-2.5 px-2 font-sans font-medium capitalize text-zinc-300">${vehicleStr} ${colorStr ? `<span class="text-zinc-500">(${colorStr})</span>` : ''}</td>
-                    <td class="py-2.5 px-2 font-semibold text-sky-400 group-hover:underline">${easyText}</td>
-                    <td class="py-2.5 px-2 font-semibold text-indigo-400 group-hover:underline">${tessText}</td>
-                    <td class="py-2.5 px-2 text-zinc-300 font-mono">${gtStr}</td>
-                    <td class="py-2.5 px-2 flex items-center gap-2">
-                        ${winnerBadge}
-                        <span class="text-[10px] text-zinc-500 group-hover:text-zinc-300 underline font-sans ml-auto">Details &rarr;</span>
-                    </td>
-                `;
+                const detailsSpan = document.createElement('span');
+                detailsSpan.className = "text-[10px] text-zinc-500 group-hover:text-zinc-300 underline font-sans ml-auto";
+                detailsSpan.textContent = "Details →";
+
+                tdWinner.appendChild(badgeSpan);
+                tdWinner.appendChild(detailsSpan);
+
+                tr.appendChild(tdTrack);
+                tr.appendChild(tdTime);
+                tr.appendChild(tdVehicle);
+                tr.appendChild(tdEasy);
+                tr.appendChild(tdTess);
+                tr.appendChild(tdGt);
+                tr.appendChild(tdWinner);
+
                 logTableBody.appendChild(tr);
             });
 
@@ -645,8 +859,8 @@
             const timestamp = easy.timestamp || tess.timestamp || '--';
             const matchedGt = easy.matched_gt || tess.matched_gt || '--';
 
-            document.getElementById('modal-track-id').textContent = `#${trackId}`;
-            document.getElementById('modal-meta').textContent = `${vehicleType} ${color ? '• ' + color : ''} • Time: ${timestamp} • Matched GT: ${matchedGt}`;
+            document.getElementById('modal-track-id').textContent = `#${ trackId } `;
+            document.getElementById('modal-meta').textContent = `${ vehicleType } ${ color ? '• ' + color : '' } • Time: ${ timestamp } • Matched GT: ${ matchedGt } `;
 
             const snapshotUrl = easy.snapshot_url || tess.snapshot_url;
             const snapImg = document.getElementById('modal-snapshot-img');
@@ -664,8 +878,8 @@
 
             // EasyOCR Model Data
             document.getElementById('modal-easy-read').textContent = easy.plate_number || 'No Detection';
-            document.getElementById('modal-easy-conf').textContent = easy.confidence ? `${(easy.confidence * 100).toFixed(0)}% conf` : '0% conf';
-            document.getElementById('modal-easy-cer').textContent = easy.cer != null ? `${(easy.cer * 100).toFixed(1)}%` : '--';
+            document.getElementById('modal-easy-conf').textContent = easy.confidence ? `${ (easy.confidence * 100).toFixed(0) }% conf` : '0% conf';
+            document.getElementById('modal-easy-cer').textContent = easy.cer != null ? `${ (easy.cer * 100).toFixed(1) }% ` : '--';
 
             const easyCropImg = document.getElementById('modal-easy-crop');
             const easyCropEmpty = document.getElementById('modal-easy-crop-empty');
@@ -681,8 +895,8 @@
 
             // PyTesseract Model Data
             document.getElementById('modal-tess-read').textContent = tess.plate_number || 'No Detection';
-            document.getElementById('modal-tess-conf').textContent = tess.confidence ? `${(tess.confidence * 100).toFixed(0)}% conf` : '0% conf';
-            document.getElementById('modal-tess-cer').textContent = tess.cer != null ? `${(tess.cer * 100).toFixed(1)}%` : '--';
+            document.getElementById('modal-tess-conf').textContent = tess.confidence ? `${ (tess.confidence * 100).toFixed(0) }% conf` : '0% conf';
+            document.getElementById('modal-tess-cer').textContent = tess.cer != null ? `${ (tess.cer * 100).toFixed(1) }% ` : '--';
 
             const tessCropImg = document.getElementById('modal-tess-crop');
             const tessCropEmpty = document.getElementById('modal-tess-crop-empty');
@@ -725,11 +939,11 @@
             const statWinnerName = document.getElementById('stat-winner-name');
             if (statWinnerName) {
                 if (winner === 'EasyOCR') {
-                    statWinnerName.innerHTML = `<span class="text-sky-400">EasyOCR</span>`;
+                    statWinnerName.innerHTML = `<span class="text-sky-400">EasyOCR</span> `;
                 } else if (winner === 'PyTesseract') {
-                    statWinnerName.innerHTML = `<span class="text-indigo-400">PyTesseract</span>`;
+                    statWinnerName.innerHTML = `<span class="text-indigo-400">PyTesseract</span> `;
                 } else {
-                    statWinnerName.innerHTML = `<span class="text-emerald-400">Tie</span>`;
+                    statWinnerName.innerHTML = `<span class="text-emerald-400">Tie</span> `;
                 }
             }
 
@@ -757,7 +971,7 @@
                 const t = pair.tess || {};
                 const gtLabel = (e.matched_gt && e.matched_gt !== '--') ? e.matched_gt :
                               ((t.matched_gt && t.matched_gt !== '--') ? t.matched_gt : null);
-                const label = gtLabel || e.plate_number || t.plate_number || `Track #${pair.track_id}`;
+                const label = gtLabel || e.plate_number || t.plate_number || `Track #${ pair.track_id } `;
 
                 const eText = e.plate_number || 'No Detection';
                 const tText = t.plate_number || 'No Detection';
@@ -783,12 +997,12 @@
                         if (!items.length) return '';
                         const idx = items[0].dataIndex;
                         const item = vehicleList[idx];
-                        return item ? `Target GT: ${item.gt}` : '';
+                        return item ? `Target GT: ${ item.gt } ` : '';
                     },
                     label: (context) => {
                         const idx = context.dataIndex;
                         const item = vehicleList[idx];
-                        if (!item) return `${context.dataset.label}: ${context.raw}`;
+                        if (!item) return `${ context.dataset.label }: ${ context.raw } `;
                         
                         const isEasy = context.dataset.label.includes('EasyOCR');
                         const dataObj = isEasy ? item.easy : item.tess;
@@ -796,10 +1010,10 @@
                         const mainVal = formatValFn(context.raw);
 
                         return [
-                            `${engineName} ${metricName}: ${mainVal}`,
+                            `${ engineName } ${ metricName }: ${ mainVal } `,
                             `  • Read Text: "${dataObj.text}"`,
-                            `  • Confidence: ${Math.round(dataObj.conf * 100)}%`,
-                            `  • CER Error: ${(dataObj.cer * 100).toFixed(1)}%`
+                            `  • Confidence: ${ Math.round(dataObj.conf * 100) }% `,
+                            `  • CER Error: ${ (dataObj.cer * 100).toFixed(1) }% `
                         ];
                     }
                 };
@@ -811,7 +1025,7 @@
             const minWidthPx = Math.max(450, vehicleList.length * 60);
             ['wrapper-chart-vehicle-cer', 'wrapper-chart-exact-match', 'wrapper-chart-confidence'].forEach(id => {
                 const el = document.getElementById(id);
-                if (el) el.style.minWidth = `${minWidthPx}px`;
+                if (el) el.style.minWidth = `${ minWidthPx } px`;
             });
 
             const perVehicleXScale = {
@@ -842,7 +1056,7 @@
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
                             legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
-                            tooltip: { callbacks: buildTooltipCallback('CER', v => `${v.toFixed(1)}%`) }
+                            tooltip: { callbacks: buildTooltipCallback('CER', v => `${ v.toFixed(1) }% `) }
                         },
                         scales: {
                             x: perVehicleXScale,
@@ -896,7 +1110,7 @@
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
                             legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
-                            tooltip: { callbacks: buildTooltipCallback('Confidence', v => `${v.toFixed(0)}%`) }
+                            tooltip: { callbacks: buildTooltipCallback('Confidence', v => `${ v.toFixed(0) }% `) }
                         },
                         scales: {
                             x: perVehicleXScale,
@@ -947,7 +1161,7 @@
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
                             legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
-                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` } }
+                            tooltip: { callbacks: { label: (ctx) => `${ ctx.dataset.label }: ${ ctx.raw.toFixed(1) }% ` } }
                         },
                         scales: {
                             x: { ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 } }, grid: { color: '#27272a' } },
@@ -958,9 +1172,11 @@
             }
         }
 
-        // ── Ground Truth Management ───────────────────────────────────
+        // ── Ground Truth Management Helpers ───────────────────────────
         async function saveGroundTruth() {
-            const text = document.getElementById('gt-input').value;
+            const inputEl = document.getElementById('gt-input');
+            if (!inputEl) return;
+            const text = inputEl.value;
             const plates = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
             try {
                 const res = await fetch('/api/ground-truth', {
@@ -969,7 +1185,8 @@
                     body: JSON.stringify({ plates })
                 });
                 const data = await res.json();
-                document.getElementById('gt-count').textContent = `${data.count || 0} plates`;
+                const countEl = document.getElementById('gt-count');
+                if (countEl) countEl.textContent = (data.count || 0) + ' plates';
                 fetchCerSummary();
             } catch (e) {
                 console.error('Failed to save ground truth:', e);
@@ -984,8 +1201,10 @@
             try {
                 const res = await fetch('/api/ground-truth/upload', { method: 'POST', body: formData });
                 const data = await res.json();
-                document.getElementById('gt-count').textContent = `${data.count || 0} plates`;
-                document.getElementById('gt-input').value = (data.plates || []).join('\n');
+                const countEl = document.getElementById('gt-count');
+                if (countEl) countEl.textContent = (data.count || 0) + ' plates';
+                const inputEl = document.getElementById('gt-input');
+                if (inputEl) inputEl.value = (data.plates || []).join('\n');
                 fetchCerSummary();
             } catch (e) {
                 console.error('Failed to import ground truth:', e);
@@ -997,8 +1216,10 @@
                 const res = await fetch('/api/ground-truth');
                 const data = await res.json();
                 const plates = data.plates || [];
-                document.getElementById('gt-count').textContent = `${plates.length} plates`;
-                if (plates.length > 0) document.getElementById('gt-input').value = plates.join('\n');
+                const countEl = document.getElementById('gt-count');
+                if (countEl) countEl.textContent = plates.length + ' plates';
+                const inputEl = document.getElementById('gt-input');
+                if (inputEl && plates.length > 0) inputEl.value = plates.join('\n');
                 fetchCerSummary();
             } catch (e) {
                 console.error('Failed to load ground truth:', e);
@@ -1017,7 +1238,7 @@
             }
         }
 
-        loadGroundTruth();
+        fetchCerSummary();
     </script>
 </body>
 

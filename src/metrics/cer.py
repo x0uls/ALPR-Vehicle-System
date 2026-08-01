@@ -1,8 +1,14 @@
 """
-Character Error Rate (CER) computation for OCR accuracy evaluation.
+Evaluation metrics for OCR accuracy benchmarking.
 
-CER measures the edit distance between an OCR-predicted plate string and a known
-ground truth plate, normalized by the length of the ground truth.
+Provides six metrics for evaluating license plate OCR performance:
+
+1. Exact Match Accuracy (string-level): Correctly Predicted / Total × 100%
+2. Character Error Rate (CER): (Substitutions + Deletions + Insertions) / N
+3. Character Recognition Rate (CRR): (1 - CER) × 100%
+4. Character Precision: TP / (TP + FP) — penalizes hallucinated characters
+5. Character Recall: TP / (TP + FN) — penalizes missed characters
+6. Inference Latency: Average execution time per image (ms)
 
 Uses the `jiwer` library which implements CER via the Levenshtein (edit) distance
 algorithm under the hood.
@@ -24,9 +30,17 @@ CER uses the Levenshtein Distance (a.k.a. Edit Distance) algorithm:
    - CER of 1.0 means every character was wrong.
    - CER can exceed 1.0 if the prediction has more characters than the truth
      (because insertions add to the edit distance beyond the truth length).
+
+4. Character Precision and Recall use the same S/D/I counts:
+   - TP (True Positives) = N - S - D  (ground truth chars matched correctly)
+   - FP (False Positives) = S + I      (wrong chars + extra hallucinated chars)
+   - FN (False Negatives) = S + D      (wrong chars + missed chars)
+   - Precision = TP / (TP + FP)
+   - Recall    = TP / (TP + FN)
 """
 
 import os
+import csv
 import json
 import jiwer
 import numpy as np
@@ -54,6 +68,51 @@ def compute_cer(prediction, ground_truth):
     
     # jiwer.cer(truth, pred): Levenshtein character error rate
     return float(jiwer.cer(truth_normalized, pred_normalized))
+
+
+def compute_crr(cer_value):
+    """
+    Computes Character Recognition Rate (CRR) from a CER value.
+    CRR = (1 - CER) × 100%, clamped to a minimum of 0.
+    """
+    if cer_value is None:
+        return None
+    return max(0.0, (1.0 - cer_value) * 100.0)
+
+
+def compute_char_precision_recall(prediction, ground_truth):
+    """
+    Computes character-level Precision and Recall between predicted and ground truth plates.
+
+    Uses jiwer.process_characters() to obtain Substitution, Deletion, and Insertion counts,
+    then derives True Positives (TP), False Positives (FP), and False Negatives (FN):
+
+        TP = N - S - D     (ground truth chars matched correctly)
+        FP = S + I         (substituted + inserted chars — hallucinated output)
+        FN = S + D         (substituted + deleted chars — missed input)
+
+    Returns (precision, recall) as floats in [0.0, 1.0], or (None, None) if inputs are empty.
+    """
+    pred_norm = _normalize_plate(prediction)
+    truth_norm = _normalize_plate(ground_truth)
+
+    if not truth_norm:
+        return None, None
+    if not pred_norm:
+        return 0.0, 0.0
+
+    output = jiwer.process_characters(truth_norm, pred_norm)
+    s, d, i = output.substitutions, output.deletions, output.insertions
+    n = len(truth_norm)
+
+    tp = max(0, n - s - d)
+    fp = s + i
+    fn = s + d
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+
+    return precision, recall
 
 
 def find_best_ground_truth_match(prediction, ground_truth_list):
@@ -120,6 +179,39 @@ def load_ground_truth():
         return []
 
 
+def load_ground_truth_csv(csv_path):
+    """
+    Loads ground truth from a CSV file with columns: filename, ground_truth.
+    Returns a dict mapping filename → ground_truth_plate (normalized uppercase, stripped).
+    """
+    mapping = {}
+    if not os.path.exists(csv_path):
+        return mapping
+    try:
+        with open(csv_path, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                fname = (row.get("filename") or "").strip()
+                gt = (row.get("ground_truth") or "").strip().upper()
+                if fname and gt:
+                    mapping[fname] = gt
+    except (IOError, csv.Error):
+        pass
+    return mapping
+
+
+def save_ground_truth_csv(mapping, csv_path):
+    """
+    Writes a filename → ground_truth mapping to a CSV file.
+    """
+    os.makedirs(os.path.dirname(csv_path) if os.path.dirname(csv_path) else ".", exist_ok=True)
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["filename", "ground_truth"])
+        for fname, gt in mapping.items():
+            writer.writerow([fname, gt])
+
+
 def compute_edit_distance(prediction, ground_truth):
     """
     Computes the raw Levenshtein edit distance (total character insertions, deletions, substitutions)
@@ -140,6 +232,9 @@ def _empty_metrics(execution_time_seconds=0.0, total_detections=0, avg_conf=0.0)
     latency = (execution_time_seconds * 1000 / total_detections) if total_detections else 0.0
     return {
         "average_cer": None,
+        "crr": None,
+        "char_precision": None,
+        "char_recall": None,
         "exact_match_count": 0,
         "exact_match_rate": 0.0,
         "gt_recall": 0.0,
@@ -166,6 +261,10 @@ def _match_detections(detections_list, ground_truth_list):
     correct_confs = []
     incorrect_confs = []
     matched_gt_set = set()
+    # Character-level accumulators for Precision and Recall
+    total_tp = 0
+    total_fp = 0
+    total_fn = 0
 
     for detection in detections_list:
         plate_text = str(detection.get("plate_number", ""))
@@ -180,6 +279,19 @@ def _match_detections(detections_list, ground_truth_list):
             total_cer += best_cer
             edit_dist = compute_edit_distance(plate_text, best_gt)
             total_edit_distance += edit_dist
+
+            # Accumulate character-level TP/FP/FN
+            pred_norm = _normalize_plate(plate_text)
+            gt_norm = _normalize_plate(best_gt)
+            output = jiwer.process_characters(gt_norm, pred_norm)
+            s, d, i_count = output.substitutions, output.deletions, output.insertions
+            n = len(gt_norm)
+            tp = max(0, n - s - d)
+            total_tp += tp
+            total_fp += s + i_count
+            total_fn += s + d
+
+            char_prec, char_rec = compute_char_precision_recall(plate_text, best_gt)
 
             is_exact = (best_cer == 0.0)
             if is_exact:
@@ -196,6 +308,9 @@ def _match_detections(detections_list, ground_truth_list):
                 "plate_number": plate_text,
                 "matched_ground_truth": best_gt,
                 "cer": round(best_cer, 4),
+                "crr": round(compute_crr(best_cer), 2),
+                "char_precision": round(char_prec, 4) if char_prec is not None else None,
+                "char_recall": round(char_rec, 4) if char_rec is not None else None,
                 "edit_distance": edit_dist,
                 "is_exact": is_exact,
                 "confidence": round(conf, 4)
@@ -210,6 +325,9 @@ def _match_detections(detections_list, ground_truth_list):
         "correct_confs": correct_confs,
         "incorrect_confs": incorrect_confs,
         "matched_gt_set": matched_gt_set,
+        "total_tp": total_tp,
+        "total_fp": total_fp,
+        "total_fn": total_fn,
     }
 
 
@@ -242,12 +360,20 @@ def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_
     
     precision = (len([p for p in per_detection if p["cer"] <= 0.3]) / len(per_detection)) if per_detection else 0.0
 
+    # Aggregate character-level Precision and Recall from accumulated TP/FP/FN
+    agg_tp, agg_fp, agg_fn = results["total_tp"], results["total_fp"], results["total_fn"]
+    char_precision = agg_tp / (agg_tp + agg_fp) if (agg_tp + agg_fp) > 0 else None
+    char_recall = agg_tp / (agg_tp + agg_fn) if (agg_tp + agg_fn) > 0 else None
+
     avg_correct_conf = float(np.mean(results["correct_confs"])) if results["correct_confs"] else 0.0
     avg_incorrect_conf = float(np.mean(results["incorrect_confs"])) if results["incorrect_confs"] else 0.0
     latency_per_plate_ms = (execution_time_seconds * 1000 / len(detections_list)) if detections_list else 0.0
 
     return {
         "average_cer": round(average_cer, 4) if average_cer is not None else None,
+        "crr": round(compute_crr(average_cer), 2) if average_cer is not None else None,
+        "char_precision": round(char_precision, 4) if char_precision is not None else None,
+        "char_recall": round(char_recall, 4) if char_recall is not None else None,
         "exact_match_count": exact_match_count,
         "exact_match_rate": round(exact_match_rate, 4),
         "gt_recall": round(gt_recall, 4),

@@ -5,6 +5,7 @@ import torch
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
 
+
 from src.color.color_detector import detect_dominant_color
 from src.logging.logger import log_detection, flush_all_logs
 from src.ocr.plate_ocr import read_plate
@@ -14,9 +15,12 @@ MIN_VEHICLE_CONFIDENCE = 0.4
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 vehicle_model = YOLO("yolov8n.pt")
-plate_model = YOLO("models/yolo_plate/best.pt")
 vehicle_model.to(device)
-plate_model.to(device)
+
+# Haar Cascade for license plate detection (ships with opencv-python)
+plate_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_russian_plate_number.xml'
+)
 
 
 def _is_valid_plate_crop(crop):
@@ -137,35 +141,37 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
         if not vehicle_crops:
             continue
 
-        # Detect plates in batch
-        batch_plate_results = plate_model(vehicle_crops, verbose=False, conf=0.5)
+        # Detect plates using Haar Cascade on each vehicle crop
+        for det_info in det_infos:
+            v_crop = det_info["v_crop"]
+            gray_crop = cv2.cvtColor(v_crop, cv2.COLOR_BGR2GRAY) if len(v_crop.shape) == 3 else v_crop
+            plates = plate_cascade.detectMultiScale(
+                gray_crop, scaleFactor=1.1, minNeighbors=4, minSize=(60, 20)
+            )
 
-        for det_info, plate_results in zip(det_infos, batch_plate_results):
-            if len(plate_results.boxes) == 0:
+            if len(plates) == 0:
                 detections_by_image[img_id].append(det_info)
                 continue
-            
-            best_box = max(plate_results.boxes, key=lambda p: float(p.conf[0]))
-            if float(best_box.conf[0]) < 0.5:
-                detections_by_image[img_id].append(det_info)
-                continue
 
-            lx1, ly1, lx2, ly2 = map(int, best_box.xyxy[0])
+            # Pick the largest detection by area (no confidence score with Haar)
+            best = max(plates, key=lambda r: r[2] * r[3])
+            lx1, ly1, w, h = best
+            lx2, ly2 = lx1 + w, ly1 + h
             det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
 
-            px, py = int((lx2 - lx1) * 0.08), int((ly2 - ly1) * 0.15)
+            px, py = int(w * 0.08), int(h * 0.15)
             px1, py1 = max(0, lx1 - px), max(0, ly1 - py)
-            px2, py2 = min(det_info["v_crop"].shape[1], lx2 + px), min(det_info["v_crop"].shape[0], ly2 + py)
-            padded_crop = det_info["v_crop"][py1:py2, px1:px2]
+            px2, py2 = min(v_crop.shape[1], lx2 + px), min(v_crop.shape[0], ly2 + py)
+            padded_crop = v_crop[py1:py2, px1:px2]
 
             if _is_valid_plate_crop(padded_crop):
                 futures.append(easyocr_pool.submit(
-                    _ocr_worker, padded_crop.copy(), det_info["v_crop"].copy(), "EasyOCR", img_id, det_info["det_id"]
+                    _ocr_worker, padded_crop.copy(), v_crop.copy(), "EasyOCR", img_id, det_info["det_id"]
                 ))
                 futures.append(pytesseract_pool.submit(
-                    _ocr_worker, padded_crop.copy(), det_info["v_crop"].copy(), "PyTesseract", img_id, det_info["det_id"]
+                    _ocr_worker, padded_crop.copy(), v_crop.copy(), "PyTesseract", img_id, det_info["det_id"]
                 ))
-            
+
             detections_by_image[img_id].append(det_info)
 
     # Wait for all OCR futures

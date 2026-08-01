@@ -158,6 +158,10 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="adaptive"):
         # maxValue=255; 25: local block size (25x25); 2: mean offset constant C
         binary = cv2.adaptiveThreshold(filtered, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 25, 2)
 
+    # (3,3): 3x3 rectangular kernel to close small gaps inside characters (e.g. broken loops in B, 8, R)
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, close_kernel, iterations=1)
+
     # (2,2): 2x2 rectangular kernel matrix for speckle removal
     morph_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, morph_kernel, iterations=1)
