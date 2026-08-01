@@ -234,7 +234,7 @@
                     <thead>
                         <tr class="border-b border-zinc-800/80 text-zinc-400 text-[11px] font-sans">
                             <th class="py-2.5 px-2 font-semibold">ID</th>
-                            <th class="py-2.5 px-2 font-semibold">Time</th>
+                            <th class="py-2.5 px-2 font-semibold">File Name</th>
                             <th class="py-2.5 px-2 font-semibold">Vehicle</th>
                             <th class="py-2.5 px-2 font-semibold text-sky-400">EasyOCR Read</th>
                             <th class="py-2.5 px-2 font-semibold text-indigo-400">PyTesseract Read</th>
@@ -570,7 +570,14 @@
                             body: formData
                         });
 
-                        const data = await response.json();
+                        let data = {};
+                        const textData = await response.text();
+                        try {
+                            data = JSON.parse(textData);
+                        } catch (e) {
+                            throw new Error('Server error (' + response.status + ')');
+                        }
+
                         if (!response.ok) throw new Error(data.error || 'Processing failed');
 
                         progressStatus.textContent = 'Processing Finished';
@@ -593,9 +600,9 @@ const gridDiv = document.createElement('div');
 gridDiv.className = 'grid grid-cols-2 gap-4';
 
 const col1 = document.createElement('div');
-col1.className = 'flex flex-col items-center';
+col1.className = 'flex flex-col items-center gap-1.5';
 const label1 = document.createElement('span');
-label1.className = 'text-[10px] font-mono text-sky-400 mb-1';
+label1.className = 'text-[10px] font-mono text-sky-400 font-semibold';
 label1.textContent = 'EasyOCR';
 const img1 = document.createElement('img');
 img1.src = res.easyocr_annotated_url;
@@ -603,10 +610,24 @@ img1.className = 'max-h-[300px] object-contain rounded border border-zinc-900';
 col1.appendChild(label1);
 col1.appendChild(img1);
 
+if (res.detections && res.detections.length > 0 && res.detections[0].easyocr && res.detections[0].easyocr.crop_url) {
+    const cropBox1 = document.createElement('div');
+    cropBox1.className = 'w-full mt-1 bg-zinc-900/90 border border-sky-950/60 rounded p-1.5 flex flex-col items-center gap-1';
+    const cropLabel1 = document.createElement('span');
+    cropLabel1.className = 'text-[9px] font-mono text-sky-400/80 uppercase tracking-wider font-medium';
+    cropLabel1.textContent = 'Preprocessed Plate Crop';
+    const cropImg1 = document.createElement('img');
+    cropImg1.src = res.detections[0].easyocr.crop_url;
+    cropImg1.className = 'max-h-[48px] object-contain bg-black border border-zinc-800 rounded p-0.5';
+    cropBox1.appendChild(cropLabel1);
+    cropBox1.appendChild(cropImg1);
+    col1.appendChild(cropBox1);
+}
+
 const col2 = document.createElement('div');
-col2.className = 'flex flex-col items-center';
+col2.className = 'flex flex-col items-center gap-1.5';
 const label2 = document.createElement('span');
-label2.className = 'text-[10px] font-mono text-indigo-400 mb-1';
+label2.className = 'text-[10px] font-mono text-indigo-400 font-semibold';
 label2.textContent = 'PyTesseract';
 const img2 = document.createElement('img');
 img2.src = res.pytesseract_annotated_url;
@@ -614,40 +635,65 @@ img2.className = 'max-h-[300px] object-contain rounded border border-zinc-900';
 col2.appendChild(label2);
 col2.appendChild(img2);
 
+if (res.detections && res.detections.length > 0 && res.detections[0].pytesseract && res.detections[0].pytesseract.crop_url) {
+    const cropBox2 = document.createElement('div');
+    cropBox2.className = 'w-full mt-1 bg-zinc-900/90 border border-indigo-950/60 rounded p-1.5 flex flex-col items-center gap-1';
+    const cropLabel2 = document.createElement('span');
+    cropLabel2.className = 'text-[9px] font-mono text-indigo-400/80 uppercase tracking-wider font-medium';
+    cropLabel2.textContent = 'Preprocessed Plate Crop';
+    const cropImg2 = document.createElement('img');
+    cropImg2.src = res.detections[0].pytesseract.crop_url;
+    cropImg2.className = 'max-h-[48px] object-contain bg-black border border-zinc-800 rounded p-0.5';
+    cropBox2.appendChild(cropLabel2);
+    cropBox2.appendChild(cropImg2);
+    col2.appendChild(cropBox2);
+}
+
 gridDiv.appendChild(col1);
 gridDiv.appendChild(col2);
 
-card.appendChild(headerDiv);
-card.appendChild(gridDiv);
+                                card.appendChild(headerDiv);
+                                card.appendChild(gridDiv);
                                 imageResultsContainer.appendChild(card);
+                                let globalSeqId = 1;
+                                data.results.forEach((res, i) => {
+                                    const fname = res.original_filename || '';
+                                    const fnameNoExt = fname.replace(/\.[^/.]+$/, "");
+                                    const gtVal = res.expected_gt || (data.gt_mapping && (data.gt_mapping[fname] || data.gt_mapping[fnameNoExt])) || '--';
 
-                                // Populate dualLogsMap
-                                res.detections.forEach(det => {
-                                    const trackId = det.det_id + '-' + i;
-                                    const modelEasy = det.easyocr;
-                                    const modelTess = det.pytesseract;
+                                    res.detections.forEach(det => {
+                                        const seqId = globalSeqId++;
+                                        const trackKey = 'det-' + seqId;
+                                        const modelEasy = det.easyocr || {};
+                                        const modelTess = det.pytesseract || {};
 
-                                    dualLogsMap[trackId] = {
-                                        track_id: trackId,
-                                        easy: {
-                                            track_id: trackId,
-                                            vehicle_type: det.vehicle_type,
-                                            color: det.color,
-                                            plate_number: modelEasy.plate_text,
-                                            confidence: modelEasy.conf,
-                                            snapshot_url: modelEasy.snapshot_url,
-                                            plate_crop_url: modelEasy.crop_url
-                                        },
-                                        tess: {
-                                            track_id: trackId,
-                                            vehicle_type: det.vehicle_type,
-                                            color: det.color,
-                                            plate_number: modelTess.plate_text,
-                                            confidence: modelTess.conf,
-                                            snapshot_url: modelTess.snapshot_url,
-                                            plate_crop_url: modelTess.crop_url
-                                        }
-                                    };
+                                        dualLogsMap[trackKey] = {
+                                            track_id: seqId,
+                                            file_name: fname,
+                                            easy: {
+                                                track_id: seqId,
+                                                file_name: fname,
+                                                matched_gt: gtVal,
+                                                vehicle_type: det.vehicle_type,
+                                                color: det.color,
+                                                plate_number: modelEasy.plate_text,
+                                                confidence: modelEasy.conf,
+                                                snapshot_url: modelEasy.snapshot_url,
+                                                plate_crop_url: modelEasy.crop_url
+                                            },
+                                            tess: {
+                                                track_id: seqId,
+                                                file_name: fname,
+                                                matched_gt: gtVal,
+                                                vehicle_type: det.vehicle_type,
+                                                color: det.color,
+                                                plate_number: modelTess.plate_text,
+                                                confidence: modelTess.conf,
+                                                snapshot_url: modelTess.snapshot_url,
+                                                plate_crop_url: modelTess.crop_url
+                                            }
+                                        };
+                                    });
                                 });
                             });
                         }
@@ -656,10 +702,16 @@ card.appendChild(gridDiv);
                             updateMetricsCards(data.metrics);
                         }
 
-                        const cerRes = await fetch('/api/cer-summary');
-                        const cerData = await cerRes.json();
-                        if (cerData.easyocr || cerData.pytesseract) {
-                            updateMetricsCards(cerData);
+                        try {
+                            const cerRes = await fetch('/api/cer-summary');
+                            if (cerRes.ok) {
+                                const cerData = await cerRes.json();
+                                if (cerData.easyocr || cerData.pytesseract) {
+                                    updateMetricsCards(cerData);
+                                }
+                            }
+                        } catch(e) {
+                            console.warn("CER Summary fetch skipped:", e);
                         }
 
                         renderDualTable();
@@ -700,8 +752,8 @@ card.appendChild(gridDiv);
                 tr.className = "border-b border-zinc-800/30 hover:bg-zinc-900/70 cursor-pointer transition-colors group";
                 tr.onclick = () => openDetailModal(key);
 
-                const trackId = pair.track_id || easy.track_id || tess.track_id || '--';
-                const timeStr = easy.timestamp || tess.timestamp || '--';
+                const trackId = pair.track_id || '--';
+                const fileName = pair.file_name || easy.file_name || tess.file_name || '--';
                 const vehicleStr = easy.vehicle_type || tess.vehicle_type || 'Vehicle';
                 const colorStr = easy.color || tess.color || '';
                 const gtStr = easy.matched_gt || tess.matched_gt || '--';
@@ -709,15 +761,16 @@ card.appendChild(gridDiv);
                 const easyText = easy.plate_number ? (easy.plate_number + ' (' + Math.round(easy.confidence * 100) + '%)') : '--';
                 const tessText = tess.plate_number ? (tess.plate_number + ' (' + Math.round(tess.confidence * 100) + '%)') : '--';
 
-                // Track ID Cell
+                // ID Cell (Clean sequential integer #1, #2, #3...)
                 const tdTrack = document.createElement('td');
                 tdTrack.className = "py-2.5 px-2 font-mono text-zinc-400";
                 tdTrack.textContent = '#' + trackId;
 
-                // Time Cell
-                const tdTime = document.createElement('td');
-                tdTime.className = "py-2.5 px-2 text-zinc-500";
-                tdTime.textContent = timeStr;
+                // File Name Cell
+                const tdFile = document.createElement('td');
+                tdFile.className = "py-2.5 px-2 font-mono text-zinc-300 truncate max-w-[150px]";
+                tdFile.title = fileName;
+                tdFile.textContent = fileName;
 
                 // Vehicle & Color Cell
                 const tdVehicle = document.createElement('td');
@@ -736,29 +789,33 @@ card.appendChild(gridDiv);
 
                 // Ground Truth Cell
                 const tdGt = document.createElement('td');
-                tdGt.className = "py-2.5 px-2 text-zinc-300 font-mono";
+                tdGt.className = "py-2.5 px-2 text-zinc-300 font-mono font-bold";
                 tdGt.textContent = gtStr;
 
-                // Winner & Details Cell
+                // Winner Cell
                 const tdWinner = document.createElement('td');
                 tdWinner.className = "py-2.5 px-2 flex items-center gap-2";
 
                 const badgeSpan = document.createElement('span');
-                if (gtStr !== '--') {
-                    const easyCer = (easy.plate_number && easy.cer != null) ? easy.cer : 1.0;
-                    const tessCer = (tess.plate_number && tess.cer != null) ? tess.cer : 1.0;
-                    if (easyCer < tessCer) {
+                const eTextNorm = (easy.plate_number || '').replace(/\s+/g, '').toUpperCase();
+                const tTextNorm = (tess.plate_number || '').replace(/\s+/g, '').toUpperCase();
+                const gtNorm = (gtStr || '').replace(/\s+/g, '').toUpperCase();
+
+                if (gtNorm !== '--' && gtNorm !== '') {
+                    const easyMatch = eTextNorm === gtNorm;
+                    const tessMatch = tTextNorm === gtNorm;
+                    if (easyMatch && !tessMatch) {
                         badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50";
                         badgeSpan.textContent = "EasyOCR";
-                    } else if (tessCer < easyCer) {
+                    } else if (tessMatch && !easyMatch) {
                         badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50";
                         badgeSpan.textContent = "PyTesseract";
-                    } else if (easyCer < 1.0 && tessCer < 1.0 && easyCer === tessCer) {
+                    } else if (easyMatch && tessMatch) {
                         badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50";
                         badgeSpan.textContent = "Match";
                     } else {
                         badgeSpan.className = "text-zinc-600 font-mono";
-                        badgeSpan.textContent = "--";
+                        badgeSpan.textContent = "Misread";
                     }
                 } else if (easy.plate_number && !tess.plate_number) {
                     badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50";
@@ -779,7 +836,7 @@ card.appendChild(gridDiv);
                 tdWinner.appendChild(detailsSpan);
 
                 tr.appendChild(tdTrack);
-                tr.appendChild(tdTime);
+                tr.appendChild(tdFile);
                 tr.appendChild(tdVehicle);
                 tr.appendChild(tdEasy);
                 tr.appendChild(tdTess);
@@ -788,8 +845,6 @@ card.appendChild(gridDiv);
 
                 logTableBody.appendChild(tr);
             });
-
-            if (lastMetrics) renderCharts(lastMetrics);
         }
 
         // ── Modal Controller Functions ────────────────────────────────

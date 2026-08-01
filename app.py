@@ -47,6 +47,24 @@ async def serve_dashboard():
 
 
 
+def _parse_csv_row_mapping(row):
+    """Extracts filename and ground_truth plate from flexible CSV headers."""
+    raw_fname = (
+        row.get("filename") or row.get("FilePath") or row.get("file_path") or
+        row.get("File") or row.get("image") or row.get("Image") or ""
+    ).strip()
+    
+    fname = os.path.basename(raw_fname) if raw_fname else ""
+    
+    gt = (
+        row.get("ground_truth") or row.get("No. Car Plate") or row.get("Car Plate") or
+        row.get("plate_number") or row.get("plate") or row.get("Plate Number") or
+        row.get("Plate") or row.get("GT") or ""
+    ).strip().upper()
+    
+    return fname, gt
+
+
 async def _extract_folder_contents(files: List[UploadFile]):
     """
     Parses uploaded directory files. Validates that the uploaded folder contains:
@@ -88,7 +106,6 @@ async def _extract_folder_contents(files: List[UploadFile]):
             import csv
             import io
             text = content.decode("utf-8-sig", errors="ignore")
-            reader = csv.DictReader(io.StringIO(text))
             
             # Save raw ground truth CSV for cer summary
             gt_csv_path = "outputs/logs/ground_truth.csv"
@@ -98,11 +115,11 @@ async def _extract_folder_contents(files: List[UploadFile]):
 
             reader = csv.DictReader(io.StringIO(text))
             for row in reader:
-                fname = (row.get("filename") or "").strip()
-                gt = (row.get("ground_truth") or row.get("plate_number") or row.get("plate") or row.get("Plate Number") or "").strip().upper()
+                fname, gt = _parse_csv_row_mapping(row)
                 if gt:
                     if fname:
                         gt_mapping[fname] = gt
+                        gt_mapping[os.path.splitext(fname)[0]] = gt
                     gt_plates.append(gt)
                     
         elif is_image_ext and "/" not in norm_name:
@@ -125,11 +142,11 @@ async def _extract_folder_contents(files: List[UploadFile]):
 
             reader = csv.DictReader(io.StringIO(text))
             for row in reader:
-                fname = (row.get("filename") or "").strip()
-                gt = (row.get("ground_truth") or row.get("plate_number") or row.get("plate") or "").strip().upper()
+                fname, gt = _parse_csv_row_mapping(row)
                 if gt:
                     if fname:
                         gt_mapping[fname] = gt
+                        gt_mapping[os.path.splitext(fname)[0]] = gt
                     gt_plates.append(gt)
     
     if not images_found:
@@ -161,14 +178,35 @@ async def process_images_api(files: List[UploadFile] = File(...)):
         if not gt_plates:
             gt_plates = load_ground_truth()
             
-        easy_dets = pd.read_csv("outputs/logs/detections_easyocr.csv").to_dict(orient="records") if os.path.exists("outputs/logs/detections_easyocr.csv") else []
-        tess_dets = pd.read_csv("outputs/logs/detections_pytesseract.csv").to_dict(orient="records") if os.path.exists("outputs/logs/detections_pytesseract.csv") else []
+        easy_csv = "outputs/logs/detections_easyocr.csv"
+        tess_csv = "outputs/logs/detections_pytesseract.csv"
+
+        easy_dets = []
+        if os.path.exists(easy_csv) and os.path.getsize(easy_csv) > 10:
+            try:
+                easy_dets = pd.read_csv(easy_csv).to_dict(orient="records")
+            except Exception:
+                easy_dets = []
+
+        tess_dets = []
+        if os.path.exists(tess_csv) and os.path.getsize(tess_csv) > 10:
+            try:
+                tess_dets = pd.read_csv(tess_csv).to_dict(orient="records")
+            except Exception:
+                tess_dets = []
         
+        for res in results:
+            fname = res.get("original_filename", "")
+            base_name = os.path.splitext(fname)[0]
+            expected = gt_mapping.get(fname) or gt_mapping.get(base_name)
+            res["expected_gt"] = expected
+
         comparison_metrics = compute_dual_model_comparison(easy_dets, tess_dets, gt_plates, easyocr_time=final_elapsed, pytesseract_time=final_elapsed)
         
         return JSONResponse({
             "status": "success",
             "results": results,
+            "gt_mapping": gt_mapping,
             "metrics": comparison_metrics,
             "gt_count": len(gt_plates),
             "gt_mapped": len(gt_mapping),
@@ -238,15 +276,32 @@ async def cer_summary_api():
     """
     Returns full side-by-side comparative Ground Truth statistics for EasyOCR vs PyTesseract.
     """
-    gt_plates = load_ground_truth()
-    easy_csv = "outputs/logs/detections_easyocr.csv"
-    tess_csv = "outputs/logs/detections_pytesseract.csv"
+    try:
+        gt_plates = load_ground_truth()
+        easy_csv = "outputs/logs/detections_easyocr.csv"
+        tess_csv = "outputs/logs/detections_pytesseract.csv"
 
-    easy_dets = pd.read_csv(easy_csv).to_dict(orient="records") if os.path.exists(easy_csv) else []
-    tess_dets = pd.read_csv(tess_csv).to_dict(orient="records") if os.path.exists(tess_csv) else []
+        easy_dets = []
+        if os.path.exists(easy_csv) and os.path.getsize(easy_csv) > 10:
+            try:
+                easy_dets = pd.read_csv(easy_csv).to_dict(orient="records")
+            except Exception:
+                easy_dets = []
 
-    comparison = compute_dual_model_comparison(easy_dets, tess_dets, gt_plates)
-    return JSONResponse(comparison)
+        tess_dets = []
+        if os.path.exists(tess_csv) and os.path.getsize(tess_csv) > 10:
+            try:
+                tess_dets = pd.read_csv(tess_csv).to_dict(orient="records")
+            except Exception:
+                tess_dets = []
+
+        comparison = compute_dual_model_comparison(easy_dets, tess_dets, gt_plates)
+        return JSONResponse(comparison)
+    except Exception as e:
+        import traceback
+        print(f"[CER SUMMARY ERROR] {e}")
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/api/benchmark")
@@ -267,8 +322,22 @@ async def benchmark_api(files: List[UploadFile] = File(...)):
         results = process_bulk_images(image_paths, easyocr_pool, pytesseract_pool)
         total_elapsed = time.time() - start_time
 
-        easy_dets = pd.read_csv("outputs/logs/detections_easyocr.csv").to_dict(orient="records") if os.path.exists("outputs/logs/detections_easyocr.csv") else []
-        tess_dets = pd.read_csv("outputs/logs/detections_pytesseract.csv").to_dict(orient="records") if os.path.exists("outputs/logs/detections_pytesseract.csv") else []
+        easy_csv = "outputs/logs/detections_easyocr.csv"
+        tess_csv = "outputs/logs/detections_pytesseract.csv"
+
+        easy_dets = []
+        if os.path.exists(easy_csv) and os.path.getsize(easy_csv) > 10:
+            try:
+                easy_dets = pd.read_csv(easy_csv).to_dict(orient="records")
+            except Exception:
+                easy_dets = []
+
+        tess_dets = []
+        if os.path.exists(tess_csv) and os.path.getsize(tess_csv) > 10:
+            try:
+                tess_dets = pd.read_csv(tess_csv).to_dict(orient="records")
+            except Exception:
+                tess_dets = []
 
         if not gt_plates:
             gt_plates = list(gt_mapping.values()) if gt_mapping else load_ground_truth()
