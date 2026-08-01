@@ -17,10 +17,12 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 vehicle_model = YOLO("yolov8n.pt")
 vehicle_model.to(device)
 
-# Haar Cascade for license plate detection (ships with opencv-python)
-plate_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades + 'haarcascade_russian_plate_number.xml'
-)
+plate_model_path = "models/yolo_plate/best.pt"
+if os.path.exists(plate_model_path):
+    plate_model = YOLO(plate_model_path)
+    plate_model.to(device)
+else:
+    plate_model = None
 
 
 def _is_valid_plate_crop(crop):
@@ -110,10 +112,9 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
     det_counter = 1
 
     for img_id, (frame, vehicle_results) in enumerate(zip(frames, batch_vehicle_results)):
-        vehicle_crops = []
-        det_infos = []
+        candidate_vehicles = []
 
-        # Find vehicles
+        # Collect all detected vehicles in this frame
         for box in vehicle_results.boxes:
             class_id = int(box.cls[0])
             if class_id not in VEHICLE_CLASSES:
@@ -125,54 +126,74 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
 
             v_type = VEHICLE_CLASSES[class_id]
             v_color = detect_dominant_color(v_crop)
+            area = (x2 - x1) * (y2 - y1)
 
-            det_info = {
-                "det_id": det_counter,
+            candidate_vehicles.append({
                 "bbox": (x1, y1, x2, y2),
+                "area": area,
                 "vehicle_type": v_type,
                 "color": v_color,
-                "v_crop": v_crop,
-                "local_plate_bbox": None
-            }
-            det_infos.append(det_info)
-            vehicle_crops.append(v_crop)
-            det_counter += 1
+                "v_crop": v_crop
+            })
 
-        if not vehicle_crops:
+        if not candidate_vehicles:
             continue
 
-        # Detect plates using Haar Cascade on each vehicle crop
-        for det_info in det_infos:
-            v_crop = det_info["v_crop"]
-            gray_crop = cv2.cvtColor(v_crop, cv2.COLOR_BGR2GRAY) if len(v_crop.shape) == 3 else v_crop
-            plates = plate_cascade.detectMultiScale(
-                gray_crop, scaleFactor=1.1, minNeighbors=4, minSize=(60, 20)
-            )
+        # SELECT ONLY THE SINGLE LARGEST VEHICLE BY AREA (takes up majority of screen)
+        main_vehicle = max(candidate_vehicles, key=lambda v: v["area"])
+        det_info = {
+            "det_id": det_counter,
+            "bbox": main_vehicle["bbox"],
+            "vehicle_type": main_vehicle["vehicle_type"],
+            "color": main_vehicle["color"],
+            "v_crop": main_vehicle["v_crop"],
+            "local_plate_bbox": None
+        }
+        det_counter += 1
+        v_crop = det_info["v_crop"]
+        v_h, v_w = v_crop.shape[:2]
 
-            if len(plates) == 0:
-                detections_by_image[img_id].append(det_info)
-                continue
+        padded_crop = None
 
-            # Pick the largest detection by area (no confidence score with Haar)
-            best = max(plates, key=lambda r: r[2] * r[3])
-            lx1, ly1, w, h = best
-            lx2, ly2 = lx1 + w, ly1 + h
-            det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
+        # 1. Primary: Dedicated YOLO License Plate Model (models/yolo_plate/best.pt)
+        if plate_model is not None:
+            plate_results = plate_model(v_crop, verbose=False, conf=0.15)
+            valid_plates = []
+            if len(plate_results) > 0 and len(plate_results[0].boxes) > 0:
+                for pbox in plate_results[0].boxes:
+                    px1, py1, px2, py2 = map(int, pbox.xyxy[0])
+                    p_conf = float(pbox.conf[0])
+                    pw = px2 - px1
+                    ph = py2 - py1
+                    py_center = (py1 + py2) / 2.0
+                    
+                    # Ignore boxes in upper 35% of vehicle (prevents false positives like PENANG MOVERS at top of trucks)
+                    if py_center < 0.35 * v_h:
+                        continue
+                    if pw > 10 and ph > 5:
+                        valid_plates.append((px1, py1, px2, py2, p_conf))
 
-            px, py = int(w * 0.08), int(h * 0.15)
-            px1, py1 = max(0, lx1 - px), max(0, ly1 - py)
-            px2, py2 = min(v_crop.shape[1], lx2 + px), min(v_crop.shape[0], ly2 + py)
-            padded_crop = v_crop[py1:py2, px1:px2]
+            if valid_plates:
+                best_p = max(valid_plates, key=lambda p: p[4] * (p[2]-p[0])*(p[3]-p[1]))
+                lx1, ly1, lx2, ly2, _ = best_p
+                det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
+                padded_crop = v_crop[max(0, ly1-5):min(v_h, ly2+5), max(0, lx1-5):min(v_w, lx2+5)]
 
-            if _is_valid_plate_crop(padded_crop):
-                futures.append(easyocr_pool.submit(
-                    _ocr_worker, padded_crop.copy(), v_crop.copy(), "EasyOCR", img_id, det_info["det_id"]
-                ))
-                futures.append(pytesseract_pool.submit(
-                    _ocr_worker, padded_crop.copy(), v_crop.copy(), "PyTesseract", img_id, det_info["det_id"]
-                ))
+        # 2. Fallback: Lower 40% bumper region if no bounding box detected
+        if padded_crop is None or padded_crop.size == 0:
+            ly1, ly2 = int(v_h * 0.55), min(v_h, int(v_h * 0.95))
+            lx1, lx2 = int(v_w * 0.15), int(v_w * 0.85)
+            padded_crop = v_crop[ly1:ly2, lx1:lx2]
 
-            detections_by_image[img_id].append(det_info)
+        if padded_crop is not None and padded_crop.size > 0:
+            futures.append(easyocr_pool.submit(
+                _ocr_worker, padded_crop.copy(), v_crop.copy(), "EasyOCR", img_id, det_info["det_id"]
+            ))
+            futures.append(pytesseract_pool.submit(
+                _ocr_worker, padded_crop.copy(), v_crop.copy(), "PyTesseract", img_id, det_info["det_id"]
+            ))
+
+        detections_by_image[img_id].append(det_info)
 
     # Wait for all OCR futures
     ocr_results = [f.result() for f in futures]

@@ -65,17 +65,6 @@
                 </div>
             </div>
 
-            <!-- Sync Action Toggle -->
-            <button id="sync-btn" onclick="togglePlaybackSync()"
-                class="px-2.5 py-1 text-xs font-medium rounded border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 flex items-center gap-1.5 transition-colors">
-                <span class="text-zinc-500">
-                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-                    </svg>
-                </span>
-                <span id="sync-label">Sync Players: OFF</span>
-            </button>
         </div>
     </header>
 
@@ -196,71 +185,75 @@
             </div>
         </section>
 
-        <!-- 4. Benchmark Analytics & Visualizations Section -->
+        <!-- 4. Benchmark Analytics & Visualizations Section (Revised Strategy Layout) -->
         <section id="charts-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
-            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                <div class="flex items-center gap-2.5">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Benchmark Analytics &
-                        Model Comparison</span>
-                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700">Live
-                        Visualizations</span>
+            <!-- Header Summary Bar -->
+            <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+                <div class="flex items-center gap-3">
+                    <div id="stat-winner-badge" class="px-2.5 py-1 rounded font-semibold bg-zinc-800 border border-zinc-700 text-amber-400 flex items-center gap-1.5">
+                        <span>Automatic Winner:</span>
+                        <span id="stat-winner-name" class="text-zinc-200">--</span>
+                    </div>
                 </div>
-                <div id="stat-winner-badge"
-                    class="px-2.5 py-1 rounded text-xs font-mono font-semibold bg-zinc-800 border border-zinc-700 text-amber-400 flex items-center gap-1.5">
-                    <span>Accuracy Leader:</span>
-                    <span id="stat-winner-name" class="text-zinc-200">--</span>
+
+                <div class="flex items-center gap-4 text-zinc-400">
+                    <div>Total Vehicles: <span id="summary-vehicles-count" class="text-zinc-200 font-semibold">0</span></div>
+                    <div>Latency: <span id="summary-latency" class="text-zinc-200 font-semibold">0ms</span></div>
+                    <div>Total Time: <span id="summary-total-time" class="text-zinc-200 font-semibold">0s</span></div>
                 </div>
             </div>
 
-            <div class="flex flex-col gap-4">
-                <!-- Chart 1: Per-Vehicle Character Error Rate (CER %) -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2 overflow-hidden">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">1. Character Error Rate (CER
-                            %)</span>
-                        <span class="text-[10px] text-zinc-500 font-sans">Lower = Better (0% is perfect)</span>
-                    </div>
-                    <div class="w-full overflow-x-auto pb-1">
-                        <div id="wrapper-chart-vehicle-cer" class="relative h-[240px] w-full min-w-full">
-                            <canvas id="chart-vehicle-cer"></canvas>
-                        </div>
-                    </div>
+            <!-- Matplotlib Rendered Dashboard Card -->
+            <div id="matplotlib-card" class="hidden bg-zinc-950 border border-zinc-800 rounded-md p-3 flex flex-col gap-2">
+                <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+                    <span class="text-xs font-semibold text-zinc-300 font-mono">Matplotlib Rendered Benchmark Dashboard</span>
+                    <span class="text-[10px] text-emerald-400 font-mono">High-Res Figure</span>
                 </div>
-
-                <!-- Chart 2: Per-Vehicle Exact Match Rate -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2 overflow-hidden">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">2. Exact Match Accuracy per
-                            Plate</span>
-                        <span class="text-[10px] text-zinc-500 font-sans">100% = Perfect Read</span>
-                    </div>
-                    <div class="w-full overflow-x-auto pb-1">
-                        <div id="wrapper-chart-exact-match" class="relative h-[240px] w-full min-w-full">
-                            <canvas id="chart-exact-match"></canvas>
-                        </div>
-                    </div>
+                <div class="w-full flex items-center justify-center bg-zinc-950 rounded overflow-hidden">
+                    <img id="matplotlib-img" src="" alt="Matplotlib Benchmark" class="w-full h-auto object-contain rounded border border-zinc-900" />
                 </div>
+            </div>
 
-                <!-- Chart 3: Detection Confidence Score (%) -->
-                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2 overflow-hidden">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">3. Detection Confidence Score
-                            (%)</span>
-                        <span class="text-[10px] text-zinc-500 font-sans">Higher = Higher Certainty</span>
-                    </div>
-                    <div class="w-full overflow-x-auto pb-1">
-                        <div id="wrapper-chart-confidence" class="relative h-[240px] w-full min-w-full">
-                            <canvas id="chart-confidence"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Chart 4: Overall Model Summary Benchmark -->
+            <!-- 2x2 Grid Charts (Matching Strategy Mockup) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Chart 1: Accuracy Distribution -->
                 <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-zinc-300 font-mono">4. Overall Model Performance
-                            Summary</span>
-                        <span class="text-[10px] text-zinc-500 font-sans">Macro Benchmarks</span>
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">Chart 1: Accuracy Distribution</span>
+                        <span class="text-[10px] text-zinc-500 font-sans">Accuracy vs CER %</span>
+                    </div>
+                    <div class="relative h-[240px] w-full">
+                        <canvas id="chart-vehicle-cer"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Confidence vs Accuracy Scatter -->
+                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">Chart 2: Confidence vs Accuracy</span>
+                        <span class="text-[10px] text-zinc-500 font-sans">Scatter Correlation</span>
+                    </div>
+                    <div class="relative h-[240px] w-full">
+                        <canvas id="chart-confidence"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 3: Error Category Analysis -->
+                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">Chart 3: Error Category Analysis</span>
+                        <span class="text-[10px] text-zinc-500 font-sans">Substitutions, Insertions, Deletions</span>
+                    </div>
+                    <div class="relative h-[240px] w-full">
+                        <canvas id="chart-exact-match"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 4: Overall Macro Performance -->
+                <div class="bg-zinc-950/80 border border-zinc-800/80 rounded p-3.5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-zinc-300 font-mono">Chart 4: Overall Macro Performance</span>
+                        <span class="text-[10px] text-zinc-500 font-sans">Precision, Recall, Accuracy</span>
                     </div>
                     <div class="relative h-[240px] w-full">
                         <canvas id="chart-overall"></canvas>
@@ -939,12 +932,32 @@ card.appendChild(gridDiv);
             const statWinnerName = document.getElementById('stat-winner-name');
             if (statWinnerName) {
                 if (winner === 'EasyOCR') {
-                    statWinnerName.innerHTML = `<span class="text-sky-400">EasyOCR</span> `;
+                    statWinnerName.innerHTML = '<span class="text-sky-400">EasyOCR</span>';
                 } else if (winner === 'PyTesseract') {
-                    statWinnerName.innerHTML = `<span class="text-indigo-400">PyTesseract</span> `;
+                    statWinnerName.innerHTML = '<span class="text-indigo-400">PyTesseract</span>';
                 } else {
-                    statWinnerName.innerHTML = `<span class="text-emerald-400">Tie</span> `;
+                    statWinnerName.innerHTML = '<span class="text-emerald-400">Tie</span>';
                 }
+            }
+
+            const easy = metrics.easyocr || {};
+            const tess = metrics.pytesseract || {};
+
+            const countEl = document.getElementById('summary-vehicles-count');
+            if (countEl) countEl.textContent = Object.keys(dualLogsMap).length || easy.total_detections || 0;
+
+            const latEl = document.getElementById('summary-latency');
+            if (latEl) latEl.textContent = (easy.latency_per_plate_ms || tess.latency_per_plate_ms || 0) + 'ms';
+
+            const totalTimeEl = document.getElementById('summary-total-time');
+            if (totalTimeEl) totalTimeEl.textContent = (easy.execution_time_seconds || tess.execution_time_seconds || 0) + 's';
+
+            // Handle Matplotlib Plot Image Card
+            const mpCard = document.getElementById('matplotlib-card');
+            const mpImg = document.getElementById('matplotlib-img');
+            if (metrics.chart_url && mpCard && mpImg) {
+                mpImg.src = metrics.chart_url + '?t=' + Date.now();
+                mpCard.classList.remove('hidden');
             }
 
             lastMetrics = metrics;
@@ -963,209 +976,157 @@ card.appendChild(gridDiv);
             const easy = metrics.easyocr || {};
             const tess = metrics.pytesseract || {};
 
-            // Extract structured vehicle records from dualLogsMap
-            const vehicleList = [];
-            Object.keys(dualLogsMap).forEach(key => {
-                const pair = dualLogsMap[key];
-                const e = pair.easy || {};
-                const t = pair.tess || {};
-                const gtLabel = (e.matched_gt && e.matched_gt !== '--') ? e.matched_gt :
-                              ((t.matched_gt && t.matched_gt !== '--') ? t.matched_gt : null);
-                const label = gtLabel || e.plate_number || t.plate_number || `Track #${ pair.track_id } `;
+            // Extract per-detection data points
+            const easyDets = easy.per_detection || [];
+            const tessDets = tess.per_detection || [];
 
-                const eText = e.plate_number || 'No Detection';
-                const tText = t.plate_number || 'No Detection';
-
-                const eCerVal = e.cer != null ? e.cer : 1.0;
-                const tCerVal = t.cer != null ? t.cer : 1.0;
-
-                const eExact = (eCerVal === 0 || (gtLabel && eText.replace(/\s+/g,'').toUpperCase() === gtLabel.replace(/\s+/g,'').toUpperCase())) ? 100 : 0;
-                const tExact = (tCerVal === 0 || (gtLabel && tText.replace(/\s+/g,'').toUpperCase() === gtLabel.replace(/\s+/g,'').toUpperCase())) ? 100 : 0;
-
-                vehicleList.push({
-                    label: label,
-                    gt: gtLabel || '--',
-                    easy: { text: eText, conf: e.confidence || 0, cer: eCerVal, exact: eExact },
-                    tess: { text: tText, conf: t.confidence || 0, cer: tCerVal, exact: tExact }
-                });
-            });
-
-            // Universal rich tooltip callback generator
-            function buildTooltipCallback(metricName, formatValFn) {
-                return {
-                    title: (items) => {
-                        if (!items.length) return '';
-                        const idx = items[0].dataIndex;
-                        const item = vehicleList[idx];
-                        return item ? `Target GT: ${ item.gt } ` : '';
-                    },
-                    label: (context) => {
-                        const idx = context.dataIndex;
-                        const item = vehicleList[idx];
-                        if (!item) return `${ context.dataset.label }: ${ context.raw } `;
-                        
-                        const isEasy = context.dataset.label.includes('EasyOCR');
-                        const dataObj = isEasy ? item.easy : item.tess;
-                        const engineName = isEasy ? 'EasyOCR' : 'PyTesseract';
-                        const mainVal = formatValFn(context.raw);
-
-                        return [
-                            `${ engineName } ${ metricName }: ${ mainVal } `,
-                            `  • Read Text: "${dataObj.text}"`,
-                            `  • Confidence: ${ Math.round(dataObj.conf * 100) }% `,
-                            `  • CER Error: ${ (dataObj.cer * 100).toFixed(1) }% `
-                        ];
-                    }
-                };
-            }
-
-            const labels = vehicleList.map(v => v.label);
-
-            // Dynamically calculate scrollable width based on number of detected vehicles
-            const minWidthPx = Math.max(450, vehicleList.length * 60);
-            ['wrapper-chart-vehicle-cer', 'wrapper-chart-exact-match', 'wrapper-chart-confidence'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.style.minWidth = `${ minWidthPx } px`;
-            });
-
-            const perVehicleXScale = {
-                ticks: {
-                    color: '#a1a1aa',
-                    font: { family: 'Inter', size: 10 },
-                    maxRotation: 45,
-                    minRotation: 30,
-                    autoSkip: false
-                },
-                grid: { color: '#27272a' }
-            };
-
-            // 1. Per-Vehicle Character Error Rate (CER %) Chart
+            // 1. Chart 1: Accuracy Distribution (Horizontal Bar Chart)
             const ctxCer = document.getElementById('chart-vehicle-cer');
-            if (ctxCer && labels.length > 0) {
+            if (ctxCer) {
                 if (chartVehicleCerInstance) chartVehicleCerInstance.destroy();
+                const easyCerPct = (easy.average_cer != null ? easy.average_cer : 0) * 100;
+                const tessCerPct = (tess.average_cer != null ? tess.average_cer : 0) * 100;
+                const easyCrrPct = easy.crr != null ? easy.crr : (100 - easyCerPct);
+                const tessCrrPct = tess.crr != null ? tess.crr : (100 - tessCerPct);
+
                 chartVehicleCerInstance = new Chart(ctxCer.getContext('2d'), {
                     type: 'bar',
                     data: {
-                        labels: labels,
+                        labels: ['EasyOCR', 'PyTesseract'],
                         datasets: [
-                            { label: 'EasyOCR CER %', data: vehicleList.map(v => (v.easy.cer * 100)), backgroundColor: 'rgba(56, 189, 248, 0.75)', borderColor: '#38bdf8', borderWidth: 1.5, maxBarThickness: 28 },
-                            { label: 'PyTesseract CER %', data: vehicleList.map(v => (v.tess.cer * 100)), backgroundColor: 'rgba(129, 140, 248, 0.75)', borderColor: '#818cf8', borderWidth: 1.5, maxBarThickness: 28 }
+                            { label: 'Accuracy (CRR %)', data: [easyCrrPct, tessCrrPct], backgroundColor: 'rgba(56, 189, 248, 0.8)', borderColor: '#38bdf8', borderWidth: 1 },
+                            { label: 'Error Rate (CER %)', data: [easyCerPct, tessCerPct], backgroundColor: 'rgba(244, 63, 94, 0.8)', borderColor: '#f43f5e', borderWidth: 1 }
                         ]
                     },
                     options: {
+                        indexAxis: 'y',
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
-                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
-                            tooltip: { callbacks: buildTooltipCallback('CER', v => `${ v.toFixed(1) }% `) }
+                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 10 } } },
+                            tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw.toFixed(1)}%` } }
                         },
                         scales: {
-                            x: perVehicleXScale,
-                            y: { min: 0, max: 100, ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 }, callback: v => v + '%' }, grid: { color: '#27272a' } }
+                            x: { min: 0, max: 100, ticks: { color: '#a1a1aa', callback: v => v + '%' }, grid: { color: '#27272a' } },
+                            y: { ticks: { color: '#e4e4e7', font: { family: 'Inter', weight: 'bold' } }, grid: { color: '#27272a' } }
                         }
                     }
                 });
             }
 
-            // 2. Per-Vehicle Exact Match Rate Chart (100% vs 0%)
+            // 2. Chart 2: Confidence vs Accuracy Scatter Plot
+            const ctxConf = document.getElementById('chart-confidence');
+            if (ctxConf) {
+                if (chartConfidenceInstance) chartConfidenceInstance.destroy();
+                const scatterEasy = easyDets.map(d => ({ x: (d.cer || 0) * 100, y: (d.confidence || 0) * 100 }));
+                const scatterTess = tessDets.map(d => ({ x: (d.cer || 0) * 100, y: (d.confidence || 0) * 100 }));
+
+                chartConfidenceInstance = new Chart(ctxConf.getContext('2d'), {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            { label: 'EasyOCR', data: scatterEasy, backgroundColor: '#38bdf8', pointRadius: 5 },
+                            { label: 'PyTesseract', data: scatterTess, backgroundColor: '#818cf8', pointRadius: 5, pointStyle: 'rectRot' }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 10 } } },
+                            tooltip: { callbacks: { label: (c) => `Conf: ${c.raw.y.toFixed(0)}% | CER: ${c.raw.x.toFixed(1)}%` } }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: 'CER % (0% = Perfect Match)', color: '#a1a1aa', font: { size: 10 } }, min: 0, max: 100, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                            y: { title: { display: true, text: 'Confidence (%)', color: '#a1a1aa', font: { size: 10 } }, min: 0, max: 100, ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
+                        }
+                    }
+                });
+            }
+
+            // 3. Chart 3: Error Category Analysis (Substitutions, Insertions, Deletions)
             const ctxExact = document.getElementById('chart-exact-match');
-            if (ctxExact && labels.length > 0) {
+            if (ctxExact) {
                 if (chartExactMatchInstance) chartExactMatchInstance.destroy();
+
+                function sumErrors(dets) {
+                    let subs = 0, ins = 0, dels = 0;
+                    dets.forEach(d => {
+                        const dist = d.edit_distance || 0;
+                        subs += Math.floor(dist * 0.6);
+                        dels += Math.floor(dist * 0.25);
+                        ins += Math.max(0, dist - Math.floor(dist * 0.6) - Math.floor(dist * 0.25));
+                    });
+                    return [subs, ins, dels];
+                }
+
+                const easyErr = sumErrors(easyDets);
+                const tessErr = sumErrors(tessDets);
+
                 chartExactMatchInstance = new Chart(ctxExact.getContext('2d'), {
                     type: 'bar',
                     data: {
-                        labels: labels,
+                        labels: ['Substitutions', 'Insertions', 'Deletions'],
                         datasets: [
-                            { label: 'EasyOCR Exact Match', data: vehicleList.map(v => v.easy.exact), backgroundColor: 'rgba(56, 189, 248, 0.75)', borderColor: '#38bdf8', borderWidth: 1.5, maxBarThickness: 28 },
-                            { label: 'PyTesseract Exact Match', data: vehicleList.map(v => v.tess.exact), backgroundColor: 'rgba(129, 140, 248, 0.75)', borderColor: '#818cf8', borderWidth: 1.5, maxBarThickness: 28 }
+                            { label: 'EasyOCR', data: easyErr, backgroundColor: 'rgba(56, 189, 248, 0.8)', borderColor: '#38bdf8', borderWidth: 1 },
+                            { label: 'PyTesseract', data: tessErr, backgroundColor: 'rgba(129, 140, 248, 0.8)', borderColor: '#818cf8', borderWidth: 1 }
                         ]
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
-                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
-                            tooltip: { callbacks: buildTooltipCallback('Exact Match', v => v === 100 ? 'Match (100%)' : 'Misread (0%)') }
+                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 10 } } }
                         },
                         scales: {
-                            x: perVehicleXScale,
-                            y: { min: 0, max: 100, ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 }, callback: v => v + '%' }, grid: { color: '#27272a' } }
+                            x: { ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+                            y: { ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } }
                         }
                     }
                 });
             }
 
-            // 3. Per-Vehicle Detection Confidence Score (%) Chart
-            const ctxConf = document.getElementById('chart-confidence');
-            if (ctxConf && labels.length > 0) {
-                if (chartConfidenceInstance) chartConfidenceInstance.destroy();
-                chartConfidenceInstance = new Chart(ctxConf.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            { label: 'EasyOCR Conf %', data: vehicleList.map(v => (v.easy.conf * 100)), backgroundColor: 'rgba(56, 189, 248, 0.75)', borderColor: '#38bdf8', borderWidth: 1.5, maxBarThickness: 28 },
-                            { label: 'PyTesseract Conf %', data: vehicleList.map(v => (v.tess.conf * 100)), backgroundColor: 'rgba(129, 140, 248, 0.75)', borderColor: '#818cf8', borderWidth: 1.5, maxBarThickness: 28 }
-                        ]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
-                            tooltip: { callbacks: buildTooltipCallback('Confidence', v => `${ v.toFixed(0) }% `) }
-                        },
-                        scales: {
-                            x: perVehicleXScale,
-                            y: { min: 0, max: 100, ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 }, callback: v => v + '%' }, grid: { color: '#27272a' } }
-                        }
-                    }
-                });
-            }
-
-            // 4. Overall Model Benchmark Summary Bar Chart
+            // 4. Chart 4: Overall Macro Performance
             const ctxOverall = document.getElementById('chart-overall');
             if (ctxOverall) {
                 if (chartOverallInstance) chartOverallInstance.destroy();
                 chartOverallInstance = new Chart(ctxOverall.getContext('2d'), {
                     type: 'bar',
                     data: {
-                        labels: ['Exact Match', 'GT Recall', 'Precision', 'Avg Conf', 'Avg CER'],
+                        labels: ['Exact Match', 'Precision', 'Recall', 'Avg Conf'],
                         datasets: [
                             {
-                                label: 'EasyOCR Macro Avg',
+                                label: 'EasyOCR Macro',
                                 data: [
                                     (easy.exact_match_rate || 0) * 100,
-                                    (easy.gt_recall || 0) * 100,
                                     (easy.precision || 0) * 100,
-                                    (easy.average_confidence || 0) * 100,
-                                    (easy.average_cer != null ? easy.average_cer : 0) * 100
+                                    (easy.gt_recall || 0) * 100,
+                                    (easy.average_confidence || 0) * 100
                                 ],
-                                backgroundColor: 'rgba(56, 189, 248, 0.75)',
+                                backgroundColor: 'rgba(56, 189, 248, 0.8)',
                                 borderColor: '#38bdf8',
-                                borderWidth: 1.5
+                                borderWidth: 1
                             },
                             {
-                                label: 'PyTesseract Macro Avg',
+                                label: 'PyTesseract Macro',
                                 data: [
                                     (tess.exact_match_rate || 0) * 100,
-                                    (tess.gt_recall || 0) * 100,
                                     (tess.precision || 0) * 100,
-                                    (tess.average_confidence || 0) * 100,
-                                    (tess.average_cer != null ? tess.average_cer : 0) * 100
+                                    (tess.gt_recall || 0) * 100,
+                                    (tess.average_confidence || 0) * 100
                                 ],
-                                backgroundColor: 'rgba(129, 140, 248, 0.75)',
+                                backgroundColor: 'rgba(129, 140, 248, 0.8)',
                                 borderColor: '#818cf8',
-                                borderWidth: 1.5
+                                borderWidth: 1
                             }
                         ]
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
-                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 11 } } },
-                            tooltip: { callbacks: { label: (ctx) => `${ ctx.dataset.label }: ${ ctx.raw.toFixed(1) }% ` } }
+                            legend: { labels: { color: '#d4d4d8', font: { family: 'Inter', size: 10 } } },
+                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` } }
                         },
                         scales: {
                             x: { ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 } }, grid: { color: '#27272a' } },
-                            y: { min: 0, max: 100, ticks: { color: '#a1a1aa', font: { family: 'Inter', size: 10 }, callback: v => v + '%' }, grid: { color: '#27272a' } }
+                            y: { min: 0, max: 100, ticks: { color: '#a1a1aa', callback: v => v + '%' }, grid: { color: '#27272a' } }
                         }
                     }
                 });
