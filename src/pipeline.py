@@ -157,7 +157,7 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
 
         # 1. Primary: Dedicated YOLO License Plate Model (models/yolo_plate/best.pt)
         if plate_model is not None:
-            plate_results = plate_model(v_crop, verbose=False, conf=0.15)
+            plate_results = plate_model(v_crop, verbose=False, conf=0.08)
             valid_plates = []
             if len(plate_results) > 0 and len(plate_results[0].boxes) > 0:
                 for pbox in plate_results[0].boxes:
@@ -190,6 +190,7 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             ly1, ly2 = int(v_h * 0.55), min(v_h, int(v_h * 0.95))
             lx1, lx2 = int(v_w * 0.15), int(v_w * 0.85)
             padded_crop = v_crop[ly1:ly2, lx1:lx2]
+            det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
 
         if padded_crop is not None and padded_crop.size > 0:
             futures.append(easyocr_pool.submit(

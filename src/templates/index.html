@@ -725,6 +725,24 @@ gridDiv.appendChild(col2);
             }
         });
 
+        function levenshteinDistance(a, b) {
+            if (a.length === 0) return b.length;
+            if (b.length === 0) return a.length;
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+                    }
+                }
+            }
+            return matrix[b.length][a.length];
+        }
+
         // ── Render Dual-Model Side-by-Side Comparison Table ─────────
         function renderDualTable() {
             const keys = Object.keys(dualLogsMap);
@@ -804,18 +822,28 @@ gridDiv.appendChild(col2);
                 if (gtNorm !== '--' && gtNorm !== '') {
                     const easyMatch = eTextNorm === gtNorm;
                     const tessMatch = tTextNorm === gtNorm;
-                    if (easyMatch && !tessMatch) {
-                        badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50";
-                        badgeSpan.textContent = "EasyOCR";
-                    } else if (tessMatch && !easyMatch) {
-                        badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50";
-                        badgeSpan.textContent = "PyTesseract";
-                    } else if (easyMatch && tessMatch) {
+                    if (easyMatch && tessMatch) {
                         badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50";
                         badgeSpan.textContent = "Match";
+                    } else if (easyMatch) {
+                        badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50";
+                        badgeSpan.textContent = "EasyOCR";
+                    } else if (tessMatch) {
+                        badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50";
+                        badgeSpan.textContent = "PyTesseract";
                     } else {
-                        badgeSpan.className = "text-zinc-600 font-mono";
-                        badgeSpan.textContent = "Misread";
+                        const easyDist = eTextNorm ? levenshteinDistance(eTextNorm, gtNorm) : 99;
+                        const tessDist = tTextNorm ? levenshteinDistance(tTextNorm, gtNorm) : 99;
+                        if (easyDist < tessDist && easyDist <= 2) {
+                            badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400/80 border border-sky-900/40";
+                            badgeSpan.textContent = `EasyOCR (${easyDist} diff)`;
+                        } else if (tessDist < easyDist && tessDist <= 2) {
+                            badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400/80 border border-indigo-900/40";
+                            badgeSpan.textContent = `PyTesseract (${tessDist} diff)`;
+                        } else {
+                            badgeSpan.className = "text-zinc-600 font-mono";
+                            badgeSpan.textContent = "Misread";
+                        }
                     }
                 } else if (easy.plate_number && !tess.plate_number) {
                     badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50";
