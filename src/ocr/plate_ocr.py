@@ -116,6 +116,26 @@ def preprocess_plate_crop(cropped_plate_img, target_width=300):
     return cv2.cvtColor(final_img, cv2.COLOR_GRAY2RGB)
 
 
+def preprocess_raw_bgr(cropped_plate_img, target_height=140):
+    """
+    High-resolution clean BGR crop with 15px border padding.
+    Preserves natural color, font edges, and subtle gradients without harsh binarization.
+    """
+    if cropped_plate_img is None or cropped_plate_img.size == 0:
+        return None
+    h, w = cropped_plate_img.shape[:2]
+    aspect = w / h
+    target_width = int(target_height * aspect)
+    resized = cv2.resize(cropped_plate_img, (target_width, target_height), interpolation=cv2.INTER_CUBIC)
+    
+    if len(resized.shape) == 3:
+        padded = cv2.copyMakeBorder(resized, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=[255, 255, 255])
+        return padded
+    else:
+        padded = cv2.copyMakeBorder(resized, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
+        return cv2.cvtColor(padded, cv2.COLOR_GRAY2BGR)
+
+
 def preprocess_for_easyocr(cropped_plate_img):
     return preprocess_plate_crop(cropped_plate_img, 300)
 
@@ -127,27 +147,14 @@ def preprocess_for_tesseract(cropped_plate_img, threshold_method="otsu"):
 def _postprocess_ocr_text(combined_text, avg_conf):
     """
     Validates the OCR string format and scales confidence values.
-    Supports relaxed fallback to prevent dropping valid detections to empty strings.
     """
     compact = PLATE_CHAR_PATTERN.sub('', combined_text.strip().upper())
     if len(compact) < MIN_PLATE_LENGTH or len(compact) > MAX_PLATE_LENGTH:
         return '', 0.0
 
     adjusted_conf = max(0.01, avg_conf * min(1.0, len(compact) / 7.0)) if compact else 0.0
-    # 2. Trim single artifact character at start or end
-    if len(clean_no_spaces) >= 4:
-        trimmed_start = clean_no_spaces[1:]
-        if MALAYSIAN_PLATE_REGEX.match(trimmed_start):
-            return _fix_plate_format(trimmed_start), min(1.0, adjusted_conf * 1.10)
-        trimmed_end = clean_no_spaces[:-1]
-        if MALAYSIAN_PLATE_REGEX.match(trimmed_end):
-            return _fix_plate_format(trimmed_end), min(1.0, adjusted_conf * 1.10)
-
-    # 3. Fallback: Accept cleaned alphanumeric string if 3-9 chars long
-    if 3 <= len(clean_no_spaces) <= 9:
-        return text, max(0.25, adjusted_conf * 0.85)
-
-    return '', 0.0
+    formatted = _fix_plate_format(compact)
+    return formatted, adjusted_conf
 
 def _run_pytesseract_raw(processed):
     """
