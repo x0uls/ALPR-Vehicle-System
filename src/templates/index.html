@@ -185,6 +185,39 @@
             </div>
         </section>
 
+        <!-- Discarded Images Section -->
+        <section id="discarded-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-4 hidden">
+            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">Discarded Images Summary</span>
+                    <span id="discarded-badge" class="text-[10px] px-2 py-0.5 rounded bg-amber-950/60 text-amber-300 font-mono border border-amber-800/50">0 Discarded</span>
+                </div>
+                <button id="toggle-discarded-btn" onclick="toggleDiscardedList()" class="text-xs text-zinc-400 hover:text-zinc-200 underline font-mono">Show Details →</button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+                <div class="bg-zinc-950 border border-zinc-800 rounded p-3 flex flex-col gap-1">
+                    <span class="text-[10px] text-zinc-400 uppercase tracking-wider">Total Discarded</span>
+                    <span id="discarded-total-val" class="text-base font-bold text-amber-400">0</span>
+                </div>
+                <div class="bg-zinc-950 border border-zinc-800 rounded p-3 flex flex-col gap-1">
+                    <span class="text-[10px] text-zinc-400 uppercase tracking-wider">No Car Detected</span>
+                    <span id="discarded-nocar-val" class="text-base font-bold text-rose-400">0</span>
+                </div>
+                <div class="bg-zinc-950 border border-zinc-800 rounded p-3 flex flex-col gap-1">
+                    <span class="text-[10px] text-zinc-400 uppercase tracking-wider">No Plate Detected</span>
+                    <span id="discarded-noplate-val" class="text-base font-bold text-orange-400">0</span>
+                </div>
+            </div>
+
+            <!-- Expandable List of Discarded Files -->
+            <div id="discarded-list-container" class="hidden bg-zinc-950 border border-zinc-800/80 rounded p-3 flex flex-col gap-2 max-h-[250px] overflow-y-auto font-mono text-xs">
+                <div class="text-[10px] text-zinc-500 uppercase tracking-wider pb-1 border-b border-zinc-900">Discarded File Breakdown</div>
+                <div id="discarded-files-list" class="divide-y divide-zinc-900 flex flex-col">
+                </div>
+            </div>
+        </section>
+
         <!-- 4. Benchmark Analytics & Visualizations Section (Revised Strategy Layout) -->
         <section id="charts-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
             <!-- Header Summary Bar -->
@@ -198,6 +231,7 @@
 
                 <div class="flex items-center gap-4 text-zinc-400">
                     <div>Total Vehicles: <span id="summary-vehicles-count" class="text-zinc-200 font-semibold">0</span></div>
+                    <div>Discarded: <span id="summary-discarded-count" class="text-amber-400 font-semibold">0</span></div>
                     <div>Latency: <span id="summary-latency" class="text-zinc-200 font-semibold">0ms</span></div>
                     <div>Total Time: <span id="summary-total-time" class="text-zinc-200 font-semibold">0s</span></div>
                 </div>
@@ -550,6 +584,7 @@
                     uploadZone.classList.add('hidden');
                     imageResultsContainer.innerHTML = '';
                     imageResultsContainer.classList.remove('hidden');
+                    renderDiscardedStats(null);
 
                     progressBox.classList.remove('opacity-60');
                     processBtn.disabled = true;
@@ -696,6 +731,10 @@ gridDiv.appendChild(col2);
                                     });
                                 });
                             });
+                        }
+
+                        if (data.discarded_stats) {
+                            renderDiscardedStats(data.discarded_stats);
                         }
 
                         if (data.metrics) {
@@ -960,6 +999,73 @@ gridDiv.appendChild(col2);
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeDetailModal();
         });
+
+        // ── Render Discarded Images Summary UI ───────────────────────
+        function renderDiscardedStats(discardedStats) {
+            const section = document.getElementById('discarded-section');
+            if (!discardedStats || !discardedStats.total_discarded || discardedStats.total_discarded === 0) {
+                if (section) section.classList.add('hidden');
+                const countEl = document.getElementById('summary-discarded-count');
+                if (countEl) countEl.textContent = '0';
+                return;
+            }
+
+            if (section) section.classList.remove('hidden');
+
+            const total = discardedStats.total_discarded || 0;
+            const noCar = discardedStats.no_vehicle_count || 0;
+            const noPlate = discardedStats.no_plate_count || 0;
+            const files = discardedStats.discarded_files || [];
+
+            document.getElementById('discarded-badge').textContent = `${total} Discarded Image${total === 1 ? '' : 's'}`;
+            document.getElementById('discarded-total-val').textContent = total;
+            document.getElementById('discarded-nocar-val').textContent = noCar;
+            document.getElementById('discarded-noplate-val').textContent = noPlate;
+
+            const summaryCount = document.getElementById('summary-discarded-count');
+            if (summaryCount) summaryCount.textContent = total;
+
+            const listEl = document.getElementById('discarded-files-list');
+            if (listEl) {
+                listEl.innerHTML = '';
+                files.forEach(f => {
+                    const row = document.createElement('div');
+                    row.className = 'py-1.5 flex items-center justify-between text-xs';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'text-zinc-300 truncate max-w-[300px]';
+                    nameSpan.title = f.filename;
+                    nameSpan.textContent = f.filename;
+
+                    const reasonBadge = document.createElement('span');
+                    if (f.reason === 'No car detected') {
+                        reasonBadge.className = 'px-2 py-0.5 rounded text-[10px] bg-rose-950/60 text-rose-300 border border-rose-800/50 font-sans font-semibold';
+                        reasonBadge.textContent = 'No Car Detected';
+                    } else {
+                        reasonBadge.className = 'px-2 py-0.5 rounded text-[10px] bg-orange-950/60 text-orange-300 border border-orange-800/50 font-sans font-semibold';
+                        reasonBadge.textContent = 'No Plate Detected';
+                    }
+
+                    row.appendChild(nameSpan);
+                    row.appendChild(reasonBadge);
+                    listEl.appendChild(row);
+                });
+            }
+        }
+
+        function toggleDiscardedList() {
+            const listContainer = document.getElementById('discarded-list-container');
+            const toggleBtn = document.getElementById('toggle-discarded-btn');
+            if (!listContainer) return;
+
+            if (listContainer.classList.contains('hidden')) {
+                listContainer.classList.remove('hidden');
+                if (toggleBtn) toggleBtn.textContent = 'Hide Details ↑';
+            } else {
+                listContainer.classList.add('hidden');
+                if (toggleBtn) toggleBtn.textContent = 'Show Details →';
+            }
+        }
 
         // ── Update Ground Truth Comparison Metric Header Cards ───────
         function updateMetricsCards(metrics) {

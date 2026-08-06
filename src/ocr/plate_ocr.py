@@ -80,68 +80,66 @@ def _fix_plate_format(text):
     return corrected_text
 
 
-def preprocess_plate_crop(cropped_plate_img, target_width=300):
+def preprocess_for_tesseract(cropped_plate_img):
     """
-    Minimal & Clean Plate Preprocessing Pipeline:
-    1. Resize while preserving aspect ratio (300px target width).
-    2. Convert to Grayscale.
-    3. CLAHE Contrast Boost.
-    4. Otsu Binarization (optimal global text threshold).
-    5. Black text on white background normalization.
-    6. Morphological Opening (remove small black noise specks).
-    7. White margin padding (15px border).
+    Bulletproof PyTesseract Strategy: Auto-Invert Binarization
+    1. Convert to Grayscale & Gaussian Blur.
+    2. Otsu's Thresholding (pure black and white binarization).
+    3. Auto-Invert Trick: Count black vs white pixels. If black > white (dark plate with light text),
+       use cv2.bitwise_not() so PyTesseract always receives black-text-on-white-background.
+    4. White margin padding (15px border).
     """
     if cropped_plate_img is None or cropped_plate_img.size == 0:
         return None
 
-    resized = _resize_keep_aspect(cropped_plate_img, target_width, "width")
-    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY) if len(resized.shape) == 3 else resized
+    gray = cv2.cvtColor(cropped_plate_img, cv2.COLOR_BGR2GRAY) if len(cropped_plate_img.shape) == 3 else cropped_plate_img.copy()
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
     
-    # CLAHE contrast enhancement
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    # Otsu's Thresholding
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     
-    # Otsu Binarization: automatically computes optimal threshold for character separation
-    _, binary = cv2.threshold(clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    
-    # Normalize to black text on white background
-    if np.mean(binary) < 127:
+    # Auto-Invert Trick: Count white vs black pixels
+    black_pixels = np.sum(binary == 0)
+    white_pixels = np.sum(binary == 255)
+    if black_pixels > white_pixels:
         binary = cv2.bitwise_not(binary)
-    
-    # Morphological Opening (2x2 kernel) to remove small noise specks
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
-    
-    # 15px white margin padding
-    final_img = cv2.copyMakeBorder(binary, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
-    return cv2.cvtColor(final_img, cv2.COLOR_GRAY2RGB)
-
-
-def preprocess_raw_bgr(cropped_plate_img, target_height=140):
-    """
-    High-resolution clean BGR crop with 15px border padding.
-    Preserves natural color, font edges, and subtle gradients without harsh binarization.
-    """
-    if cropped_plate_img is None or cropped_plate_img.size == 0:
-        return None
-    h, w = cropped_plate_img.shape[:2]
-    aspect = w / h
-    target_width = int(target_height * aspect)
-    resized = cv2.resize(cropped_plate_img, (target_width, target_height), interpolation=cv2.INTER_CUBIC)
-    
-    if len(resized.shape) == 3:
-        padded = cv2.copyMakeBorder(resized, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=[255, 255, 255])
-        return padded
-    else:
-        padded = cv2.copyMakeBorder(resized, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
-        return cv2.cvtColor(padded, cv2.COLOR_GRAY2BGR)
+        
+    # White margin padding (15px)
+    padded = cv2.copyMakeBorder(binary, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
+    return cv2.cvtColor(padded, cv2.COLOR_GRAY2RGB)
 
 
 def preprocess_for_easyocr(cropped_plate_img):
-    return preprocess_plate_crop(cropped_plate_img, 300)
+    """
+    EasyOCR Strategy: Do Not Binarize!
+    Preserves soft grayscale edges/gradients for CNN feature extraction.
+    1. Convert to Grayscale.
+    2. Mild Bilateral Filter (removes noise while keeping letter edges sharp).
+    3. CLAHE (fixes day shadows, sun glare, and night lighting).
+    4. Upscale by 2x using cubic interpolation.
+    5. White margin padding (15px border).
+    """
+    if cropped_plate_img is None or cropped_plate_img.size == 0:
+        return None
+
+    gray = cv2.cvtColor(cropped_plate_img, cv2.COLOR_BGR2GRAY) if len(cropped_plate_img.shape) == 3 else cropped_plate_img.copy()
+    
+    # Mild Bilateral Filter
+    filtered = cv2.bilateralFilter(gray, d=5, sigmaColor=75, sigmaSpace=75)
+    
+    # CLAHE contrast enhancement
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(filtered)
+    
+    # Upscale by 2x
+    upscaled = cv2.resize(clahe, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+    
+    # White margin padding (15px)
+    padded = cv2.copyMakeBorder(upscaled, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
+    return cv2.cvtColor(padded, cv2.COLOR_GRAY2RGB)
 
 
-def preprocess_for_tesseract(cropped_plate_img, threshold_method="otsu"):
-    return preprocess_plate_crop(cropped_plate_img, 300)
+def preprocess_plate_crop(cropped_plate_img, target_width=300):
+    return preprocess_for_tesseract(cropped_plate_img)
 
 
 def _postprocess_ocr_text(combined_text, avg_conf):
@@ -226,35 +224,30 @@ def _run_ocr(processed, engine_name):
 
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """
-    Minimal Dual-Pass OCR Engine:
-    Pass 1: Clean high-res BGR crop (natural font edges).
-    Pass 2: Minimal Otsu-binarized crop (CLAHE + Otsu + 15px border padding).
+    Dedicated Preprocessing OCR Dispatcher:
+    - PyTesseract: Auto-Invert Binarization (Otsu + pixel count auto-invert to ensure black text on white bg).
+    - EasyOCR: Non-binarized pipeline (Grayscale + Bilateral Filter + CLAHE + 2x Upscale).
     """
     if cropped_plate_img is None or cropped_plate_img.size == 0:
         return '', 0.0, engine_name, None
 
-    candidates = []
-    prep_img = preprocess_plate_crop(cropped_plate_img)
+    if engine_name == "PyTesseract":
+        prep_img = preprocess_for_tesseract(cropped_plate_img)
+    else:
+        prep_img = preprocess_for_easyocr(cropped_plate_img)
 
-    # Pass 1: Raw high-resolution BGR crop
+    if prep_img is None:
+        return '', 0.0, engine_name, None
+
+    text, conf = _run_ocr(prep_img, engine_name)
+    if text and conf >= 0.50:
+        return text, conf, engine_name, prep_img
+
+    # Fallback to raw BGR crop if primary prep was uncertain
     raw_img = preprocess_raw_bgr(cropped_plate_img)
     if raw_img is not None:
-        text, conf = _run_ocr(raw_img, engine_name)
-        if text and conf >= 0.60:
-            return text, conf, engine_name, prep_img if prep_img is not None else raw_img
-        if text:
-            candidates.append((text, conf, prep_img if prep_img is not None else raw_img))
+        raw_text, raw_conf = _run_ocr(raw_img, engine_name)
+        if raw_conf > conf and raw_text:
+            return raw_text, raw_conf, engine_name, raw_img
 
-    # Pass 2: Minimal Otsu-binarized crop
-    if prep_img is not None:
-        text, conf = _run_ocr(prep_img, engine_name)
-        if text and conf >= 0.60:
-            return text, conf, engine_name, prep_img
-        if text:
-            candidates.append((text, conf, prep_img))
-
-    if candidates:
-        best = max(candidates, key=lambda x: x[1])
-        return best[0], best[1], engine_name, best[2]
-
-    return '', 0.0, engine_name, prep_img if prep_img is not None else raw_img
+    return text, conf, engine_name, prep_img

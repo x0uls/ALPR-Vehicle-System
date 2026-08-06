@@ -83,10 +83,12 @@ def _draw_overlay(frame, bbox, vehicle_type, color, plate_text, conf, local_plat
 def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
     """
     Processes a bulk list of static images.
-    Returns a list of dicts with detections per image, and saves annotated versions.
+    Discards images where no vehicle or license plate is detected by YOLO.
+    Returns a dict with 'results' (valid detections) and 'discarded_stats'.
     """
     frames = []
-    for path in image_paths:
+    valid_path_indices = []
+    for idx, path in enumerate(image_paths):
         img = cv2.imread(path)
         if img is None:
             continue
@@ -95,23 +97,34 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             scale = 1920 / float(img.shape[1])
             img = cv2.resize(img, (1920, int(img.shape[0] * scale)))
         frames.append(img)
+        valid_path_indices.append(idx)
 
     if not frames:
-        return []
+        return {
+            "results": [],
+            "discarded_stats": {
+                "total_discarded": 0,
+                "no_vehicle_count": 0,
+                "no_plate_count": 0,
+                "discarded_files": []
+            }
+        }
 
     # Create output directories once before processing
     for d in ["outputs/plate_crops/Processed", "outputs/snapshots", "outputs/annotated"]:
         os.makedirs(d, exist_ok=True)
+
     # Detect Vehicles in batch
     batch_vehicle_results = vehicle_model(frames, verbose=False, conf=MIN_VEHICLE_CONFIDENCE)
 
     futures = []
-    # img_id -> list of detection dicts (one per vehicle)
     detections_by_image = {i: [] for i in range(len(frames))}
+    discarded_files = []
     
     det_counter = 1
 
     for img_id, (frame, vehicle_results) in enumerate(zip(frames, batch_vehicle_results)):
+        out_filename = os.path.basename(image_paths[valid_path_indices[img_id]])
         candidate_vehicles = []
 
         # Collect all detected vehicles in this frame
@@ -137,9 +150,13 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             })
 
         if not candidate_vehicles:
+            discarded_files.append({
+                "filename": out_filename,
+                "reason": "No car detected"
+            })
             continue
 
-        # SELECT ONLY THE SINGLE LARGEST VEHICLE BY AREA (takes up majority of screen)
+        # SELECT ONLY THE SINGLE LARGEST VEHICLE BY AREA
         main_vehicle = max(candidate_vehicles, key=lambda v: v["area"])
         det_info = {
             "det_id": det_counter,
@@ -149,13 +166,12 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             "v_crop": main_vehicle["v_crop"],
             "local_plate_bbox": None
         }
-        det_counter += 1
         v_crop = det_info["v_crop"]
         v_h, v_w = v_crop.shape[:2]
 
         padded_crop = None
 
-        # 1. Primary: Dedicated YOLO License Plate Model (models/yolo_plate/best.pt)
+        # Dedicated YOLO License Plate Model (models/yolo_plate/best.pt)
         if plate_model is not None:
             plate_results = plate_model(v_crop, verbose=False, conf=0.08)
             valid_plates = []
@@ -167,7 +183,7 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
                     ph = py2 - py1
                     py_center = (py1 + py2) / 2.0
                     
-                    # Ignore boxes in upper 35% of vehicle (prevents false positives like PENANG MOVERS at top of trucks)
+                    # Ignore boxes in upper 35% of vehicle
                     if py_center < 0.35 * v_h:
                         continue
                     if pw > 10 and ph > 5:
@@ -178,27 +194,29 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
                 lx1, ly1, lx2, ly2, _ = best_p
                 det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
                 
-                # Proportional padding (10% horizontal, 18% vertical, min 12px) from rehaul branch
+                # Proportional padding
                 px = max(12, int((lx2 - lx1) * 0.10))
                 py = max(10, int((ly2 - ly1) * 0.18))
                 px1, py1 = max(0, lx1 - px), max(0, ly1 - py)
                 px2, py2 = min(v_w, lx2 + px), min(v_h, ly2 + py)
                 padded_crop = v_crop[py1:py2, px1:px2]
 
-        # 2. Fallback: Lower 40% bumper region if no bounding box detected
+        # If no valid plate box was detected by YOLO, discard the image (no fallback to dummy crop)
         if padded_crop is None or padded_crop.size == 0:
-            ly1, ly2 = int(v_h * 0.55), min(v_h, int(v_h * 0.95))
-            lx1, lx2 = int(v_w * 0.15), int(v_w * 0.85)
-            padded_crop = v_crop[ly1:ly2, lx1:lx2]
-            det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
+            discarded_files.append({
+                "filename": out_filename,
+                "reason": "No plate detected"
+            })
+            continue
 
-        if padded_crop is not None and padded_crop.size > 0:
-            futures.append(easyocr_pool.submit(
-                _ocr_worker, padded_crop.copy(), v_crop.copy(), "EasyOCR", img_id, det_info["det_id"]
-            ))
-            futures.append(pytesseract_pool.submit(
-                _ocr_worker, padded_crop.copy(), v_crop.copy(), "PyTesseract", img_id, det_info["det_id"]
-            ))
+        det_counter += 1
+
+        futures.append(easyocr_pool.submit(
+            _ocr_worker, padded_crop.copy(), v_crop.copy(), "EasyOCR", img_id, det_info["det_id"]
+        ))
+        futures.append(pytesseract_pool.submit(
+            _ocr_worker, padded_crop.copy(), v_crop.copy(), "PyTesseract", img_id, det_info["det_id"]
+        ))
 
         detections_by_image[img_id].append(det_info)
 
@@ -206,7 +224,6 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
     ocr_results = [f.result() for f in futures]
 
     # Map OCR results back to detections
-    # Det ID -> { "EasyOCR": res, "PyTesseract": res }
     ocr_by_det = {}
     for res in ocr_results:
         did = res["det_id"]
@@ -214,11 +231,13 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             ocr_by_det[did] = {}
         ocr_by_det[did][res["engine"]] = res
 
-    # Annotate and save images, structure final output
-    
+    # Annotate and save images, structure final output ONLY for images with valid detections
     final_output = []
 
     for img_id, frame in enumerate(frames):
+        if not detections_by_image[img_id]:
+            continue
+
         frame_easy = frame.copy()
         frame_tess = frame.copy()
 
@@ -234,7 +253,7 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             _draw_overlay(frame_tess, det_info["bbox"], det_info["vehicle_type"], det_info["color"], 
                           tess_res.get("plate_text"), tess_res.get("conf", 0.0), det_info["local_plate_bbox"], "PyTesseract")
 
-            # Log to CSV (optional, matching old behavior)
+            # Log to CSV
             if easy_res.get("plate_text"):
                 log_detection(did, det_info["vehicle_type"], det_info["color"], easy_res.get("plate_text"), 
                               easy_res.get("conf", 0.0), easy_res.get("snapshot_path"), easy_res.get("processed_crop_path"), log_path="outputs/logs/detections_easyocr.csv")
@@ -260,7 +279,7 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
                 }
             })
 
-        out_name = os.path.basename(image_paths[img_id])
+        out_name = os.path.basename(image_paths[valid_path_indices[img_id]])
         easy_path = f"outputs/annotated/easy_{out_name}"
         tess_path = f"outputs/annotated/tess_{out_name}"
         cv2.imwrite(easy_path, frame_easy)
@@ -276,4 +295,17 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
     # Flush all CSV logs in a single batch write
     flush_all_logs()
 
-    return final_output
+    no_vehicle_count = sum(1 for d in discarded_files if d["reason"] == "No car detected")
+    no_plate_count = sum(1 for d in discarded_files if d["reason"] == "No plate detected")
+
+    discarded_stats = {
+        "total_discarded": len(discarded_files),
+        "no_vehicle_count": no_vehicle_count,
+        "no_plate_count": no_plate_count,
+        "discarded_files": discarded_files
+    }
+
+    return {
+        "results": final_output,
+        "discarded_stats": discarded_stats
+    }

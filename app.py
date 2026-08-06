@@ -172,8 +172,15 @@ async def process_images_api(files: List[UploadFile] = File(...)):
             return JSONResponse({"error": error_msg}, status_code=400)
         
         start_time = time.time()
-        results = process_bulk_images(image_paths, easyocr_pool, pytesseract_pool)
+        pipeline_out = process_bulk_images(image_paths, easyocr_pool, pytesseract_pool)
         final_elapsed = time.time() - start_time
+        
+        if isinstance(pipeline_out, dict):
+            results = pipeline_out.get("results", [])
+            discarded_stats = pipeline_out.get("discarded_stats", {})
+        else:
+            results = pipeline_out
+            discarded_stats = {"total_discarded": 0, "no_vehicle_count": 0, "no_plate_count": 0, "discarded_files": []}
         
         if not gt_plates:
             gt_plates = load_ground_truth()
@@ -206,6 +213,7 @@ async def process_images_api(files: List[UploadFile] = File(...)):
         return JSONResponse({
             "status": "success",
             "results": results,
+            "discarded_stats": discarded_stats,
             "gt_mapping": gt_mapping,
             "metrics": comparison_metrics,
             "gt_count": len(gt_plates),
@@ -319,8 +327,15 @@ async def benchmark_api(files: List[UploadFile] = File(...)):
 
         # Run the full pipeline
         start_time = time.time()
-        results = process_bulk_images(image_paths, easyocr_pool, pytesseract_pool)
+        pipeline_out = process_bulk_images(image_paths, easyocr_pool, pytesseract_pool)
         total_elapsed = time.time() - start_time
+
+        if isinstance(pipeline_out, dict):
+            results = pipeline_out.get("results", [])
+            discarded_stats = pipeline_out.get("discarded_stats", {})
+        else:
+            results = pipeline_out
+            discarded_stats = {"total_discarded": 0, "no_vehicle_count": 0, "no_plate_count": 0, "discarded_files": []}
 
         easy_csv = "outputs/logs/detections_easyocr.csv"
         tess_csv = "outputs/logs/detections_pytesseract.csv"
@@ -361,11 +376,14 @@ async def benchmark_api(files: List[UploadFile] = File(...)):
             "status": "success",
             "summary": {
                 "total_images": len(image_paths),
+                "processed_images": len(results),
+                "discarded_images": discarded_stats.get("total_discarded", 0),
                 "ground_truth_plates": len(gt_plates),
                 "total_detections_easyocr": len(easy_dets),
                 "total_detections_pytesseract": len(tess_dets),
                 "elapsed": _format_elapsed(total_elapsed)
             },
+            "discarded_stats": discarded_stats,
             "easyocr": comparison.get("easyocr", {}),
             "pytesseract": comparison.get("pytesseract", {}),
             "winner": comparison.get("winner", "Tie"),
