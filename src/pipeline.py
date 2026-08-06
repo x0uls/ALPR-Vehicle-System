@@ -1,6 +1,7 @@
 import os
 os.environ["OMP_THREAD_LIMIT"] = "1"
 import cv2
+import numpy as np
 import torch
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
@@ -33,7 +34,20 @@ def _is_valid_plate_crop(crop):
         return False
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if len(crop.shape) == 3 else crop
     sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
-    adaptive_thresh = max(30.0, min(50.0 * (crop.shape[0] * crop.shape[1] / 3000.0), 200.0))
+    # Brightness-adaptive sharpness threshold: dark images naturally have
+    # lower Laplacian variance, so we lower the bar to avoid rejecting
+    # valid night / shadow crops that the OCR can still read.
+    mean_brightness = float(np.mean(gray))
+    area = crop.shape[0] * crop.shape[1]
+    base_thresh = max(30.0, min(50.0 * (area / 3000.0), 200.0))
+    if mean_brightness < 60:
+        # Very dark: cut threshold to 30% of normal
+        adaptive_thresh = base_thresh * 0.3
+    elif mean_brightness < 100:
+        # Dim: cut threshold to 50% of normal
+        adaptive_thresh = base_thresh * 0.5
+    else:
+        adaptive_thresh = base_thresh
     return sharpness >= adaptive_thresh
 
 
@@ -194,11 +208,23 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
                 lx1, ly1, lx2, ly2, _ = best_p
                 det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
                 
-                # Proportional padding
-                px = max(12, int((lx2 - lx1) * 0.10))
-                py = max(10, int((ly2 - ly1) * 0.18))
-                px1, py1 = max(0, lx1 - px), max(0, ly1 - py)
-                px2, py2 = min(v_w, lx2 + px), min(v_h, ly2 + py)
+                # Phase 0: Bounding Box Expansion (+10px every direction)
+                # Deep learning OCR models need spatial context (empty padding)
+                # around characters to recognize structural shapes — chopping off
+                # margins destroys the model's spatial awareness.
+                expand = 10
+                lx1_exp = max(0, lx1 - expand)
+                ly1_exp = max(0, ly1 - expand)
+                lx2_exp = min(v_w, lx2 + expand)
+                ly2_exp = min(v_h, ly2 + expand)
+                
+                # Additional proportional padding on top of the 10px expansion
+                pw = lx2_exp - lx1_exp
+                ph = ly2_exp - ly1_exp
+                px = max(5, int(pw * 0.10))
+                py = max(4, int(ph * 0.15))
+                px1, py1 = max(0, lx1_exp - px), max(0, ly1_exp - py)
+                px2, py2 = min(v_w, lx2_exp + px), min(v_h, ly2_exp + py)
                 padded_crop = v_crop[py1:py2, px1:px2]
 
         # If no valid plate box was detected by YOLO, discard the image (no fallback to dummy crop)
