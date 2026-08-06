@@ -26,16 +26,13 @@ MALAYSIAN_PLATE_REGEX = re.compile(
     r'^(' + '|'.join(SPECIAL_PLATE_PREFIXES) + r'|[A-Z]{1,3})\s?\d{1,4}(\s?[A-Z])?$'
 )
 
-_TESS_CONFIG = "--psm 7 --oem 1"
-
 
 def _fix_plate_format(text):
     """
-    High-accuracy format correction for Malaysian license plates:
-    - Strips non-alphanumeric noise.
-    - Corrects common OCR prefix misreads (MOG->WOG, BMJ->BNJ, HYG->WYG, KR->WTR, HE->HWE, etc).
-    - Enforces first-character letter rule.
-    - Corrects digit/letter confusion inside the number block.
+    General structural format corrector for Malaysian license plates:
+    - Enforces letter conversions in prefix region (first 1-3 chars).
+    - Enforces digit conversions in number region (middle digit block).
+    - Inserts a single space between letter prefix and digit block.
     """
     compact = PLATE_CHAR_PATTERN.sub('', text.strip().upper()).replace(' ', '')
     if len(compact) < MIN_PLATE_LENGTH:
@@ -44,36 +41,8 @@ def _fix_plate_format(text):
     d2l = str.maketrans('01258', 'OIZSB')
     l2d = str.maketrans('OIZSB', '01258')
 
-    # Common OCR prefix hallucination fixes for Malaysian plates
-    if compact.startswith(("MOG", "NOG", "KOG")):
-        compact = "WOG" + compact[3:]
-    elif compact.startswith("BMJ"):
-        compact = "BNJ" + compact[3:]
-    elif compact.startswith("HYG"):
-        compact = "WYG" + compact[3:]
-    elif compact.startswith("KR80"):
-        compact = "WTR80" + compact[5:]
-    elif compact.startswith("HE84"):
-        compact = "HWE84" + compact[4:]
-    elif compact.startswith(("NC", "ND", "MC")):
-        compact = "W" + compact[2:]
-    elif compact.startswith(("MIIR", "MIR")):
-        compact = "WTR" + compact[len("MIIR") if compact.startswith("MIIR") else len("MIR"):]
-    elif compact.startswith("ROS"):
-        compact = "WOS" + compact[3:]
-    elif compact.startswith("IC") and len(compact) >= 5 and compact[2].isalpha():
-        compact = "WC" + compact[2:]
-    elif compact.startswith("UF"):
-        compact = "V" + compact[1:]
-    elif compact.startswith("NGO"):
-        compact = "VGQ" + compact[3:]
-    elif compact.startswith("OTX"):
-        compact = "QTX" + compact[3:]
-    elif compact.startswith("JIH"):
-        compact = "JTH" + compact[3:]
-
     chars = list(compact)
-    # First character of Malaysian plates is ALWAYS a letter
+    # First character is ALWAYS a letter in Malaysian plates
     if chars[0].isdigit():
         chars[0] = chars[0].translate(d2l)
 
@@ -87,16 +56,13 @@ def _fix_plate_format(text):
                     chars[i] = chars[i].translate(d2l)
             elif i <= last_dig:
                 if chars[i].isalpha():
-                    if chars[i] == 'J':
-                        chars[i] = '7'
-                    else:
-                        chars[i] = chars[i].translate(l2d)
+                    chars[i] = '7' if chars[i] == 'J' else chars[i].translate(l2d)
             else:
                 if chars[i].isdigit():
                     chars[i] = chars[i].translate(d2l)
 
     result = "".join(chars)
-    # Format with standard space separating prefix letters from number block
+    # Space separation between letter prefix and digit block
     for i in range(1, len(result)):
         if result[i-1].isalpha() and result[i].isdigit():
             return result[:i] + ' ' + result[i:]
@@ -105,7 +71,7 @@ def _fix_plate_format(text):
 
 # ─── Preprocessing Strategies ────────────────────────────────────
 
-def _add_white_padding(img, pad=10):
+def _add_white_padding(img, pad=15):
     """Adds white margin padding around crop for spatial OCR awareness."""
     return cv2.copyMakeBorder(img, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=(255, 255, 255) if len(img.shape)==3 else 255)
 
@@ -127,16 +93,44 @@ def _preprocess_clahe_light(crop):
     return cv2.cvtColor(padded, cv2.COLOR_GRAY2RGB)
 
 
-def _preprocess_tesseract_adaptive(crop):
-    """2x Bicubic Upscale + Adaptive Thresholding + 15px White Padding."""
+def _preprocess_tesseract_shaved_binarized(crop):
+    """
+    Shaves 6% plastic border frame, 3x Bicubic Upscale + Otsu Binarization + Inversion.
+    Strips plastic plate frames that cause Tesseract hallucinations.
+    """
     h, w = crop.shape[:2]
-    up = cv2.resize(crop, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+    shave_h, shave_w = int(h * 0.06), int(w * 0.06)
+    if shave_h > 0 and shave_w > 0:
+        crop = crop[shave_h:h-shave_h, shave_w:w-shave_w]
+
+    h, w = crop.shape[:2]
+    up = cv2.resize(crop, (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
     gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY) if len(up.shape) == 3 else up
     blur = cv2.GaussianBlur(gray, (3, 3), 0)
-    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 13, 3)
-    if np.median(thresh) < 127:
+    _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    # Invert to Black text on White background for Tesseract engine
+    if np.mean(thresh) < 127:
         thresh = cv2.bitwise_not(thresh)
     padded = _add_white_padding(thresh, pad=15)
+    return cv2.cvtColor(padded, cv2.COLOR_GRAY2RGB)
+
+
+def _preprocess_tesseract_shaved_gray(crop):
+    """
+    Shaves 6% plastic border frame, 3x Bicubic Upscale + Grayscale Inversion.
+    """
+    h, w = crop.shape[:2]
+    shave_h, shave_w = int(h * 0.06), int(w * 0.06)
+    if shave_h > 0 and shave_w > 0:
+        crop = crop[shave_h:h-shave_h, shave_w:w-shave_w]
+
+    h, w = crop.shape[:2]
+    up = cv2.resize(crop, (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
+    gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY) if len(up.shape) == 3 else up
+    if np.mean(gray) < 127:
+        gray = cv2.bitwise_not(gray)
+    padded = _add_white_padding(gray, pad=15)
     return cv2.cvtColor(padded, cv2.COLOR_GRAY2RGB)
 
 
@@ -151,22 +145,35 @@ def _postprocess_ocr_text(combined_text, avg_conf):
 
 
 def _run_pytesseract_raw(processed):
-    try:
-        data = pytesseract.image_to_data(processed, config=_TESS_CONFIG, output_type=pytesseract.Output.DICT)
-        words, confs = [], []
-        for word, conf in zip(data.get('text', []), data.get('conf', [])):
-            cleaned = PLATE_CHAR_PATTERN.sub('', str(word).strip().upper())
-            if cleaned:
-                try: val = int(float(conf))
-                except (ValueError, TypeError): val = -1
-                words.append(cleaned)
-                confs.append(50 if val == -1 else val)
-        combined = "".join(words)
-        avg_conf = (float(np.mean(confs)) / 100.0) if confs else 0.0
-        return combined, avg_conf
-    except Exception as e:
-        print(f"[PyTesseract WARN] {e}")
-        return '', 0.0
+    """
+    Runs PyTesseract across PSM 7 (single line) and PSM 6 (block text) modes,
+    returning the highest quality detection candidate.
+    """
+    best_text = ""
+    best_conf = 0.0
+
+    for config_str in ["--psm 7 --oem 1", "--psm 6 --oem 1"]:
+        try:
+            data = pytesseract.image_to_data(processed, config=config_str, output_type=pytesseract.Output.DICT)
+            words, confs = [], []
+            for word, conf in zip(data.get('text', []), data.get('conf', [])):
+                cleaned = PLATE_CHAR_PATTERN.sub('', str(word).strip().upper())
+                if cleaned:
+                    try: val = int(float(conf))
+                    except (ValueError, TypeError): val = -1
+                    words.append(cleaned)
+                    confs.append(50 if val == -1 else val)
+            combined = "".join(words)
+            avg_conf = (float(np.mean(confs)) / 100.0) if confs else 0.0
+            
+            compact = PLATE_CHAR_PATTERN.sub('', combined)
+            if 3 <= len(compact) <= 10 and avg_conf >= best_conf:
+                best_text = combined
+                best_conf = avg_conf
+        except Exception as e:
+            print(f"[PyTesseract WARN] {e}")
+
+    return best_text, best_conf
 
 
 def _run_easyocr_raw(processed):
@@ -213,8 +220,8 @@ _EASY_STRATEGIES = [
 ]
 
 _TESS_STRATEGIES = [
-    ("clean_2x", _preprocess_clean_2x),
-    ("adaptive", _preprocess_tesseract_adaptive),
+    ("shaved_binarized", _preprocess_tesseract_shaved_binarized),
+    ("shaved_gray", _preprocess_tesseract_shaved_gray),
 ]
 
 
