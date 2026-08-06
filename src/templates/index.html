@@ -237,6 +237,69 @@
                 </div>
             </div>
 
+            <!-- Granular Academic Metrics Comparison Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- EasyOCR Academic Metrics Card -->
+                <div class="bg-zinc-950 border border-sky-900/50 rounded-md p-3 flex flex-col gap-2 font-mono">
+                    <div class="flex items-center justify-between border-b border-sky-950 pb-1.5">
+                        <span class="text-xs font-semibold text-sky-400">EasyOCR Academic Metrics</span>
+                        <span id="easy-ema-badge" class="text-[10px] px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800">EMA: --%</span>
+                    </div>
+                    <div class="grid grid-cols-5 gap-2 text-center text-xs">
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">EMA %</span>
+                            <span id="easy-ema-val" class="font-bold text-sky-400">--%</span>
+                        </div>
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">HA %</span>
+                            <span id="easy-ha-val" class="font-bold text-emerald-400">--%</span>
+                        </div>
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">CRR %</span>
+                            <span id="easy-crr-val" class="font-bold text-teal-400">--%</span>
+                        </div>
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">CER %</span>
+                            <span id="easy-cer-val" class="font-bold text-rose-400">--%</span>
+                        </div>
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">Latency</span>
+                            <span id="easy-lat-val" class="font-bold text-zinc-300">--ms</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PyTesseract Academic Metrics Card -->
+                <div class="bg-zinc-950 border border-indigo-900/50 rounded-md p-3 flex flex-col gap-2 font-mono">
+                    <div class="flex items-center justify-between border-b border-indigo-950 pb-1.5">
+                        <span class="text-xs font-semibold text-indigo-400">PyTesseract Academic Metrics</span>
+                        <span id="tess-ema-badge" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">EMA: --%</span>
+                    </div>
+                    <div class="grid grid-cols-5 gap-2 text-center text-xs">
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">EMA %</span>
+                            <span id="tess-ema-val" class="font-bold text-indigo-400">--%</span>
+                        </div>
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">HA %</span>
+                            <span id="tess-ha-val" class="font-bold text-emerald-400">--%</span>
+                        </div>
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">CRR %</span>
+                            <span id="tess-crr-val" class="font-bold text-teal-400">--%</span>
+                        </div>
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">CER %</span>
+                            <span id="tess-cer-val" class="font-bold text-rose-400">--%</span>
+                        </div>
+                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-500 uppercase">Latency</span>
+                            <span id="tess-lat-val" class="font-bold text-zinc-300">--ms</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Matplotlib Rendered Dashboard Card -->
             <div id="matplotlib-card" class="bg-zinc-950 border border-zinc-800 rounded-md p-3 flex flex-col gap-2">
                 <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
@@ -873,10 +936,10 @@ gridDiv.appendChild(col2);
                     } else {
                         const easyDist = eTextNorm ? levenshteinDistance(eTextNorm, gtNorm) : 99;
                         const tessDist = tTextNorm ? levenshteinDistance(tTextNorm, gtNorm) : 99;
-                        if (easyDist < tessDist && easyDist <= 2) {
+                        if (easyDist <= 2 && easyDist <= tessDist) {
                             badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400/80 border border-sky-900/40";
                             badgeSpan.textContent = `EasyOCR (${easyDist} diff)`;
-                        } else if (tessDist < easyDist && tessDist <= 2) {
+                        } else if (tessDist <= 2 && tessDist < easyDist) {
                             badgeSpan.className = "px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400/80 border border-indigo-900/40";
                             badgeSpan.textContent = `PyTesseract (${tessDist} diff)`;
                         } else {
@@ -1094,6 +1157,32 @@ gridDiv.appendChild(col2);
 
             const totalTimeEl = document.getElementById('summary-total-time');
             if (totalTimeEl) totalTimeEl.textContent = (easy.execution_time_seconds || tess.execution_time_seconds || 0) + 's';
+
+            const easyEma = easy.exact_match_rate != null ? (easy.exact_match_rate * 100).toFixed(1) : '--';
+            const easyHa = easy.high_accuracy_rate != null ? (easy.high_accuracy_rate * 100).toFixed(1) : '--';
+            const easyCrr = easy.crr != null ? easy.crr.toFixed(1) : '--';
+            const easyCer = easy.average_cer != null ? (easy.average_cer * 100).toFixed(1) : '--';
+            const easyLat = easy.latency_per_plate_ms != null ? easy.latency_per_plate_ms.toFixed(0) : '--';
+
+            const tessEma = tess.exact_match_rate != null ? (tess.exact_match_rate * 100).toFixed(1) : '--';
+            const tessHa = tess.high_accuracy_rate != null ? (tess.high_accuracy_rate * 100).toFixed(1) : '--';
+            const tessCrr = tess.crr != null ? tess.crr.toFixed(1) : '--';
+            const tessCer = tess.average_cer != null ? (tess.average_cer * 100).toFixed(1) : '--';
+            const tessLat = tess.latency_per_plate_ms != null ? tess.latency_per_plate_ms.toFixed(0) : '--';
+
+            if (document.getElementById('easy-ema-val')) document.getElementById('easy-ema-val').textContent = easyEma + '%';
+            if (document.getElementById('easy-ema-badge')) document.getElementById('easy-ema-badge').textContent = 'EMA: ' + easyEma + '%';
+            if (document.getElementById('easy-ha-val')) document.getElementById('easy-ha-val').textContent = easyHa + '%';
+            if (document.getElementById('easy-crr-val')) document.getElementById('easy-crr-val').textContent = easyCrr + '%';
+            if (document.getElementById('easy-cer-val')) document.getElementById('easy-cer-val').textContent = easyCer + '%';
+            if (document.getElementById('easy-lat-val')) document.getElementById('easy-lat-val').textContent = easyLat + 'ms';
+
+            if (document.getElementById('tess-ema-val')) document.getElementById('tess-ema-val').textContent = tessEma + '%';
+            if (document.getElementById('tess-ema-badge')) document.getElementById('tess-ema-badge').textContent = 'EMA: ' + tessEma + '%';
+            if (document.getElementById('tess-ha-val')) document.getElementById('tess-ha-val').textContent = tessHa + '%';
+            if (document.getElementById('tess-crr-val')) document.getElementById('tess-crr-val').textContent = tessCrr + '%';
+            if (document.getElementById('tess-cer-val')) document.getElementById('tess-cer-val').textContent = tessCer + '%';
+            if (document.getElementById('tess-lat-val')) document.getElementById('tess-lat-val').textContent = tessLat + 'ms';
 
             // Handle Matplotlib Plot Image Display
             const mpImg = document.getElementById('matplotlib-img');

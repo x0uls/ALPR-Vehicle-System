@@ -26,6 +26,9 @@ MALAYSIAN_PLATE_REGEX = re.compile(
     r'^(' + '|'.join(SPECIAL_PLATE_PREFIXES) + r'|[A-Z]{1,3})\s?\d{1,4}(\s?[A-Z])?$'
 )
 
+# Standard clean configuration for PyTesseract (100% compatible across Tesseract 4/5 builds)
+_TESS_CONFIG = "--psm 7 --oem 1"
+
 
 def _fix_plate_format(text):
     """
@@ -83,23 +86,13 @@ def _preprocess_clean_2x(crop):
     return _add_white_padding(up, pad=10)
 
 
-def _preprocess_clahe_light(crop):
-    """Light CLAHE (1.2 limit) + 2x Upscale + 10px White Margin Padding."""
-    h, w = crop.shape[:2]
-    up = cv2.resize(crop, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-    gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY) if len(up.shape) == 3 else up
-    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8, 8)).apply(gray)
-    padded = _add_white_padding(clahe, pad=10)
-    return cv2.cvtColor(padded, cv2.COLOR_GRAY2RGB)
-
-
 def _preprocess_tesseract_shaved_binarized(crop):
     """
-    Shaves 6% plastic border frame, 3x Bicubic Upscale + Otsu Binarization + Inversion.
+    Shaves 10% horizontal and 8% vertical plastic border frame, 3x Bicubic Upscale + Otsu Binarization + Inversion.
     Strips plastic plate frames that cause Tesseract hallucinations.
     """
     h, w = crop.shape[:2]
-    shave_h, shave_w = int(h * 0.06), int(w * 0.06)
+    shave_h, shave_w = int(h * 0.08), int(w * 0.10)
     if shave_h > 0 and shave_w > 0:
         crop = crop[shave_h:h-shave_h, shave_w:w-shave_w]
 
@@ -116,24 +109,6 @@ def _preprocess_tesseract_shaved_binarized(crop):
     return cv2.cvtColor(padded, cv2.COLOR_GRAY2RGB)
 
 
-def _preprocess_tesseract_shaved_gray(crop):
-    """
-    Shaves 6% plastic border frame, 3x Bicubic Upscale + Grayscale Inversion.
-    """
-    h, w = crop.shape[:2]
-    shave_h, shave_w = int(h * 0.06), int(w * 0.06)
-    if shave_h > 0 and shave_w > 0:
-        crop = crop[shave_h:h-shave_h, shave_w:w-shave_w]
-
-    h, w = crop.shape[:2]
-    up = cv2.resize(crop, (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
-    gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY) if len(up.shape) == 3 else up
-    if np.mean(gray) < 127:
-        gray = cv2.bitwise_not(gray)
-    padded = _add_white_padding(gray, pad=15)
-    return cv2.cvtColor(padded, cv2.COLOR_GRAY2RGB)
-
-
 # ─── OCR Execution & Scoring ─────────────────────────────────────
 
 def _postprocess_ocr_text(combined_text, avg_conf):
@@ -146,34 +121,24 @@ def _postprocess_ocr_text(combined_text, avg_conf):
 
 def _run_pytesseract_raw(processed):
     """
-    Runs PyTesseract across PSM 7 (single line) and PSM 6 (block text) modes,
-    returning the highest quality detection candidate.
+    Runs PyTesseract with a single standardized configuration and character whitelisting.
     """
-    best_text = ""
-    best_conf = 0.0
-
-    for config_str in ["--psm 7 --oem 1", "--psm 6 --oem 1"]:
-        try:
-            data = pytesseract.image_to_data(processed, config=config_str, output_type=pytesseract.Output.DICT)
-            words, confs = [], []
-            for word, conf in zip(data.get('text', []), data.get('conf', [])):
-                cleaned = PLATE_CHAR_PATTERN.sub('', str(word).strip().upper())
-                if cleaned:
-                    try: val = int(float(conf))
-                    except (ValueError, TypeError): val = -1
-                    words.append(cleaned)
-                    confs.append(50 if val == -1 else val)
-            combined = "".join(words)
-            avg_conf = (float(np.mean(confs)) / 100.0) if confs else 0.0
-            
-            compact = PLATE_CHAR_PATTERN.sub('', combined)
-            if 3 <= len(compact) <= 10 and avg_conf >= best_conf:
-                best_text = combined
-                best_conf = avg_conf
-        except Exception as e:
-            print(f"[PyTesseract WARN] {e}")
-
-    return best_text, best_conf
+    try:
+        data = pytesseract.image_to_data(processed, config=_TESS_CONFIG, output_type=pytesseract.Output.DICT)
+        words, confs = [], []
+        for word, conf in zip(data.get('text', []), data.get('conf', [])):
+            cleaned = PLATE_CHAR_PATTERN.sub('', str(word).strip().upper())
+            if cleaned:
+                try: val = int(float(conf))
+                except (ValueError, TypeError): val = -1
+                words.append(cleaned)
+                confs.append(50 if val == -1 else val)
+        combined = "".join(words)
+        avg_conf = (float(np.mean(confs)) / 100.0) if confs else 0.0
+        return combined, avg_conf
+    except Exception as e:
+        print(f"[PyTesseract WARN] {e}")
+        return '', 0.0
 
 
 def _run_easyocr_raw(processed):
@@ -202,52 +167,30 @@ def _run_ocr(processed, engine_name):
     return _postprocess_ocr_text(text, conf)
 
 
-def _score_ocr_result(text, conf):
-    if not text:
-        return -1.0
-    score = max(0.1, float(conf))
-    if MALAYSIAN_PLATE_REGEX.match(text):
-        score *= 1.5
-    compact_len = len(text.replace(' ', ''))
-    if 4 <= compact_len <= 8:
-        score *= 1.2
-    return score
-
-
 _EASY_STRATEGIES = [
     ("clean_2x", _preprocess_clean_2x),
-    ("clahe_light", _preprocess_clahe_light),
 ]
 
 _TESS_STRATEGIES = [
     ("shaved_binarized", _preprocess_tesseract_shaved_binarized),
-    ("shaved_gray", _preprocess_tesseract_shaved_gray),
 ]
 
 
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
     """
-    High-accuracy License Plate OCR Dispatcher.
-    Generates optimized preprocessing variants, runs OCR, and returns the highest scoring result.
+    Standardized License Plate OCR Dispatcher.
+    Runs a single optimized pipeline per OCR engine for fair benchmarking.
     """
     if cropped_plate_img is None or cropped_plate_img.size == 0:
         return '', 0.0, engine_name, None
 
     strategies = _TESS_STRATEGIES if engine_name == "PyTesseract" else _EASY_STRATEGIES
+    name, fn = strategies[0]
 
-    best_text, best_conf, best_score, best_img = '', 0.0, -1.0, None
-
-    for name, fn in strategies:
-        try:
-            processed_rgb = fn(cropped_plate_img)
-            text, conf = _run_ocr(processed_rgb, engine_name)
-            score = _score_ocr_result(text, conf)
-            if score > best_score:
-                best_text, best_conf, best_score, best_img = text, conf, score, processed_rgb
-        except Exception as e:
-            print(f"[OCR Strategy WARN] {name}: {e}")
-
-    if best_img is None:
-        best_img = strategies[0][1](cropped_plate_img)
-
-    return best_text, best_conf, engine_name, best_img
+    try:
+        processed_rgb = fn(cropped_plate_img)
+        text, conf = _run_ocr(processed_rgb, engine_name)
+        return text, conf, engine_name, processed_rgb
+    except Exception as e:
+        print(f"[OCR WARN] {name}: {e}")
+        return '', 0.0, engine_name, None

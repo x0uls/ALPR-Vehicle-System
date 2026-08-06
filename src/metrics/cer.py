@@ -352,22 +352,8 @@ def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_
     per_detection = results["per_detection"]
     matched_gt_set = results["matched_gt_set"]
 
-    average_cer = (results["total_cer"] / matched_count) if matched_count > 0 else None
-    exact_match_rate = (exact_match_count / matched_count) if matched_count > 0 else 0.0
-    
-    gt_norm_set = set(_normalize_plate(g) for g in ground_truth_list if g)
-    gt_recall = (len(matched_gt_set) / len(gt_norm_set)) if gt_norm_set else 0.0
-    
-    precision = (len([p for p in per_detection if p["cer"] <= 0.3]) / len(per_detection)) if per_detection else 0.0
-
-    # Aggregate character-level Precision and Recall from accumulated TP/FP/FN
-    agg_tp, agg_fp, agg_fn = results["total_tp"], results["total_fp"], results["total_fn"]
-    char_precision = agg_tp / (agg_tp + agg_fp) if (agg_tp + agg_fp) > 0 else None
-    char_recall = agg_tp / (agg_tp + agg_fn) if (agg_tp + agg_fn) > 0 else None
-
-    avg_correct_conf = float(np.mean(results["correct_confs"])) if results["correct_confs"] else 0.0
-    avg_incorrect_conf = float(np.mean(results["incorrect_confs"])) if results["incorrect_confs"] else 0.0
-    latency_per_plate_ms = (execution_time_seconds * 1000 / len(detections_list)) if detections_list else 0.0
+    high_accuracy_count = len([p for p in per_detection if p["cer"] <= 0.35])
+    high_accuracy_rate = (high_accuracy_count / matched_count) if matched_count > 0 else 0.0
 
     return {
         "average_cer": round(average_cer, 4) if average_cer is not None else None,
@@ -376,6 +362,8 @@ def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_
         "char_recall": round(char_recall, 4) if char_recall is not None else None,
         "exact_match_count": exact_match_count,
         "exact_match_rate": round(exact_match_rate, 4),
+        "high_accuracy_count": high_accuracy_count,
+        "high_accuracy_rate": round(high_accuracy_rate, 4),
         "gt_recall": round(gt_recall, 4),
         "precision": round(precision, 4),
         "total_edit_distance": results["total_edit_distance"],
