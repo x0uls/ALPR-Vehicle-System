@@ -166,20 +166,21 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
 
         # Dedicated YOLO License Plate Model (models/yolo_plate/best.pt)
         if plate_model is not None:
-            plate_results = plate_model(v_crop, verbose=False, conf=0.08)
+            plate_results = plate_model(v_crop, verbose=False, conf=0.04)
             valid_plates = []
             if len(plate_results) > 0 and len(plate_results[0].boxes) > 0:
                 for pbox in plate_results[0].boxes:
                     px1, py1, px2, py2 = map(int, pbox.xyxy[0])
                     p_conf = float(pbox.conf[0])
-                    pw = px2 - px1
-                    ph = py2 - py1
+                    pw, ph = px2 - px1, py2 - py1
+                    aspect = pw / float(ph) if ph > 0 else 0
                     py_center = (py1 + py2) / 2.0
                     
-                    # Ignore boxes in upper 35% of vehicle
-                    if py_center < 0.35 * v_h:
+                    # Ignore boxes in extreme upper 15% of vehicle crop
+                    if py_center < 0.15 * v_h:
                         continue
-                    if pw > 10 and ph > 5:
+                    # Real license plate geometry: width>=30, height>=10, aspect ratio 1.5-7.0
+                    if pw >= 30 and ph >= 10 and 1.5 <= aspect <= 7.0:
                         valid_plates.append((px1, py1, px2, py2, p_conf))
 
             if valid_plates:
@@ -187,17 +188,14 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
                 lx1, ly1, lx2, ly2, _ = best_p
                 det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
                 
-                # Phase 0: Bounding Box Expansion (+10px every direction)
-                # Deep learning OCR models need spatial context (empty padding)
-                # around characters to recognize structural shapes — chopping off
-                # margins destroys the model's spatial awareness.
-                expand = 10
+                # Phase 0: Bounding Box Expansion (+15px every direction)
+                expand = 15
                 lx1_exp = max(0, lx1 - expand)
                 ly1_exp = max(0, ly1 - expand)
                 lx2_exp = min(v_w, lx2 + expand)
                 ly2_exp = min(v_h, ly2 + expand)
                 
-                # Additional proportional padding on top of the 10px expansion
+                # Additional proportional padding on top of expansion
                 pw = lx2_exp - lx1_exp
                 ph = ly2_exp - ly1_exp
                 px = max(5, int(pw * 0.10))
