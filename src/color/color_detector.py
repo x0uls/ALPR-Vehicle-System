@@ -35,13 +35,13 @@ def detect_dominant_color(cropped_vehicle_img):
         "brown":  [((10, 30, 30), (25, 180, 100))]
     }
 
-    color_counts = {}
-    for color_name, ranges in COLOR_RANGES.items():
-        mask_combined = np.zeros(hsv.shape[:2], dtype=np.uint8)
-        for lower, upper in ranges:
-            mask = cv2.inRange(hsv, np.array(lower, dtype=np.uint8), np.array(upper, dtype=np.uint8))
-            mask_combined = cv2.bitwise_or(mask_combined, mask)
-        color_counts[color_name] = cv2.countNonZero(mask_combined)
+    color_counts = {
+        name: sum(
+            cv2.countNonZero(cv2.inRange(hsv, np.array(lower, dtype=np.uint8), np.array(upper, dtype=np.uint8)))
+            for lower, upper in ranges
+        )
+        for name, ranges in COLOR_RANGES.items()
+    }
 
     best_color = max(color_counts, key=color_counts.get)
     return best_color if color_counts[best_color] > 0 else "gray"

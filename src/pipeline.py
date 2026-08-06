@@ -1,7 +1,6 @@
 import os
 os.environ["OMP_THREAD_LIMIT"] = "1"
 import cv2
-import numpy as np
 import torch
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
@@ -26,29 +25,9 @@ else:
     plate_model = None
 
 
-def _is_valid_plate_crop(crop):
-    if crop.size == 0 or crop.shape[0] < 5 or crop.shape[1] < 10:
-        return False
-    aspect = crop.shape[1] / float(crop.shape[0])
-    if not (1.5 <= aspect <= 7.0):
-        return False
-    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if len(crop.shape) == 3 else crop
-    sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
-    # Brightness-adaptive sharpness threshold: dark images naturally have
-    # lower Laplacian variance, so we lower the bar to avoid rejecting
-    # valid night / shadow crops that the OCR can still read.
-    mean_brightness = float(np.mean(gray))
-    area = crop.shape[0] * crop.shape[1]
-    base_thresh = max(30.0, min(50.0 * (area / 3000.0), 200.0))
-    if mean_brightness < 60:
-        # Very dark: cut threshold to 30% of normal
-        adaptive_thresh = base_thresh * 0.3
-    elif mean_brightness < 100:
-        # Dim: cut threshold to 50% of normal
-        adaptive_thresh = base_thresh * 0.5
-    else:
-        adaptive_thresh = base_thresh
-    return sharpness >= adaptive_thresh
+def _to_url(path):
+    """Converts a local file path to a URL-safe path for the frontend."""
+    return "/" + str(path).replace("\\", "/") if path else None
 
 
 def _ocr_worker(plate_crop_image, vehicle_crop_image, ocr_engine_name, img_id, det_id):
@@ -294,14 +273,14 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
                 "easyocr": {
                     "plate_text": easy_res.get("plate_text"),
                     "conf": easy_res.get("conf", 0.0),
-                    "snapshot_url": "/" + str(easy_res.get("snapshot_path")).replace("\\", "/") if easy_res.get("snapshot_path") else None,
-                    "crop_url": "/" + str(easy_res.get("processed_crop_path")).replace("\\", "/") if easy_res.get("processed_crop_path") else None,
+                    "snapshot_url": _to_url(easy_res.get("snapshot_path")),
+                    "crop_url": _to_url(easy_res.get("processed_crop_path")),
                 },
                 "pytesseract": {
                     "plate_text": tess_res.get("plate_text"),
                     "conf": tess_res.get("conf", 0.0),
-                    "snapshot_url": "/" + str(tess_res.get("snapshot_path")).replace("\\", "/") if tess_res.get("snapshot_path") else None,
-                    "crop_url": "/" + str(tess_res.get("processed_crop_path")).replace("\\", "/") if tess_res.get("processed_crop_path") else None,
+                    "snapshot_url": _to_url(tess_res.get("snapshot_path")),
+                    "crop_url": _to_url(tess_res.get("processed_crop_path")),
                 }
             })
 
