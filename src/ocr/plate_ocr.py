@@ -240,14 +240,4 @@ def read_plate(cropped_plate_img, engine_name="EasyOCR"):
         return '', 0.0, engine_name, None
 
     text, conf = _run_ocr(prep_img, engine_name)
-    if text and conf >= 0.50:
-        return text, conf, engine_name, prep_img
-
-    # Fallback to raw BGR crop if primary prep was uncertain
-    raw_img = preprocess_raw_bgr(cropped_plate_img)
-    if raw_img is not None:
-        raw_text, raw_conf = _run_ocr(raw_img, engine_name)
-        if raw_conf > conf and raw_text:
-            return raw_text, raw_conf, engine_name, raw_img
-
     return text, conf, engine_name, prep_img
