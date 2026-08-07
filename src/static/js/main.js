@@ -80,7 +80,6 @@ function handleFileSelect(files) {
     const uploadIdleState = document.getElementById('upload-idle-state');
     const uploadStatusCard = document.getElementById('upload-status-card');
     const uploadErrorBanner = document.getElementById('upload-error-banner');
-    const uploadErrorText = document.getElementById('upload-error-text');
     const processBtn = document.getElementById('process-btn');
 
     let detectedImagesCount = 0;
@@ -196,13 +195,60 @@ async function processImages() {
         if (data.results) {
             data.results.forEach((res, i) => {
                 const fname = res.original_filename || `Image_${i+1}`;
+                const fnameNoExt = fname.replace(/\.[^/.]+$/, "");
+                const gtVal = res.expected_gt || (data.gt_mapping && (data.gt_mapping[fname] || data.gt_mapping[fnameNoExt])) || '--';
+
+                // Render side-by-side card
+                const card = document.createElement('div');
+                card.className = 'bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors';
+                card.innerHTML = `
+                    <div class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
+                        <span class="font-medium text-zinc-300">${fname}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="flex flex-col items-center gap-1.5">
+                            <span class="text-[10px] font-mono text-sky-400 font-semibold">EasyOCR</span>
+                            <img src="${res.easyocr_annotated_url}" class="max-h-[300px] object-contain rounded border border-zinc-900">
+                        </div>
+                        <div class="flex flex-col items-center gap-1.5">
+                            <span class="text-[10px] font-mono text-indigo-400 font-semibold">PyTesseract</span>
+                            <img src="${res.pytesseract_annotated_url}" class="max-h-[300px] object-contain rounded border border-zinc-900">
+                        </div>
+                    </div>
+                `;
+                if (imageResultsContainer) imageResultsContainer.appendChild(card);
+
                 (res.detections || []).forEach(det => {
                     const seqId = globalSeqId++;
                     const key = `${fname}_${seqId}`;
+                    const modelEasy = det.easyocr || {};
+                    const modelTess = det.pytesseract || {};
+
                     dualLogsMap[key] = {
-                        track_id: seqId, file_name: fname,
-                        easy: { ...det.easyocr, track_id: seqId, file_name: fname, vehicle_type: det.vehicle_type, color: det.color, matched_gt: res.expected_gt },
-                        tess: { ...det.pytesseract, track_id: seqId, file_name: fname, vehicle_type: det.vehicle_type, color: det.color, matched_gt: res.expected_gt }
+                        track_id: seqId,
+                        file_name: fname,
+                        easy: {
+                            track_id: seqId,
+                            file_name: fname,
+                            matched_gt: gtVal,
+                            vehicle_type: det.vehicle_type,
+                            color: det.color,
+                            plate_number: modelEasy.plate_text,
+                            confidence: modelEasy.conf,
+                            snapshot_url: modelEasy.snapshot_url,
+                            plate_crop_url: modelEasy.crop_url
+                        },
+                        tess: {
+                            track_id: seqId,
+                            file_name: fname,
+                            matched_gt: gtVal,
+                            vehicle_type: det.vehicle_type,
+                            color: det.color,
+                            plate_number: modelTess.plate_text,
+                            confidence: modelTess.conf,
+                            snapshot_url: modelTess.snapshot_url,
+                            plate_crop_url: modelTess.crop_url
+                        }
                     };
                 });
             });
@@ -210,6 +256,15 @@ async function processImages() {
 
         if (data.discarded_stats) renderDiscardedStats(data.discarded_stats);
         if (data.metrics) updateMetricsCards(data.metrics);
+
+        try {
+            const cerRes = await fetch('/api/cer-summary');
+            if (cerRes.ok) {
+                const cerData = await cerRes.json();
+                if (cerData.easyocr || cerData.pytesseract) updateMetricsCards(cerData);
+            }
+        } catch(e) {}
+
         renderDualTable();
 
     } catch (err) {
@@ -318,17 +373,49 @@ function openDetailModal(key) {
     let snapUrl = easy.snapshot_url || tess.snapshot_url;
     if (snapUrl && !snapUrl.startsWith('/') && !snapUrl.startsWith('http')) snapUrl = '/' + snapUrl;
     const snapImg = document.getElementById('modal-snapshot-img');
-    if (snapUrl && snapImg) { snapImg.src = snapUrl; snapImg.classList.remove('hidden'); }
+    const snapPlaceholder = document.getElementById('modal-snapshot-placeholder');
+    if (snapUrl && snapImg) {
+        snapImg.src = snapUrl;
+        snapImg.classList.remove('hidden');
+        if (snapPlaceholder) snapPlaceholder.classList.add('hidden');
+    } else if (snapPlaceholder) {
+        snapImg.classList.add('hidden');
+        snapPlaceholder.classList.remove('hidden');
+    }
 
     if (document.getElementById('modal-easy-read')) document.getElementById('modal-easy-read').textContent = easy.plate_number || 'No Detection';
     if (document.getElementById('modal-easy-conf')) document.getElementById('modal-easy-conf').textContent = easy.confidence ? `${(easy.confidence * 100).toFixed(0)}% conf` : '0% conf';
     if (document.getElementById('modal-easy-cer')) document.getElementById('modal-easy-cer').textContent = easy.cer != null ? `${(easy.cer * 100).toFixed(1)}%` : '--';
-    if (easy.crop_url && document.getElementById('modal-easy-crop')) document.getElementById('modal-easy-crop').src = easy.crop_url.startsWith('/') ? easy.crop_url : '/' + easy.crop_url;
+
+    const easyCropImg = document.getElementById('modal-easy-crop');
+    const easyCropEmpty = document.getElementById('modal-easy-crop-empty');
+    let easyCropSrc = easy.plate_crop_url || tess.plate_crop_url;
+    if (easyCropSrc && !easyCropSrc.startsWith('/') && !easyCropSrc.startsWith('http')) easyCropSrc = '/' + easyCropSrc;
+    if (easyCropSrc && easyCropImg) {
+        easyCropImg.src = easyCropSrc;
+        easyCropImg.classList.remove('hidden');
+        if (easyCropEmpty) easyCropEmpty.classList.add('hidden');
+    } else if (easyCropEmpty) {
+        easyCropImg.classList.add('hidden');
+        easyCropEmpty.classList.remove('hidden');
+    }
 
     if (document.getElementById('modal-tess-read')) document.getElementById('modal-tess-read').textContent = tess.plate_number || 'No Detection';
     if (document.getElementById('modal-tess-conf')) document.getElementById('modal-tess-conf').textContent = tess.confidence ? `${(tess.confidence * 100).toFixed(0)}% conf` : '0% conf';
     if (document.getElementById('modal-tess-cer')) document.getElementById('modal-tess-cer').textContent = tess.cer != null ? `${(tess.cer * 100).toFixed(1)}%` : '--';
-    if (tess.crop_url && document.getElementById('modal-tess-crop')) document.getElementById('modal-tess-crop').src = tess.crop_url.startsWith('/') ? tess.crop_url : '/' + tess.crop_url;
+
+    const tessCropImg = document.getElementById('modal-tess-crop');
+    const tessCropEmpty = document.getElementById('modal-tess-crop-empty');
+    let tessCropSrc = tess.plate_crop_url || easy.plate_crop_url;
+    if (tessCropSrc && !tessCropSrc.startsWith('/') && !tessCropSrc.startsWith('http')) tessCropSrc = '/' + tessCropSrc;
+    if (tessCropSrc && tessCropImg) {
+        tessCropImg.src = tessCropSrc;
+        tessCropImg.classList.remove('hidden');
+        if (tessCropEmpty) tessCropEmpty.classList.add('hidden');
+    } else if (tessCropEmpty) {
+        tessCropImg.classList.add('hidden');
+        tessCropEmpty.classList.remove('hidden');
+    }
 
     const modal = document.getElementById('detail-modal');
     if (modal) modal.classList.remove('hidden');
