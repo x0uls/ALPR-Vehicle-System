@@ -23,7 +23,7 @@ def _to_url(path):
 
 
 def _ocr_worker(plate_crop, vehicle_crop, engine_name, img_id, det_id):
-    plate_text, ocr_conf, engine, proc_crop = read_plate(plate_crop, engine_name)
+    plate_text, ocr_conf, engine, proc_crop, latency_ms = read_plate(plate_crop, engine_name)
     
     proc_path = f"outputs/plate_crops/Processed/img{img_id}_det{det_id}_{engine_name.lower()}.jpg"
     cv2.imwrite(proc_path, proc_crop if proc_crop is not None and proc_crop.size > 0 else plate_crop)
@@ -34,7 +34,8 @@ def _ocr_worker(plate_crop, vehicle_crop, engine_name, img_id, det_id):
 
     return {
         "engine": engine_name, "det_id": det_id, "plate_text": plate_text,
-        "conf": ocr_conf, "processed_crop_path": proc_path, "snapshot_path": snap_path
+        "conf": ocr_conf, "latency_ms": latency_ms,
+        "processed_crop_path": proc_path, "snapshot_path": snap_path
     }
 
 
@@ -139,8 +140,8 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
 
             img_detections.append({
                 "det_id": did, "vehicle_type": d_info["v_type"], "color": d_info["color"],
-                "easyocr": {"plate_text": e_res.get("plate_text"), "conf": e_res.get("conf", 0.0), "snapshot_url": _to_url(e_res.get("snapshot_path")), "crop_url": _to_url(e_res.get("processed_crop_path"))},
-                "pytesseract": {"plate_text": t_res.get("plate_text"), "conf": t_res.get("conf", 0.0), "snapshot_url": _to_url(t_res.get("snapshot_path")), "crop_url": _to_url(t_res.get("processed_crop_path"))}
+                "easyocr": {"plate_text": e_res.get("plate_text"), "conf": e_res.get("conf", 0.0), "latency_ms": e_res.get("latency_ms", 0.0), "snapshot_url": _to_url(e_res.get("snapshot_path")), "crop_url": _to_url(e_res.get("processed_crop_path"))},
+                "pytesseract": {"plate_text": t_res.get("plate_text"), "conf": t_res.get("conf", 0.0), "latency_ms": t_res.get("latency_ms", 0.0), "snapshot_url": _to_url(t_res.get("snapshot_path")), "crop_url": _to_url(t_res.get("processed_crop_path"))}
             })
 
         out_name = os.path.basename(image_paths[valid_indices[img_id]])

@@ -1,6 +1,7 @@
 import os
 os.environ["OMP_THREAD_LIMIT"] = "1"
 import re
+import time
 import cv2
 import numpy as np
 import easyocr
@@ -23,6 +24,13 @@ _TESS_CONFIG = "--psm 7 --oem 1"
 def _fix_plate_format(text):
     compact = PLATE_CHAR_PATTERN.sub('', text.strip().upper()).replace(' ', '')
     if len(compact) < MIN_PLATE_LENGTH: return text
+
+    # Handle inverted text reading (e.g., "9393WSX" -> "WSX9393") safely for 3-4 digits followed by 2-3 letters
+    if compact[0].isdigit():
+        m = re.match(r'^(\d{3,4})([A-Z]{2,3})$', compact)
+        if m:
+            digits, letters = m.group(1), m.group(2)
+            compact = letters + digits
 
     d2l, l2d = str.maketrans('01258', 'OIZSB'), str.maketrans('OIZSB', '01258')
     chars = list(compact)
@@ -51,18 +59,12 @@ def _add_white_padding(img, pad=15):
 
 
 def _preprocess_clean_2x(crop):
-    """EasyOCR Single Standard Preprocessor: 2x Bicubic Upscale + 10px White Margin Padding."""
     h, w = crop.shape[:2]
     up = cv2.resize(crop, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
     return _add_white_padding(up, pad=10)
 
 
 def _preprocess_tesseract_single_pass(crop):
-    """
-    PyTesseract Single Standard Preprocessor (Grid 6 Optimized):
-    6% H / 6% V Margin Shaving + 3.5x Bicubic Upscale + Unsharp Mask Edge Sharpening +
-    Morphological TopHat/BlackHat Contrast Isolation + Otsu Binarization & Inversion.
-    """
     h, w = crop.shape[:2]
     sh_h, sh_w = int(h * 0.06), int(w * 0.06)
     if sh_h > 0 and sh_w > 0:
@@ -72,11 +74,9 @@ def _preprocess_tesseract_single_pass(crop):
     up = cv2.resize(crop, (int(w * 3.5), int(h * 3.5)), interpolation=cv2.INTER_CUBIC)
     gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY) if len(up.shape) == 3 else up
     
-    # 1. Unsharp Mask Sharpening
     sharpen_kernel = np.array([[0, -0.5, 0], [-0.5, 3.0, -0.5], [0, -0.5, 0]])
     sharpened = cv2.filter2D(gray, -1, sharpen_kernel)
 
-    # 2. Morphological contrast isolation of character glyphs
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 5))
     tophat = cv2.morphologyEx(sharpened, cv2.MORPH_TOPHAT, kernel)
     blackhat = cv2.morphologyEx(sharpened, cv2.MORPH_BLACKHAT, kernel)
@@ -117,6 +117,7 @@ def _run_easyocr_raw(processed):
     try:
         results = reader.readtext(processed)
         if not results: return '', 0.0
+        # Sort bounding boxes left-to-right
         sorted_results = sorted(results, key=lambda r: r[0][0][0])
         combined_text = "".join([r[1].upper().strip() for r in sorted_results])
         cleaned = PLATE_CHAR_PATTERN.sub('', combined_text)
@@ -128,13 +129,10 @@ def _run_easyocr_raw(processed):
 
 
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
-    """
-    Standardized License Plate OCR Dispatcher.
-    Runs 1 single complete pass per engine for 100% fair academic benchmarking.
-    """
     if cropped_plate_img is None or cropped_plate_img.size == 0:
-        return '', 0.0, engine_name, None
+        return '', 0.0, engine_name, None, 0.0
 
+    t_start = time.perf_counter()
     try:
         if engine_name == "PyTesseract":
             proc = _preprocess_tesseract_single_pass(cropped_plate_img)
@@ -144,8 +142,10 @@ def read_plate(cropped_plate_img, engine_name="EasyOCR"):
             raw_text, conf = _run_easyocr_raw(proc)
 
         final_text, final_conf = _postprocess_ocr_text(raw_text, conf)
-        return final_text, final_conf, engine_name, proc
+        latency_ms = (time.perf_counter() - t_start) * 1000.0
+        return final_text, final_conf, engine_name, proc, latency_ms
 
     except Exception as e:
         print(f"[OCR WARN] {engine_name}: {e}")
-        return '', 0.0, engine_name, None
+        latency_ms = (time.perf_counter() - t_start) * 1000.0
+        return '', 0.0, engine_name, None, latency_ms

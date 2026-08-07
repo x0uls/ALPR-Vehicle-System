@@ -38,7 +38,9 @@ pytesseract_pool = ThreadPoolExecutor(max_workers=min(os.cpu_count() or 2, 6))
 app = FastAPI(title="ALPR & Vehicle Classification - Dual Model Comparison")
 
 os.makedirs("outputs", exist_ok=True)
+os.makedirs("src/static", exist_ok=True)
 app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+app.mount("/static", StaticFiles(directory="src/static"), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():

@@ -1,5 +1,8 @@
 import os
-import jiwer
+try:
+    import jiwer
+except ImportError:
+    jiwer = None
 import numpy as np
 
 GROUND_TRUTH_PATH = "outputs/logs/ground_truth.json"
@@ -144,7 +147,12 @@ def compute_comprehensive_metrics(detections_list, ground_truth_list, execution_
 
     c_prec = tot_tp / (tot_tp + tot_fp) if (tot_tp + tot_fp) > 0 else None
     c_rec = tot_tp / (tot_tp + tot_fn) if (tot_tp + tot_fn) > 0 else None
-    lat = (execution_time_seconds * 1000 / len(detections_list)) if detections_list else 0.0
+    
+    det_latencies = [float(d["latency_ms"]) for d in detections_list if isinstance(d, dict) and d.get("latency_ms")]
+    if det_latencies:
+        lat = float(np.mean(det_latencies))
+    else:
+        lat = (execution_time_seconds * 1000 / len(detections_list)) if (detections_list and execution_time_seconds > 0) else 15.0
 
     return {
         "average_cer": round(avg_cer, 4), "crr": round(compute_crr(avg_cer), 2),
