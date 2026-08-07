@@ -38,7 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') closeDetailModal();
     });
 
-    fetchCerSummary();
     loadGroundTruth();
 });
 
@@ -180,6 +179,33 @@ async function processImages() {
     processBtn.textContent = 'Processing Dataset...';
     document.getElementById('progress-status').textContent = 'Uploading and processing dataset...';
 
+    // Start live client-side elapsed timer & animated progress bar
+    const processStartTime = performance.now();
+    const progressBox = document.getElementById('progress-box');
+    const progressBarFill = document.getElementById('progress-bar-fill');
+    const progressPercent = document.getElementById('progress-percent');
+
+    if (progressBox) progressBox.classList.remove('opacity-60');
+
+    if (window.liveTimerInterval) clearInterval(window.liveTimerInterval);
+    window.liveTimerInterval = setInterval(() => {
+        const elapsedMs = performance.now() - processStartTime;
+        const elapsedSec = Math.floor(elapsedMs / 1000);
+        const m = Math.floor(elapsedSec / 60);
+        const s = elapsedSec % 60;
+        const timeStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+
+        const el1 = document.getElementById('stat-elapsed');
+        const el2 = document.getElementById('summary-total-time');
+        if (el1) el1.textContent = timeStr;
+        if (el2) el2.textContent = timeStr;
+
+        // Smoothly animate progress bar up to 95% while waiting for backend
+        const simulatedPercent = Math.min(95, Math.floor(100 * (1 - Math.exp(-elapsedMs / 4000))));
+        if (progressBarFill) progressBarFill.style.width = `${simulatedPercent}%`;
+        if (progressPercent) progressPercent.textContent = `${simulatedPercent}%`;
+    }, 150);
+
     const formData = new FormData();
     selectedFiles.forEach(file => formData.append('files', file, file.webkitRelativePath || file.name));
 
@@ -188,8 +214,19 @@ async function processImages() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Processing failed');
 
+        if (window.liveTimerInterval) {
+            clearInterval(window.liveTimerInterval);
+            window.liveTimerInterval = null;
+        }
+
+        if (progressBarFill) progressBarFill.style.width = '100%';
+        if (progressPercent) progressPercent.textContent = '100%';
+
         document.getElementById('progress-status').textContent = 'Processing Finished';
-        if (data.elapsed) document.getElementById('stat-elapsed').textContent = data.elapsed;
+        if (data.elapsed) {
+            if (document.getElementById('stat-elapsed')) document.getElementById('stat-elapsed').textContent = data.elapsed;
+            if (document.getElementById('summary-total-time')) document.getElementById('summary-total-time').textContent = data.elapsed;
+        }
 
         let globalSeqId = 1;
         if (data.results) {
@@ -271,8 +308,12 @@ async function processImages() {
         console.error(err);
         document.getElementById('progress-status').textContent = "Error: " + err.message;
     } finally {
+        if (window.liveTimerInterval) {
+            clearInterval(window.liveTimerInterval);
+            window.liveTimerInterval = null;
+        }
         processBtn.disabled = false;
-        processBtn.textContent = 'Process Images';
+        processBtn.textContent = 'Process & Benchmark Dataset';
     }
 }
 
@@ -434,29 +475,52 @@ function updateMetricsCards(metrics) {
     if (document.getElementById('easy-ema-val')) document.getElementById('easy-ema-val').textContent = (easy.exact_match_rate != null ? (easy.exact_match_rate * 100).toFixed(1) : '--') + '%';
     if (document.getElementById('easy-ha-val')) document.getElementById('easy-ha-val').textContent = (easy.high_accuracy_rate != null ? (easy.high_accuracy_rate * 100).toFixed(1) : '--') + '%';
     if (document.getElementById('easy-crr-val')) document.getElementById('easy-crr-val').textContent = (easy.crr != null ? easy.crr.toFixed(1) : '--') + '%';
-    if (document.getElementById('easy-cer-val')) document.getElementById('easy-cer-val').textContent = (easy.average_cer != null ? (easy.average_cer * 100).toFixed(1) : '--') + '%';
     if (document.getElementById('easy-lat-val')) document.getElementById('easy-lat-val').textContent = (easy.latency_per_plate_ms != null ? easy.latency_per_plate_ms.toFixed(0) : '--') + 'ms';
+    if (document.getElementById('easy-ema-badge')) document.getElementById('easy-ema-badge').textContent = 'EMA: ' + (easy.exact_match_rate != null ? (easy.exact_match_rate * 100).toFixed(1) : '--') + '%';
 
     if (document.getElementById('tess-ema-val')) document.getElementById('tess-ema-val').textContent = (tess.exact_match_rate != null ? (tess.exact_match_rate * 100).toFixed(1) : '--') + '%';
     if (document.getElementById('tess-ha-val')) document.getElementById('tess-ha-val').textContent = (tess.high_accuracy_rate != null ? (tess.high_accuracy_rate * 100).toFixed(1) : '--') + '%';
     if (document.getElementById('tess-crr-val')) document.getElementById('tess-crr-val').textContent = (tess.crr != null ? tess.crr.toFixed(1) : '--') + '%';
-    if (document.getElementById('tess-cer-val')) document.getElementById('tess-cer-val').textContent = (tess.average_cer != null ? (tess.average_cer * 100).toFixed(1) : '--') + '%';
     if (document.getElementById('tess-lat-val')) document.getElementById('tess-lat-val').textContent = (tess.latency_per_plate_ms != null ? tess.latency_per_plate_ms.toFixed(0) : '--') + 'ms';
+    if (document.getElementById('tess-ema-badge')) document.getElementById('tess-ema-badge').textContent = 'EMA: ' + (tess.exact_match_rate != null ? (tess.exact_match_rate * 100).toFixed(1) : '--') + '%';
+
+    if (metrics.winner && document.getElementById('stat-winner-name')) {
+        document.getElementById('stat-winner-name').textContent = metrics.winner;
+    }
 
     if (metrics.chart_url && document.getElementById('matplotlib-img')) {
         document.getElementById('matplotlib-img').src = metrics.chart_url + '?t=' + Date.now();
         document.getElementById('matplotlib-img').classList.remove('hidden');
+        if (document.getElementById('matplotlib-placeholder')) {
+            document.getElementById('matplotlib-placeholder').classList.add('hidden');
+        }
     }
 }
 
 function renderDiscardedStats(stats) {
     const sec = document.getElementById('discarded-section');
+    const toggleBtn = document.getElementById('toggle-discarded-btn');
     if (!sec) return;
-    if (!stats || stats.total_discarded === 0) { sec.classList.add('hidden'); return; }
+
+    if (!stats || !stats.total_discarded || stats.total_discarded === 0) {
+        sec.classList.add('hidden');
+        if (toggleBtn) toggleBtn.classList.add('hidden');
+        return;
+    }
+
     sec.classList.remove('hidden');
-    if (document.getElementById('stat-total-discarded')) document.getElementById('stat-total-discarded').textContent = stats.total_discarded;
-    if (document.getElementById('stat-no-vehicle')) document.getElementById('stat-no-vehicle').textContent = stats.no_vehicle_count;
-    if (document.getElementById('stat-no-plate')) document.getElementById('stat-no-plate').textContent = stats.no_plate_count;
+    if (document.getElementById('discarded-total-val')) document.getElementById('discarded-total-val').textContent = stats.total_discarded;
+    if (document.getElementById('discarded-nocar-val')) document.getElementById('discarded-nocar-val').textContent = stats.no_vehicle_count;
+    if (document.getElementById('discarded-noplate-val')) document.getElementById('discarded-noplate-val').textContent = stats.no_plate_count;
+    if (document.getElementById('discarded-badge')) document.getElementById('discarded-badge').textContent = `${stats.total_discarded} Discarded`;
+
+    if (toggleBtn) {
+        if (stats.discarded_files && stats.discarded_files.length > 0) {
+            toggleBtn.classList.remove('hidden');
+        } else {
+            toggleBtn.classList.add('hidden');
+        }
+    }
 }
 
 async function fetchCerSummary() {

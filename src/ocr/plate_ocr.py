@@ -58,34 +58,50 @@ def _add_white_padding(img, pad=15):
     return cv2.copyMakeBorder(img, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=(255, 255, 255) if len(img.shape)==3 else 255)
 
 
-def _preprocess_clean_2x(crop):
+def _upscale_and_denoise_first(crop, target_h=140):
+    if crop is None or crop.size == 0:
+        return crop
     h, w = crop.shape[:2]
-    up = cv2.resize(crop, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-    return _add_white_padding(up, pad=10)
+    if h == 0 or w == 0:
+        return crop
+    scale = max(2.5, target_h / float(h))
+    up = cv2.resize(crop, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+    try:
+        denoised = cv2.fastNlMeansDenoisingColored(up, None, 4, 4, 7, 21) if len(up.shape) == 3 else cv2.fastNlMeansDenoising(up, None, 4, 7, 21)
+        return denoised
+    except Exception:
+        return up
+
+
+def _preprocess_clean_2x(crop):
+    # Upscale 3.5x and denoise first to eliminate pixelation and graininess
+    highres = _upscale_and_denoise_first(crop, target_h=140)
+    return _add_white_padding(highres, pad=15)
 
 
 def _preprocess_tesseract_single_pass(crop):
-    h, w = crop.shape[:2]
-    sh_h, sh_w = int(h * 0.06), int(w * 0.06)
-    if sh_h > 0 and sh_w > 0:
-        crop = crop[sh_h:h-sh_h, sh_w:w-sh_w]
+    if crop is None or crop.size == 0:
+        return crop
 
-    h, w = crop.shape[:2]
-    up = cv2.resize(crop, (int(w * 3.5), int(h * 3.5)), interpolation=cv2.INTER_CUBIC)
-    gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY) if len(up.shape) == 3 else up
-    
-    sharpen_kernel = np.array([[0, -0.5, 0], [-0.5, 3.0, -0.5], [0, -0.5, 0]])
-    sharpened = cv2.filter2D(gray, -1, sharpen_kernel)
+    # 1. Upscale and denoise first to eliminate graininess on small plate crops
+    highres = _upscale_and_denoise_first(crop, target_h=140)
+    gray = cv2.cvtColor(highres, cv2.COLOR_BGR2GRAY) if len(highres.shape) == 3 else highres
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 5))
-    tophat = cv2.morphologyEx(sharpened, cv2.MORPH_TOPHAT, kernel)
-    blackhat = cv2.morphologyEx(sharpened, cv2.MORPH_BLACKHAT, kernel)
-    enhanced = cv2.subtract(cv2.add(sharpened, tophat), blackhat)
+    # 2. Local CLAHE Contrast Isolation for clean character outlines
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
 
-    blur = cv2.GaussianBlur(enhanced, (3, 3), 0)
+    # 3. Mild Sharpening
+    sharpen_k = np.array([[0, -0.5, 0], [-0.5, 3.0, -0.5], [0, -0.5, 0]])
+    sharpened = cv2.filter2D(enhanced, -1, sharpen_k)
+
+    # 4. Otsu Thresholding
+    blur = cv2.GaussianBlur(sharpened, (3, 3), 0)
     _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
     if np.mean(thresh) < 127:
         thresh = cv2.bitwise_not(thresh)
+
     return cv2.cvtColor(_add_white_padding(thresh, pad=15), cv2.COLOR_GRAY2RGB)
 
 

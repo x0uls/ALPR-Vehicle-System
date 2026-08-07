@@ -103,10 +103,9 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             if valid_p:
                 lx1, ly1, lx2, ly2, _ = max(valid_p, key=lambda p: p[4] * (p[2]-p[0]) * (p[3]-p[1]))
                 det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
-                exp = 15
-                lx1_exp, ly1_exp, lx2_exp, ly2_exp = max(0, lx1-exp), max(0, ly1-exp), min(vw, lx2+exp), min(vh, ly2+exp)
-                px, py = max(5, int((lx2_exp-lx1_exp) * 0.10)), max(4, int((ly2_exp-ly1_exp) * 0.15))
-                padded_crop = v_crop[max(0, ly1_exp-py):min(vh, ly2_exp+py), max(0, lx1_exp-px):min(vw, lx2_exp+px)]
+                # Tight crop with 2px padding margin to isolate exact license plate without car body panels
+                pad_m = 2
+                padded_crop = v_crop[max(0, ly1-pad_m):min(vh, ly2+pad_m), max(0, lx1-pad_m):min(vw, lx2+pad_m)]
 
         if padded_crop is None or padded_crop.size == 0:
             discarded_files.append({"filename": out_name, "reason": "No plate detected"})

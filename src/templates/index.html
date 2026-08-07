@@ -6,8 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ALPR Benchmarking Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -15,9 +14,13 @@
             color: #f4f4f5;
         }
 
+        .font-heading {
+            font-family: 'Outfit', sans-serif;
+        }
+
         ::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
+            width: 6px;
+            height: 6px;
         }
 
         ::-webkit-scrollbar-track {
@@ -26,323 +29,309 @@
 
         ::-webkit-scrollbar-thumb {
             background: #27272a;
-            border-radius: 2px;
+            border-radius: 3px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
             background: #3f3f46;
         }
 
-        .active-easyocr-border {
-            border-color: #38bdf8 !important;
+        .glass-card {
+            background: rgba(24, 24, 27, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(39, 39, 42, 0.8);
         }
 
-        .active-pytesseract-border {
-            border-color: #818cf8 !important;
+        .glass-card-sky {
+            background: rgba(12, 74, 110, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .glass-card-indigo {
+            background: rgba(49, 46, 129, 0.15);
+            border: 1px solid rgba(129, 140, 248, 0.2);
         }
     </style>
 </head>
 
-<body class="min-h-screen flex flex-col antialiased selection:bg-zinc-800 selection:text-zinc-100">
+<body class="min-h-screen flex flex-col antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
 
     <!-- Header Section -->
-    <header class="border-b border-zinc-800 bg-zinc-950 px-6 py-3 sticky top-0 z-50">
+    <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-6 py-3.5 sticky top-0 z-40">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="h-7 w-7 rounded border border-zinc-700 bg-zinc-900 flex items-center justify-center">
-                    <svg class="w-4 h-4 text-zinc-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                <div class="h-9 w-9 rounded-xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center shadow-inner">
+                    <svg class="w-5 h-5 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
                     </svg>
                 </div>
                 <div>
-                    <div class="flex items-center gap-2">
-                        <h1 class="text-sm font-semibold text-zinc-100 tracking-tight">ALPR Benchmarking System</h1>
-                        <span class="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">v2.4</span>
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-base font-bold font-heading text-zinc-100 tracking-tight">ALPR Benchmarking System</h1>
+                        <span class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/60">v2.5</span>
                     </div>
-                    <p class="text-[11px] text-zinc-500">Automated Dual-Model Recognition & Ground Truth Analysis</p>
+                    <p class="text-xs text-zinc-400">Automated Dual-Model Recognition & Ground Truth Evaluation</p>
                 </div>
             </div>
 
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    System Ready
+                </span>
+            </div>
         </div>
     </header>
 
     <!-- Main Workspace Container -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-5 flex flex-col gap-5">
+    <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-6 flex flex-col gap-6">
 
-        <!-- 1. Controller Panel -->
+        <!-- 1. Execution Controller Panel -->
         <section class="w-full">
-            <div class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="glass-card rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
                 <div class="flex items-center gap-4 w-full sm:w-auto">
                     <div class="flex flex-col">
-                        <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Execution Controller</span>
-                        <span class="text-xs text-zinc-300 font-mono mt-0.5">Parallel (EasyOCR + PyTesseract)</span>
+                        <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Execution Pipeline</span>
+                        <span class="text-sm font-mono font-medium text-zinc-200 mt-0.5">Parallel Benchmarking Engine</span>
                     </div>
-                    <span class="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">Dual Pipeline</span>
+                    <span class="text-xs font-mono text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-1 rounded-lg">EasyOCR + PyTesseract</span>
                 </div>
 
                 <button id="process-btn" disabled
-                    class="w-full sm:w-auto px-6 bg-zinc-100 hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-500 text-zinc-950 font-medium rounded py-2 text-xs transition-colors cursor-not-allowed disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
-                    <span>
-                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
-                        </svg>
-                    </span>
+                    class="w-full sm:w-auto px-7 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800/80 disabled:text-zinc-500 text-white font-medium rounded-xl text-xs transition-all shadow-lg shadow-indigo-600/20 cursor-not-allowed disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                    </svg>
                     <span>Process & Benchmark Dataset</span>
                 </button>
             </div>
         </section>
 
-        <!-- 2. Full-Width Horizontal Pipeline Status Tracker -->
-        <section id="progress-box"
-            class="bg-zinc-900/60 border border-zinc-800 rounded-md p-3.5 flex flex-col gap-2.5 opacity-60 transition-opacity">
+        <!-- 2. Live Pipeline Progress Tracker -->
+        <section id="progress-box" class="glass-card rounded-2xl p-4 flex flex-col gap-3 opacity-60 transition-opacity">
             <div class="flex items-center justify-between text-xs">
                 <div class="flex items-center gap-2.5">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Pipeline
-                        Status</span>
-                    <span id="progress-status" class="text-xs font-mono text-zinc-300">System Idle</span>
+                    <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Pipeline Status</span>
+                    <span id="progress-status" class="text-xs font-mono text-zinc-200">System Idle</span>
                 </div>
                 <div class="flex items-center gap-5 text-xs font-mono text-zinc-400">
-                    <div>Elapsed: <span id="stat-elapsed" class="text-zinc-200 font-medium">0s</span></div>
-                    <div>Batch: <span id="stat-images" class="text-zinc-200 font-medium">0 images</span></div>
-                    <span id="progress-percent" class="text-zinc-100 font-semibold font-mono">0%</span>
+                    <div>Elapsed: <span id="stat-elapsed" class="text-zinc-100 font-bold">0s</span></div>
+                    <div>Batch: <span id="stat-images" class="text-zinc-100 font-bold">0 images</span></div>
+                    <span id="progress-percent" class="text-indigo-400 font-bold font-mono">0%</span>
                 </div>
             </div>
 
-            <div class="w-full bg-zinc-950 rounded-sm h-1.5 overflow-hidden border border-zinc-900">
-                <div id="progress-bar-fill" class="bg-zinc-300 h-full w-0 transition-all duration-150"></div>
+            <div class="w-full bg-zinc-950 rounded-full h-2 overflow-hidden border border-zinc-800">
+                <div id="progress-bar-fill" class="bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 h-full w-0 transition-all duration-200 rounded-full"></div>
             </div>
         </section>
 
-        <!-- 3. Batch Image Inspection & Dual-Model Results -->
-        <section class="bg-zinc-900/40 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
-            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+        <!-- 3. Upload Zone & Dataset Drop -->
+        <section class="glass-card rounded-2xl p-5 flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
                 <div class="flex items-center gap-2">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Image Results</span>
-                    <span id="image-info" class="text-xs text-zinc-500 font-mono">No images selected</span>
+                    <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Dataset Selection</span>
+                    <span id="image-info" class="text-xs text-zinc-400 font-mono">No images selected</span>
                 </div>
             </div>
 
-            <!-- Upload Zone -->
+            <!-- Drop Zone Container -->
             <div id="upload-zone"
-                class="w-full min-h-[200px] flex flex-col items-center justify-center p-6 border border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-950 transition-all rounded">
+                class="w-full min-h-[190px] flex flex-col items-center justify-center p-6 border-2 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-950/70 transition-all rounded-xl cursor-pointer">
                 <input type="file" id="image-file-input" webkitdirectory directory multiple class="hidden">
                 <input type="file" id="single-file-input" accept="image/*,.csv" multiple class="hidden">
-                
-                <div id="upload-idle-state" class="flex flex-col items-center justify-center cursor-pointer" onclick="document.getElementById('image-file-input').click()">
-                    <span class="text-zinc-500 mb-2">
-                        <svg class="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                d="M2.25 12.75l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12.75M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" />
+
+                <div id="upload-idle-state" class="flex flex-col items-center justify-center" onclick="document.getElementById('image-file-input').click()">
+                    <div class="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 mb-3 shadow-inner">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12.75M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" />
                         </svg>
-                    </span>
-                    <span class="text-xs font-medium text-zinc-300">Drop dataset folder here, or <span
-                            class="text-zinc-100 underline">browse dataset folder</span></span>
-                    <p class="text-[11px] text-zinc-500 mt-1.5 text-center">
-                        Uploaded folder must contain an <span class="font-mono text-zinc-400 font-semibold">images/</span> directory and a <span class="font-mono text-zinc-400 font-semibold">csv/</span> directory
+                    </div>
+                    <span class="text-sm font-medium text-zinc-200">Drop dataset folder here, or <span class="text-indigo-400 hover:underline">browse dataset folder</span></span>
+                    <p class="text-xs text-zinc-500 mt-1.5 text-center">
+                        Folder must contain an <span class="font-mono text-zinc-400 font-semibold">images/</span> folder and a <span class="font-mono text-zinc-400 font-semibold">csv/</span> ground truth folder
                     </p>
                 </div>
 
-                <div id="upload-status-card" class="hidden w-full max-w-lg flex flex-col gap-3">
+                <div id="upload-status-card" class="hidden w-full max-w-md flex flex-col gap-3">
                     <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
                         <span id="folder-name-display" class="text-xs font-semibold font-mono text-zinc-200 truncate">Dataset Folder</span>
-                        <button onclick="resetUploadZone(event)" class="text-[10px] text-zinc-400 hover:text-zinc-200 underline">Choose different folder</button>
+                        <button onclick="resetUploadZone(event)" class="text-xs text-zinc-400 hover:text-zinc-200 underline">Change folder</button>
                     </div>
 
-                    <!-- Status Badges Grid -->
                     <div class="grid grid-cols-2 gap-3 text-xs font-mono">
-                        <!-- Image Count Status -->
-                        <div id="badge-images-container" class="bg-zinc-900 border border-zinc-800 rounded p-2.5 flex flex-col gap-1">
-                            <span class="text-[10px] text-zinc-400 font-sans uppercase tracking-wider">Detected Images</span>
-                            <div id="badge-images-content" class="flex items-center gap-1.5 font-semibold text-emerald-400">
+                        <div class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-1">
+                            <span class="text-[10px] text-zinc-400 uppercase tracking-wider font-sans">Detected Images</span>
+                            <div class="flex items-center gap-1.5 font-bold text-emerald-400">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                 <span id="text-images-count">0 images</span>
                             </div>
                         </div>
 
-                        <!-- CSV File Status -->
-                        <div id="badge-csv-container" class="bg-zinc-900 border border-zinc-800 rounded p-2.5 flex flex-col gap-1">
-                            <span class="text-[10px] text-zinc-400 font-sans uppercase tracking-wider">Ground Truth CSV</span>
-                            <div id="badge-csv-content" class="flex items-center gap-1.5 font-semibold text-emerald-400">
+                        <div class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-1">
+                            <span class="text-[10px] text-zinc-400 uppercase tracking-wider font-sans">Ground Truth CSV</span>
+                            <div class="flex items-center gap-1.5 font-bold text-emerald-400">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                 <span id="text-csv-name">ground_truth.csv</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Validation Error Message Banner -->
-                    <div id="upload-error-banner" class="hidden bg-rose-950/50 border border-rose-800/80 rounded p-2.5 text-xs text-rose-300 font-sans flex items-start gap-2">
+                    <div id="upload-error-banner" class="hidden bg-rose-950/40 border border-rose-800/60 rounded-xl p-3 text-xs text-rose-300 font-sans flex items-start gap-2">
                         <svg class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                         <span id="upload-error-text">Upload folder must contain both an 'images/' folder and a 'csv/' folder.</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Image Results Container -->
-            <div id="image-results-container" class="hidden flex flex-col gap-5 w-full overflow-y-auto max-h-[800px]">
+            <div id="image-results-container" class="hidden flex flex-col gap-4 w-full overflow-y-auto max-h-[800px]">
             </div>
         </section>
 
         <!-- Discarded Images Section -->
-        <section id="discarded-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-4 hidden">
+        <section id="discarded-section" class="glass-card rounded-2xl p-4 flex flex-col gap-3 hidden">
             <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
                 <div class="flex items-center gap-2">
-                    <span class="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">Discarded Images Summary</span>
-                    <span id="discarded-badge" class="text-[10px] px-2 py-0.5 rounded bg-amber-950/60 text-amber-300 font-mono border border-amber-800/50">0 Discarded</span>
+                    <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Discarded Images Summary</span>
+                    <span id="discarded-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono border border-amber-500/20">0 Discarded</span>
                 </div>
-                <button id="toggle-discarded-btn" onclick="toggleDiscardedList()" class="text-xs text-zinc-400 hover:text-zinc-200 underline font-mono">Show Details →</button>
+                <button id="toggle-discarded-btn" onclick="toggleDiscardedList()" class="hidden text-xs text-zinc-400 hover:text-zinc-200 underline font-mono">Show Details →</button>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
-                <div class="bg-zinc-950 border border-zinc-800 rounded p-3 flex flex-col gap-1">
+                <div class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-1">
                     <span class="text-[10px] text-zinc-400 uppercase tracking-wider">Total Discarded</span>
-                    <span id="discarded-total-val" class="text-base font-bold text-amber-400">0</span>
+                    <span id="discarded-total-val" class="text-lg font-bold text-amber-400">0</span>
                 </div>
-                <div class="bg-zinc-950 border border-zinc-800 rounded p-3 flex flex-col gap-1">
+                <div class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-1">
                     <span class="text-[10px] text-zinc-400 uppercase tracking-wider">No Car Detected</span>
-                    <span id="discarded-nocar-val" class="text-base font-bold text-rose-400">0</span>
+                    <span id="discarded-nocar-val" class="text-lg font-bold text-rose-400">0</span>
                 </div>
-                <div class="bg-zinc-950 border border-zinc-800 rounded p-3 flex flex-col gap-1">
+                <div class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-1">
                     <span class="text-[10px] text-zinc-400 uppercase tracking-wider">No Plate Detected</span>
-                    <span id="discarded-noplate-val" class="text-base font-bold text-orange-400">0</span>
+                    <span id="discarded-noplate-val" class="text-lg font-bold text-orange-400">0</span>
                 </div>
             </div>
 
-            <!-- Expandable List of Discarded Files -->
-            <div id="discarded-list-container" class="hidden bg-zinc-950 border border-zinc-800/80 rounded p-3 flex flex-col gap-2 max-h-[250px] overflow-y-auto font-mono text-xs">
+            <div id="discarded-list-container" class="hidden bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-2 max-h-[250px] overflow-y-auto font-mono text-xs">
                 <div class="text-[10px] text-zinc-500 uppercase tracking-wider pb-1 border-b border-zinc-900">Discarded File Breakdown</div>
                 <div id="discarded-files-list" class="divide-y divide-zinc-900 flex flex-col">
                 </div>
             </div>
         </section>
 
-        <!-- 4. Benchmark Analytics & Visualizations Section (Revised Strategy Layout) -->
-        <section id="charts-section" class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-4">
-            <!-- Header Summary Bar -->
-            <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+        <!-- 4. Core Benchmark Analytics Grid -->
+        <section id="charts-section" class="glass-card rounded-2xl p-5 flex flex-col gap-5">
+            <!-- Summary Bar -->
+            <div class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
                 <div class="flex items-center gap-3">
-                    <div id="stat-winner-badge" class="px-2.5 py-1 rounded font-semibold bg-zinc-800 border border-zinc-700 text-amber-400 flex items-center gap-1.5">
-                        <span>Automatic Winner:</span>
-                        <span id="stat-winner-name" class="text-zinc-200">--</span>
+                    <div id="stat-winner-badge" class="px-3 py-1 rounded-lg font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center gap-1.5">
+                        <span>Benchmark Winner:</span>
+                        <span id="stat-winner-name" class="text-zinc-100 font-bold">--</span>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-4 text-zinc-400">
-                    <div>Total Vehicles: <span id="summary-vehicles-count" class="text-zinc-200 font-semibold">0</span></div>
-                    <div>Discarded: <span id="summary-discarded-count" class="text-amber-400 font-semibold">0</span></div>
-                    <div>Latency: <span id="summary-latency" class="text-zinc-200 font-semibold">0ms</span></div>
-                    <div>Total Time: <span id="summary-total-time" class="text-zinc-200 font-semibold">0s</span></div>
+                <div class="flex items-center gap-5 text-zinc-400">
+                    <div>Total Vehicles: <span id="summary-vehicles-count" class="text-zinc-100 font-bold">0</span></div>
+                    <div>Discarded: <span id="summary-discarded-count" class="text-amber-400 font-bold">0</span></div>
+                    <div>Latency: <span id="summary-latency" class="text-zinc-100 font-bold">0ms</span></div>
+                    <div>Total Time: <span id="summary-total-time" class="text-zinc-100 font-bold">0s</span></div>
                 </div>
             </div>
 
-            <!-- Granular Academic Metrics Comparison Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- EasyOCR Academic Metrics Card -->
-                <div class="bg-zinc-950 border border-sky-900/50 rounded-md p-3 flex flex-col gap-2 font-mono">
-                    <div class="flex items-center justify-between border-b border-sky-950 pb-1.5">
-                        <span class="text-xs font-semibold text-sky-400">EasyOCR Academic Metrics</span>
-                        <span id="easy-ema-badge" class="text-[10px] px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800">EMA: --%</span>
+            <!-- Clean Core Benchmark Metrics Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <!-- EasyOCR Core Metrics Card -->
+                <div class="glass-card-sky rounded-2xl p-4 flex flex-col gap-3 font-mono shadow-lg">
+                    <div class="flex items-center justify-between border-b border-sky-500/20 pb-2">
+                        <span class="text-xs font-bold font-heading text-sky-400 tracking-wide">EasyOCR Core Metrics</span>
+                        <span id="easy-ema-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/30">EMA: --%</span>
                     </div>
-                    <div class="grid grid-cols-5 gap-2 text-center text-xs">
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">EMA %</span>
-                            <span id="easy-ema-val" class="font-bold text-sky-400">--%</span>
+                    <div class="grid grid-cols-4 gap-2.5 text-center text-xs">
+                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Exact Match</span>
+                            <span id="easy-ema-val" class="font-bold text-sky-400 text-base font-heading mt-0.5">--%</span>
                         </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">HA %</span>
-                            <span id="easy-ha-val" class="font-bold text-emerald-400">--%</span>
+                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-400 uppercase font-sans">High Accuracy</span>
+                            <span id="easy-ha-val" class="font-bold text-emerald-400 text-base font-heading mt-0.5">--%</span>
                         </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">CRR %</span>
-                            <span id="easy-crr-val" class="font-bold text-teal-400">--%</span>
+                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Char Recognition</span>
+                            <span id="easy-crr-val" class="font-bold text-teal-400 text-base font-heading mt-0.5">--%</span>
                         </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">CER %</span>
-                            <span id="easy-cer-val" class="font-bold text-rose-400">--%</span>
-                        </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">Latency</span>
-                            <span id="easy-lat-val" class="font-bold text-zinc-300">--ms</span>
+                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Speed</span>
+                            <span id="easy-lat-val" class="font-bold text-zinc-200 text-base font-heading mt-0.5">--ms</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- PyTesseract Academic Metrics Card -->
-                <div class="bg-zinc-950 border border-indigo-900/50 rounded-md p-3 flex flex-col gap-2 font-mono">
-                    <div class="flex items-center justify-between border-b border-indigo-950 pb-1.5">
-                        <span class="text-xs font-semibold text-indigo-400">PyTesseract Academic Metrics</span>
-                        <span id="tess-ema-badge" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">EMA: --%</span>
+                <!-- PyTesseract Core Metrics Card -->
+                <div class="glass-card-indigo rounded-2xl p-4 flex flex-col gap-3 font-mono shadow-lg">
+                    <div class="flex items-center justify-between border-b border-indigo-500/20 pb-2">
+                        <span class="text-xs font-bold font-heading text-indigo-400 tracking-wide">PyTesseract Core Metrics</span>
+                        <span id="tess-ema-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">EMA: --%</span>
                     </div>
-                    <div class="grid grid-cols-5 gap-2 text-center text-xs">
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">EMA %</span>
-                            <span id="tess-ema-val" class="font-bold text-indigo-400">--%</span>
+                    <div class="grid grid-cols-4 gap-2.5 text-center text-xs">
+                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Exact Match</span>
+                            <span id="tess-ema-val" class="font-bold text-indigo-400 text-base font-heading mt-0.5">--%</span>
                         </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">HA %</span>
-                            <span id="tess-ha-val" class="font-bold text-emerald-400">--%</span>
+                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-400 uppercase font-sans">High Accuracy</span>
+                            <span id="tess-ha-val" class="font-bold text-emerald-400 text-base font-heading mt-0.5">--%</span>
                         </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">CRR %</span>
-                            <span id="tess-crr-val" class="font-bold text-teal-400">--%</span>
+                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Char Recognition</span>
+                            <span id="tess-crr-val" class="font-bold text-teal-400 text-base font-heading mt-0.5">--%</span>
                         </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">CER %</span>
-                            <span id="tess-cer-val" class="font-bold text-rose-400">--%</span>
-                        </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 rounded p-1.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-500 uppercase">Latency</span>
-                            <span id="tess-lat-val" class="font-bold text-zinc-300">--ms</span>
+                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
+                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Speed</span>
+                            <span id="tess-lat-val" class="font-bold text-zinc-200 text-base font-heading mt-0.5">--ms</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Matplotlib Rendered Dashboard Card -->
-            <div id="matplotlib-card" class="bg-zinc-950 border border-zinc-800 rounded-md p-3 flex flex-col gap-2">
+            <div id="matplotlib-card" class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-4 flex flex-col gap-3">
                 <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
-                    <span class="text-xs font-semibold text-zinc-300 font-mono">Matplotlib Benchmark Analytics Dashboard</span>
-                    <span class="text-[10px] text-emerald-400 font-mono">High-Res Analytics Figure</span>
+                    <span class="text-xs font-bold font-heading text-zinc-200">Matplotlib Benchmark Analytics Figure</span>
+                    <span class="text-xs text-indigo-400 font-mono font-medium">Visual Analytics Figure</span>
                 </div>
-                <div class="w-full flex items-center justify-center bg-zinc-950 rounded overflow-hidden p-1">
-                    <img id="matplotlib-img" src="" alt="Matplotlib Benchmark" class="w-full h-auto object-contain rounded border border-zinc-900 hidden" />
+                <div class="w-full flex items-center justify-center bg-zinc-950 rounded-xl overflow-hidden p-2 border border-zinc-900">
+                    <img id="matplotlib-img" src="" alt="Matplotlib Benchmark" class="w-full h-auto object-contain rounded-lg border border-zinc-900 hidden" />
                     <span id="matplotlib-placeholder" class="py-12 text-zinc-600 text-xs font-mono">Run a process to generate Matplotlib analytics figure.</span>
                 </div>
             </div>
         </section>
 
         <!-- 5. Bottom Section: Side-by-Side Model Detections Table -->
-        <section id="table-section"
-            class="bg-zinc-900/60 border border-zinc-800 rounded-md p-4 flex flex-col gap-3 min-h-[360px] w-full">
-            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+        <section id="table-section" class="glass-card rounded-2xl p-5 flex flex-col gap-4 min-h-[360px] w-full">
+            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
                 <div class="flex items-center gap-2.5">
-                    <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Side-by-Side Model
-                        Detections</span>
-                    <span id="log-count"
-                        class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono border border-zinc-700">0
-                        Total</span>
+                    <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Side-by-Side Model Detections</span>
+                    <span id="log-count" class="text-xs px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-mono border border-zinc-700/60">0 Total</span>
                 </div>
             </div>
 
             <div class="grow overflow-x-auto">
                 <table class="w-full text-left text-xs border-collapse font-mono">
                     <thead>
-                        <tr class="border-b border-zinc-800/80 text-zinc-400 text-[11px] font-sans">
-                            <th class="py-2.5 px-2 font-semibold">ID</th>
-                            <th class="py-2.5 px-2 font-semibold">File Name</th>
-                            <th class="py-2.5 px-2 font-semibold">Vehicle</th>
-                            <th class="py-2.5 px-2 font-semibold text-sky-400">EasyOCR Read</th>
-                            <th class="py-2.5 px-2 font-semibold text-indigo-400">PyTesseract Read</th>
-                            <th class="py-2.5 px-2 font-semibold text-zinc-300">Ground Truth</th>
-                            <th class="py-2.5 px-2 font-semibold text-zinc-400">Winner</th>
+                        <tr class="border-b border-zinc-800 text-zinc-400 text-xs font-sans">
+                            <th class="py-3 px-3 font-semibold">ID</th>
+                            <th class="py-3 px-3 font-semibold">File Name</th>
+                            <th class="py-3 px-3 font-semibold">Vehicle</th>
+                            <th class="py-3 px-3 font-semibold text-sky-400">EasyOCR Read</th>
+                            <th class="py-3 px-3 font-semibold text-indigo-400">PyTesseract Read</th>
+                            <th class="py-3 px-3 font-semibold text-zinc-300">Ground Truth</th>
+                            <th class="py-3 px-3 font-semibold text-zinc-400">Winner</th>
                         </tr>
                     </thead>
                     <tbody id="log-table-body" class="divide-y divide-zinc-800/40 text-zinc-300">
                         <tr id="empty-log-row">
-                            <td colspan="7" class="text-center py-12 text-zinc-500 font-sans text-xs">No vehicle records
-                                populated. Run a process to benchmark.</td>
+                            <td colspan="7" class="text-center py-12 text-zinc-500 font-sans text-xs">No vehicle records populated. Run a process to benchmark.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -351,111 +340,19 @@
 
     </main>
 
-    <!-- Dual-Model Comparison Detail Modal -->
-    <div id="detail-modal"
-        class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-        <div
-            class="bg-zinc-950 border border-zinc-800 rounded-lg max-w-2xl w-full p-5 shadow-2xl flex flex-col gap-4 relative">
-            <button onclick="closeDetailModal()"
-                class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-100 p-1 rounded-md hover:bg-zinc-900 transition-colors">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            </button>
-
-            <!-- Modal Header -->
-            <div class="flex items-center gap-3 border-b border-zinc-800 pb-3">
-                <div class="h-8 w-8 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 font-mono font-bold text-xs"
-                    id="modal-track-id">#--</div>
-                <div>
-                    <h3 class="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                        <span>Vehicle Telemetry & Dual Recognition Analysis</span>
-                    </h3>
-                    <p class="text-[11px] text-zinc-400" id="modal-meta">--</p>
-                </div>
-            </div>
-
-            <!-- Full Snapshot Image -->
-            <div
-                class="bg-zinc-900 border border-zinc-800/80 rounded overflow-hidden flex items-center justify-center min-h-[160px] max-h-[220px]">
-                <img id="modal-snapshot-img" src="" alt="Vehicle Snapshot"
-                    class="object-contain max-h-[220px] w-full hidden">
-                <span id="modal-snapshot-placeholder" class="text-zinc-600 text-xs font-mono">No snapshot image
-                    available</span>
-            </div>
-
-            <!-- Side-by-Side Model Detections -->
-            <div class="grid grid-cols-2 gap-4">
-                <!-- EasyOCR Card -->
-                <div class="bg-zinc-900/60 border border-sky-900/50 rounded p-3 flex flex-col gap-2">
-                    <div class="flex items-center justify-between border-b border-sky-950 pb-1.5">
-                        <span class="text-xs font-semibold text-sky-400 font-mono">EasyOCR Engine</span>
-                        <span class="text-[10px] font-mono text-zinc-400" id="modal-easy-conf">--% conf</span>
-                    </div>
-                    <div
-                        class="bg-zinc-950 border border-zinc-800 rounded p-2 flex items-center justify-center min-h-[50px]">
-                        <img id="modal-easy-crop" src="" class="max-h-[45px] object-contain hidden">
-                        <span id="modal-easy-crop-empty" class="text-[11px] text-zinc-600 font-mono">No crop
-                            image</span>
-                    </div>
-                    <div class="flex flex-col text-xs font-mono gap-1 mt-1">
-                        <div class="flex justify-between">
-                            <span class="text-zinc-500">Read:</span>
-                            <span class="text-sky-300 font-bold" id="modal-easy-read">--</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-zinc-500">CER Error:</span>
-                            <span class="text-zinc-300" id="modal-easy-cer">--</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PyTesseract Card -->
-                <div class="bg-zinc-900/60 border border-indigo-900/50 rounded p-3 flex flex-col gap-2">
-                    <div class="flex items-center justify-between border-b border-indigo-950 pb-1.5">
-                        <span class="text-xs font-semibold text-indigo-400 font-mono">PyTesseract Engine</span>
-                        <span class="text-[10px] font-mono text-zinc-400" id="modal-tess-conf">--% conf</span>
-                    </div>
-                    <div
-                        class="bg-zinc-950 border border-zinc-800 rounded p-2 flex items-center justify-center min-h-[50px]">
-                        <img id="modal-tess-crop" src="" class="max-h-[45px] object-contain hidden">
-                        <span id="modal-tess-crop-empty" class="text-[11px] text-zinc-600 font-mono">No crop
-                            image</span>
-                    </div>
-                    <div class="flex flex-col text-xs font-mono gap-1 mt-1">
-                        <div class="flex justify-between">
-                            <span class="text-zinc-500">Read:</span>
-                            <span class="text-indigo-300 font-bold" id="modal-tess-read">--</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-zinc-500">CER Error:</span>
-                        </div>
-                    </div>
-                </div>
-                </section>
-            </div>
-
-            <!-- Footer -->
-            <footer class="border-t border-zinc-800 bg-zinc-950 py-3.5 px-6 text-center text-xs text-zinc-500 mt-auto">
-                ALPR Benchmarking System
-            </footer>
-
-            <!-- Frontend Application Logic Script -->
-            <script src="/static/js/main.js"></script>
-
-    <!-- ── Detail Telemetry Modal ── -->
-    <div id="detail-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 hidden">
-        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 relative">
-            <button onclick="closeDetailModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white p-2 rounded-full hover:bg-zinc-800 transition-colors">
+    <!-- Detail Telemetry Modal -->
+    <div id="detail-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 hidden">
+        <div class="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 relative">
+            <button onclick="closeDetailModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white p-2 rounded-full hover:bg-zinc-900 transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
             <div class="flex items-center gap-3 mb-4">
-                <span id="modal-track-id" class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">#1</span>
-                <span id="modal-meta" class="text-sm font-mono text-zinc-400">CAR BLACK • File: frame_0001.png • Matched GT: WOG6731</span>
+                <span id="modal-track-id" class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">#1</span>
+                <span id="modal-meta" class="text-sm font-mono text-zinc-300">CAR BLACK • File: frame_0001.png • Matched GT: WOG6731</span>
             </div>
 
             <!-- Vehicle Snapshot Image -->
-            <div class="mb-6 rounded-xl overflow-hidden bg-black border border-zinc-800 max-h-[350px] flex items-center justify-center">
+            <div class="mb-6 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 max-h-[350px] flex items-center justify-center">
                 <img id="modal-snapshot-img" src="" alt="Vehicle Snapshot" class="max-h-[350px] object-contain w-full">
                 <div id="modal-snapshot-placeholder" class="py-12 text-zinc-600 font-mono text-sm hidden">No Vehicle Snapshot Available</div>
             </div>
@@ -463,39 +360,41 @@
             <!-- Side by Side Model Telemetry Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- EasyOCR Card -->
-                <div class="bg-zinc-950/60 border border-sky-900/40 rounded-xl p-4">
+                <div class="glass-card-sky rounded-xl p-4">
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-xs font-mono font-bold text-sky-400">EasyOCR Model</span>
-                        <span id="modal-easy-conf" class="text-xs font-mono text-zinc-400">95% conf</span>
+                        <span id="modal-easy-conf" class="text-xs font-mono text-zinc-400">--% conf</span>
                     </div>
-                    <div class="text-2xl font-mono font-bold text-sky-300 mb-3" id="modal-easy-read">WOG6731</div>
-                    <div class="flex items-center gap-4 text-xs font-mono text-zinc-400 mb-3">
-                        <span>CER: <strong id="modal-easy-cer" class="text-zinc-200">0.0%</strong></span>
-                    </div>
-                    <div class="h-24 rounded-lg bg-black border border-zinc-800 flex items-center justify-center overflow-hidden">
-                        <img id="modal-easy-crop" src="" alt="EasyOCR Preprocessed Crop" class="h-full object-contain">
+                    <div class="text-2xl font-mono font-bold text-sky-300 mb-3" id="modal-easy-read">--</div>
+                    <div class="h-24 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center overflow-hidden">
+                        <img id="modal-easy-crop" src="" alt="EasyOCR Crop" class="h-full object-contain">
                         <span id="modal-easy-crop-empty" class="text-xs font-mono text-zinc-600 hidden">No Crop</span>
                     </div>
                 </div>
 
                 <!-- PyTesseract Card -->
-                <div class="bg-zinc-950/60 border border-indigo-900/40 rounded-xl p-4">
+                <div class="glass-card-indigo rounded-xl p-4">
                     <div class="flex items-center justify-between mb-3">
                         <span class="text-xs font-mono font-bold text-indigo-400">PyTesseract Model</span>
-                        <span id="modal-tess-conf" class="text-xs font-mono text-zinc-400">80% conf</span>
+                        <span id="modal-tess-conf" class="text-xs font-mono text-zinc-400">--% conf</span>
                     </div>
-                    <div class="text-2xl font-mono font-bold text-indigo-300 mb-3" id="modal-tess-read">WOG6731</div>
-                    <div class="flex items-center gap-4 text-xs font-mono text-zinc-400 mb-3">
-                        <span>CER: <strong id="modal-tess-cer" class="text-zinc-200">0.0%</strong></span>
-                    </div>
-                    <div class="h-24 rounded-lg bg-black border border-zinc-800 flex items-center justify-center overflow-hidden">
-                        <img id="modal-tess-crop" src="" alt="PyTesseract Preprocessed Crop" class="h-full object-contain">
+                    <div class="text-2xl font-mono font-bold text-indigo-300 mb-3" id="modal-tess-read">--</div>
+                    <div class="h-24 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center overflow-hidden">
+                        <img id="modal-tess-crop" src="" alt="PyTesseract Crop" class="h-full object-contain">
                         <span id="modal-tess-crop-empty" class="text-xs font-mono text-zinc-600 hidden">No Crop</span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-zinc-800/80 bg-zinc-950 py-4 px-6 text-center text-xs text-zinc-500 mt-auto">
+        ALPR Dual-Model Benchmarking System • Modern Web Interface
+    </footer>
+
+    <!-- Application Script -->
+    <script src="/static/js/main.js"></script>
 </body>
 
 </html>
