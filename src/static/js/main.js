@@ -240,9 +240,18 @@ function levenshteinDistance(a, b) {
 
 function renderDualTable() {
     const logTableBody = document.getElementById('log-table-body');
+    const logCountEl = document.getElementById('log-count');
     if (!logTableBody) return;
     logTableBody.innerHTML = '';
     const keys = Object.keys(dualLogsMap);
+    if (logCountEl) logCountEl.textContent = `${keys.length} Total`;
+
+    if (keys.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="7" class="py-8 text-center text-zinc-600 font-mono text-xs">No vehicle detections found in dataset.</td>`;
+        logTableBody.appendChild(tr);
+        return;
+    }
 
     keys.forEach(key => {
         const pair = dualLogsMap[key];
@@ -256,6 +265,33 @@ function renderDualTable() {
         const easyText = easy.plate_number ? `${easy.plate_number} (${Math.round(easy.confidence * 100)}%)` : '--';
         const tessText = tess.plate_number ? `${tess.plate_number} (${Math.round(tess.confidence * 100)}%)` : '--';
 
+        const eNorm = (easy.plate_number || '').replace(/\s+/g, '').toUpperCase();
+        const tNorm = (tess.plate_number || '').replace(/\s+/g, '').toUpperCase();
+        const gtNorm = (gtStr || '').replace(/\s+/g, '').toUpperCase();
+
+        let badgeHtml = '<span class="text-zinc-600 font-mono text-[10px]">--</span>';
+        if (gtNorm && gtNorm !== '--') {
+            const eMatch = eNorm === gtNorm;
+            const tMatch = tNorm === gtNorm;
+            if (eMatch && tMatch) {
+                badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50">Match</span>';
+            } else if (eMatch) {
+                badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50">EasyOCR</span>';
+            } else if (tMatch) {
+                badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50">PyTesseract</span>';
+            } else {
+                const eDist = eNorm ? levenshteinDistance(eNorm, gtNorm) : 99;
+                const tDist = tNorm ? levenshteinDistance(tNorm, gtNorm) : 99;
+                if (eDist <= 2 && eDist <= tDist) {
+                    badgeHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400/80 border border-sky-900/40">EasyOCR (${eDist} diff)</span>`;
+                } else if (tDist <= 2 && tDist < eDist) {
+                    badgeHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400/80 border border-indigo-900/40">PyTesseract (${tDist} diff)</span>`;
+                } else {
+                    badgeHtml = '<span class="text-zinc-600 font-mono text-[10px]">Misread</span>';
+                }
+            }
+        }
+
         tr.innerHTML = `
             <td class="py-2.5 px-2 font-mono text-zinc-400">#${pair.track_id}</td>
             <td class="py-2.5 px-2 font-mono text-zinc-300 truncate max-w-[150px]" title="${pair.file_name}">${pair.file_name}</td>
@@ -263,7 +299,7 @@ function renderDualTable() {
             <td class="py-2.5 px-2 font-semibold text-sky-400 group-hover:underline">${easyText}</td>
             <td class="py-2.5 px-2 font-semibold text-indigo-400 group-hover:underline">${tessText}</td>
             <td class="py-2.5 px-2 text-zinc-300 font-mono font-bold">${gtStr}</td>
-            <td class="py-2.5 px-2 flex items-center gap-2"><span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50">Match</span><span class="text-[10px] text-zinc-500 group-hover:text-zinc-300 underline font-sans ml-auto">Details →</span></td>
+            <td class="py-2.5 px-2 flex items-center gap-2">${badgeHtml}<span class="text-[10px] text-zinc-500 group-hover:text-zinc-300 underline font-sans ml-auto">Details →</span></td>
         `;
         logTableBody.appendChild(tr);
     });
