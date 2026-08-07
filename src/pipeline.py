@@ -5,7 +5,6 @@ import torch
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
 
-
 from src.color.color_detector import detect_dominant_color
 from src.logging.logger import log_detection, flush_all_logs
 from src.ocr.plate_ocr import read_plate
@@ -14,301 +13,149 @@ VEHICLE_CLASSES = {2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
 MIN_VEHICLE_CONFIDENCE = 0.4
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-vehicle_model = YOLO("yolov8n.pt")
-vehicle_model.to(device)
-
+vehicle_model = YOLO("yolov8n.pt").to(device)
 plate_model_path = "models/yolo_plate/best.pt"
-if os.path.exists(plate_model_path):
-    plate_model = YOLO(plate_model_path)
-    plate_model.to(device)
-else:
-    plate_model = None
+plate_model = YOLO(plate_model_path).to(device) if os.path.exists(plate_model_path) else None
 
 
 def _to_url(path):
-    """Converts a local file path to a URL-safe path for the frontend."""
     return "/" + str(path).replace("\\", "/") if path else None
 
 
-def _ocr_worker(plate_crop_image, vehicle_crop_image, ocr_engine_name, img_id, det_id):
-    plate_text, ocr_conf, engine, processed_crop = read_plate(plate_crop_image, ocr_engine_name)
-
-    processed_crop_path = f"outputs/plate_crops/Processed/img{img_id}_det{det_id}_{ocr_engine_name.lower()}.jpg"
-    if processed_crop is not None and processed_crop.size > 0:
-        cv2.imwrite(processed_crop_path, processed_crop)
-    else:
-        cv2.imwrite(processed_crop_path, plate_crop_image)
-
+def _ocr_worker(plate_crop, vehicle_crop, engine_name, img_id, det_id):
+    plate_text, ocr_conf, engine, proc_crop = read_plate(plate_crop, engine_name)
+    
+    proc_path = f"outputs/plate_crops/Processed/img{img_id}_det{det_id}_{engine_name.lower()}.jpg"
+    cv2.imwrite(proc_path, proc_crop if proc_crop is not None and proc_crop.size > 0 else plate_crop)
+    
     safe_text = (plate_text or "no_read").replace(' ', '_')
-    snapshot_path = f"outputs/snapshots/img{img_id}_det{det_id}_{safe_text}.jpg"
-    cv2.imwrite(snapshot_path, vehicle_crop_image)
+    snap_path = f"outputs/snapshots/img{img_id}_det{det_id}_{safe_text}.jpg"
+    cv2.imwrite(snap_path, vehicle_crop)
 
     return {
-        "engine": ocr_engine_name,
-        "img_id": img_id,
-        "det_id": det_id,
-        "plate_text": plate_text,
-        "conf": ocr_conf,
-        "processed_crop_path": processed_crop_path,
-        "snapshot_path": snapshot_path
+        "engine": engine_name, "det_id": det_id, "plate_text": plate_text,
+        "conf": ocr_conf, "processed_crop_path": proc_path, "snapshot_path": snap_path
     }
 
 
-def _draw_overlay(frame, bbox, vehicle_type, color, plate_text, conf, local_plate_bbox, model_theme="EasyOCR"):
-    primary_color = (200, 0, 255) if model_theme == "PyTesseract" else (0, 200, 255)
-    annotator = Annotator(frame, line_width=2)
-
-    parts = [vehicle_type.capitalize()]
-    if color:
-        parts.append(color.capitalize())
-    if plate_text:
-        parts.append(f"• {plate_text} ({int(conf * 100)}%)")
-
-    label_str = " ".join(parts)
-    annotator.box_label(bbox, label_str, color=primary_color)
-
+def _draw_overlay(frame, bbox, v_type, color, text, conf, local_plate_bbox, theme):
+    color_rgb = (200, 0, 255) if theme == "PyTesseract" else (0, 200, 255)
+    ann = Annotator(frame, line_width=2)
+    label = f"{v_type.capitalize()} {color.capitalize() if color else ''} • {text} ({int(conf * 100)}%)" if text else f"{v_type.capitalize()} {color.capitalize() if color else ''}"
+    ann.box_label(bbox, label, color=color_rgb)
     if local_plate_bbox:
         x1, y1, _, _ = bbox
-        lpx1, lpy1, lpx2, lpy2 = local_plate_bbox
-        annotator.box_label((x1 + lpx1, y1 + lpy1, x1 + lpx2, y1 + lpy2), label="Plate", color=(50, 50, 255))
+        lx1, ly1, lx2, ly2 = local_plate_bbox
+        ann.box_label((x1 + lx1, y1 + ly1, x1 + lx2, y1 + ly2), label="Plate", color=(50, 50, 255))
 
 
 def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
-    """
-    Processes a bulk list of static images.
-    Discards images where no vehicle or license plate is detected by YOLO.
-    Returns a dict with 'results' (valid detections) and 'discarded_stats'.
-    """
-    frames = []
-    valid_path_indices = []
+    frames, valid_indices = [], []
     for idx, path in enumerate(image_paths):
         img = cv2.imread(path)
-        if img is None:
-            continue
-        # Resize if too large
+        if img is None: continue
         if img.shape[1] > 1920:
-            scale = 1920 / float(img.shape[1])
-            img = cv2.resize(img, (1920, int(img.shape[0] * scale)))
+            img = cv2.resize(img, (1920, int(img.shape[0] * (1920 / float(img.shape[1])))))
         frames.append(img)
-        valid_path_indices.append(idx)
+        valid_indices.append(idx)
 
     if not frames:
-        return {
-            "results": [],
-            "discarded_stats": {
-                "total_discarded": 0,
-                "no_vehicle_count": 0,
-                "no_plate_count": 0,
-                "discarded_files": []
-            }
-        }
+        return {"results": [], "discarded_stats": {"total_discarded": 0, "no_vehicle_count": 0, "no_plate_count": 0, "discarded_files": []}}
 
-    # Create output directories once before processing
     for d in ["outputs/plate_crops/Processed", "outputs/snapshots", "outputs/annotated"]:
         os.makedirs(d, exist_ok=True)
 
-    # Detect Vehicles in batch
-    batch_vehicle_results = vehicle_model(frames, verbose=False, conf=MIN_VEHICLE_CONFIDENCE)
-
-    futures = []
-    detections_by_image = {i: [] for i in range(len(frames))}
-    discarded_files = []
-    
+    batch_v_res = vehicle_model(frames, verbose=False, conf=MIN_VEHICLE_CONFIDENCE)
+    futures, detections_by_image, discarded_files = [], {i: [] for i in range(len(frames))}, []
     det_counter = 1
 
-    for img_id, (frame, vehicle_results) in enumerate(zip(frames, batch_vehicle_results)):
-        out_filename = os.path.basename(image_paths[valid_path_indices[img_id]])
-        candidate_vehicles = []
-
-        # Collect all detected vehicles in this frame
-        for box in vehicle_results.boxes:
-            class_id = int(box.cls[0])
-            if class_id not in VEHICLE_CLASSES:
-                continue
+    for img_id, (frame, v_res) in enumerate(zip(frames, batch_v_res)):
+        out_name = os.path.basename(image_paths[valid_indices[img_id]])
+        candidates = []
+        for box in v_res.boxes:
+            cid = int(box.cls[0])
+            if cid not in VEHICLE_CLASSES: continue
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             v_crop = frame[max(0, y1):min(frame.shape[0], y2), max(0, x1):min(frame.shape[1], x2)]
-            if v_crop.size == 0:
-                continue
+            if v_crop.size > 0:
+                candidates.append({"bbox": (x1, y1, x2, y2), "area": (x2-x1)*(y2-y1), "v_type": VEHICLE_CLASSES[cid], "color": detect_dominant_color(v_crop), "v_crop": v_crop})
 
-            v_type = VEHICLE_CLASSES[class_id]
-            v_color = detect_dominant_color(v_crop)
-            area = (x2 - x1) * (y2 - y1)
-
-            candidate_vehicles.append({
-                "bbox": (x1, y1, x2, y2),
-                "area": area,
-                "vehicle_type": v_type,
-                "color": v_color,
-                "v_crop": v_crop
-            })
-
-        if not candidate_vehicles:
-            discarded_files.append({
-                "filename": out_filename,
-                "reason": "No car detected"
-            })
+        if not candidates:
+            discarded_files.append({"filename": out_name, "reason": "No car detected"})
             continue
 
-        # SELECT ONLY THE SINGLE LARGEST VEHICLE BY AREA
-        main_vehicle = max(candidate_vehicles, key=lambda v: v["area"])
-        det_info = {
-            "det_id": det_counter,
-            "bbox": main_vehicle["bbox"],
-            "vehicle_type": main_vehicle["vehicle_type"],
-            "color": main_vehicle["color"],
-            "v_crop": main_vehicle["v_crop"],
-            "local_plate_bbox": None
-        }
-        v_crop = det_info["v_crop"]
-        v_h, v_w = v_crop.shape[:2]
-
+        main_v = max(candidates, key=lambda c: c["area"])
+        v_crop, (vh, vw) = main_v["v_crop"], main_v["v_crop"].shape[:2]
+        det_info = {"det_id": det_counter, "bbox": main_v["bbox"], "v_type": main_v["v_type"], "color": main_v["color"], "v_crop": v_crop, "local_plate_bbox": None}
         padded_crop = None
 
-        # Dedicated YOLO License Plate Model (models/yolo_plate/best.pt)
-        if plate_model is not None:
-            plate_results = plate_model(v_crop, verbose=False, conf=0.04)
-            valid_plates = []
-            if len(plate_results) > 0 and len(plate_results[0].boxes) > 0:
-                for pbox in plate_results[0].boxes:
+        if plate_model:
+            p_res = plate_model(v_crop, verbose=False, conf=0.04)
+            valid_p = []
+            if len(p_res) > 0 and len(p_res[0].boxes) > 0:
+                for pbox in p_res[0].boxes:
                     px1, py1, px2, py2 = map(int, pbox.xyxy[0])
-                    p_conf = float(pbox.conf[0])
-                    pw, ph = px2 - px1, py2 - py1
-                    aspect = pw / float(ph) if ph > 0 else 0
-                    py_center = (py1 + py2) / 2.0
-                    
-                    # Ignore boxes in extreme upper 15% of vehicle crop
-                    if py_center < 0.15 * v_h:
-                        continue
-                    # Real license plate geometry: width>=30, height>=10, aspect ratio 1.5-7.0
-                    if pw >= 30 and ph >= 10 and 1.5 <= aspect <= 7.0:
-                        valid_plates.append((px1, py1, px2, py2, p_conf))
+                    p_conf, pw, ph = float(pbox.conf[0]), px2 - px1, py2 - py1
+                    if (py1 + py2)/2.0 >= 0.15 * vh and pw >= 30 and ph >= 10 and 1.5 <= (pw / float(ph) if ph else 0) <= 7.0:
+                        valid_p.append((px1, py1, px2, py2, p_conf))
 
-            if valid_plates:
-                best_p = max(valid_plates, key=lambda p: p[4] * (p[2]-p[0])*(p[3]-p[1]))
-                lx1, ly1, lx2, ly2, _ = best_p
+            if valid_p:
+                lx1, ly1, lx2, ly2, _ = max(valid_p, key=lambda p: p[4] * (p[2]-p[0]) * (p[3]-p[1]))
                 det_info["local_plate_bbox"] = (lx1, ly1, lx2, ly2)
-                
-                # Phase 0: Bounding Box Expansion (+15px every direction)
-                expand = 15
-                lx1_exp = max(0, lx1 - expand)
-                ly1_exp = max(0, ly1 - expand)
-                lx2_exp = min(v_w, lx2 + expand)
-                ly2_exp = min(v_h, ly2 + expand)
-                
-                # Additional proportional padding on top of expansion
-                pw = lx2_exp - lx1_exp
-                ph = ly2_exp - ly1_exp
-                px = max(5, int(pw * 0.10))
-                py = max(4, int(ph * 0.15))
-                px1, py1 = max(0, lx1_exp - px), max(0, ly1_exp - py)
-                px2, py2 = min(v_w, lx2_exp + px), min(v_h, ly2_exp + py)
-                padded_crop = v_crop[py1:py2, px1:px2]
+                exp = 15
+                lx1_exp, ly1_exp, lx2_exp, ly2_exp = max(0, lx1-exp), max(0, ly1-exp), min(vw, lx2+exp), min(vh, ly2+exp)
+                px, py = max(5, int((lx2_exp-lx1_exp) * 0.10)), max(4, int((ly2_exp-ly1_exp) * 0.15))
+                padded_crop = v_crop[max(0, ly1_exp-py):min(vh, ly2_exp+py), max(0, lx1_exp-px):min(vw, lx2_exp+px)]
 
-        # If no valid plate box was detected by YOLO, discard the image (no fallback to dummy crop)
         if padded_crop is None or padded_crop.size == 0:
-            discarded_files.append({
-                "filename": out_filename,
-                "reason": "No plate detected"
-            })
+            discarded_files.append({"filename": out_name, "reason": "No plate detected"})
             continue
 
         det_counter += 1
-
-        futures.append(easyocr_pool.submit(
-            _ocr_worker, padded_crop.copy(), v_crop.copy(), "EasyOCR", img_id, det_info["det_id"]
-        ))
-        futures.append(pytesseract_pool.submit(
-            _ocr_worker, padded_crop.copy(), v_crop.copy(), "PyTesseract", img_id, det_info["det_id"]
-        ))
-
+        futures.append(easyocr_pool.submit(_ocr_worker, padded_crop.copy(), v_crop.copy(), "EasyOCR", img_id, det_info["det_id"]))
+        futures.append(pytesseract_pool.submit(_ocr_worker, padded_crop.copy(), v_crop.copy(), "PyTesseract", img_id, det_info["det_id"]))
         detections_by_image[img_id].append(det_info)
 
-    # Wait for all OCR futures
-    ocr_results = [f.result() for f in futures]
-
-    # Map OCR results back to detections
     ocr_by_det = {}
-    for res in ocr_results:
-        did = res["det_id"]
-        if did not in ocr_by_det:
-            ocr_by_det[did] = {}
-        ocr_by_det[did][res["engine"]] = res
+    for res in [f.result() for f in futures]:
+        ocr_by_det.setdefault(res["det_id"], {})[res["engine"]] = res
 
-    # Annotate and save images, structure final output ONLY for images with valid detections
     final_output = []
-
     for img_id, frame in enumerate(frames):
-        if not detections_by_image[img_id]:
-            continue
+        if not detections_by_image[img_id]: continue
+        frame_easy, frame_tess, img_detections = frame.copy(), frame.copy(), []
 
-        frame_easy = frame.copy()
-        frame_tess = frame.copy()
+        for d_info in detections_by_image[img_id]:
+            did = d_info["det_id"]
+            e_res = ocr_by_det.get(did, {}).get("EasyOCR", {})
+            t_res = ocr_by_det.get(did, {}).get("PyTesseract", {})
 
-        img_detections = []
-        for det_info in detections_by_image[img_id]:
-            did = det_info["det_id"]
-            easy_res = ocr_by_det.get(did, {}).get("EasyOCR", {})
-            tess_res = ocr_by_det.get(did, {}).get("PyTesseract", {})
+            _draw_overlay(frame_easy, d_info["bbox"], d_info["v_type"], d_info["color"], e_res.get("plate_text"), e_res.get("conf", 0.0), d_info["local_plate_bbox"], "EasyOCR")
+            _draw_overlay(frame_tess, d_info["bbox"], d_info["v_type"], d_info["color"], t_res.get("plate_text"), t_res.get("conf", 0.0), d_info["local_plate_bbox"], "PyTesseract")
 
-            # Draw
-            _draw_overlay(frame_easy, det_info["bbox"], det_info["vehicle_type"], det_info["color"], 
-                          easy_res.get("plate_text"), easy_res.get("conf", 0.0), det_info["local_plate_bbox"], "EasyOCR")
-            _draw_overlay(frame_tess, det_info["bbox"], det_info["vehicle_type"], det_info["color"], 
-                          tess_res.get("plate_text"), tess_res.get("conf", 0.0), det_info["local_plate_bbox"], "PyTesseract")
-
-            # Log to CSV
-            if easy_res.get("plate_text"):
-                log_detection(did, det_info["vehicle_type"], det_info["color"], easy_res.get("plate_text"), 
-                              easy_res.get("conf", 0.0), easy_res.get("snapshot_path"), easy_res.get("processed_crop_path"), log_path="outputs/logs/detections_easyocr.csv")
-            if tess_res.get("plate_text"):
-                log_detection(did, det_info["vehicle_type"], det_info["color"], tess_res.get("plate_text"), 
-                              tess_res.get("conf", 0.0), tess_res.get("snapshot_path"), tess_res.get("processed_crop_path"), log_path="outputs/logs/detections_pytesseract.csv")
+            for eng_res, log_file in [(e_res, "outputs/logs/detections_easyocr.csv"), (t_res, "outputs/logs/detections_pytesseract.csv")]:
+                if eng_res.get("plate_text"):
+                    log_detection(did, d_info["v_type"], d_info["color"], eng_res.get("plate_text"), eng_res.get("conf", 0.0), eng_res.get("snapshot_path"), eng_res.get("processed_crop_path"), log_path=log_file)
 
             img_detections.append({
-                "det_id": did,
-                "vehicle_type": det_info["vehicle_type"],
-                "color": det_info["color"],
-                "easyocr": {
-                    "plate_text": easy_res.get("plate_text"),
-                    "conf": easy_res.get("conf", 0.0),
-                    "snapshot_url": _to_url(easy_res.get("snapshot_path")),
-                    "crop_url": _to_url(easy_res.get("processed_crop_path")),
-                },
-                "pytesseract": {
-                    "plate_text": tess_res.get("plate_text"),
-                    "conf": tess_res.get("conf", 0.0),
-                    "snapshot_url": _to_url(tess_res.get("snapshot_path")),
-                    "crop_url": _to_url(tess_res.get("processed_crop_path")),
-                }
+                "det_id": did, "vehicle_type": d_info["v_type"], "color": d_info["color"],
+                "easyocr": {"plate_text": e_res.get("plate_text"), "conf": e_res.get("conf", 0.0), "snapshot_url": _to_url(e_res.get("snapshot_path")), "crop_url": _to_url(e_res.get("processed_crop_path"))},
+                "pytesseract": {"plate_text": t_res.get("plate_text"), "conf": t_res.get("conf", 0.0), "snapshot_url": _to_url(t_res.get("snapshot_path")), "crop_url": _to_url(t_res.get("processed_crop_path"))}
             })
 
-        out_name = os.path.basename(image_paths[valid_path_indices[img_id]])
-        easy_path = f"outputs/annotated/easy_{out_name}"
-        tess_path = f"outputs/annotated/tess_{out_name}"
+        out_name = os.path.basename(image_paths[valid_indices[img_id]])
+        easy_path, tess_path = f"outputs/annotated/easy_{out_name}", f"outputs/annotated/tess_{out_name}"
         cv2.imwrite(easy_path, frame_easy)
         cv2.imwrite(tess_path, frame_tess)
+        final_output.append({"original_filename": out_name, "easyocr_annotated_url": "/" + easy_path, "pytesseract_annotated_url": "/" + tess_path, "detections": img_detections})
 
-        final_output.append({
-            "original_filename": out_name,
-            "easyocr_annotated_url": "/" + easy_path,
-            "pytesseract_annotated_url": "/" + tess_path,
-            "detections": img_detections
-        })
-
-    # Flush all CSV logs in a single batch write
     flush_all_logs()
-
-    no_vehicle_count = sum(1 for d in discarded_files if d["reason"] == "No car detected")
-    no_plate_count = sum(1 for d in discarded_files if d["reason"] == "No plate detected")
-
-    discarded_stats = {
-        "total_discarded": len(discarded_files),
-        "no_vehicle_count": no_vehicle_count,
-        "no_plate_count": no_plate_count,
-        "discarded_files": discarded_files
-    }
-
     return {
         "results": final_output,
-        "discarded_stats": discarded_stats
+        "discarded_stats": {
+            "total_discarded": len(discarded_files),
+            "no_vehicle_count": sum(1 for d in discarded_files if d["reason"] == "No car detected"),
+            "no_plate_count": sum(1 for d in discarded_files if d["reason"] == "No plate detected"),
+            "discarded_files": discarded_files
+        }
     }

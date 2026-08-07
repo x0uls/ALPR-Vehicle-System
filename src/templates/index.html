@@ -988,13 +988,17 @@ gridDiv.appendChild(col2);
             const trackId = pair.track_id || easy.track_id || tess.track_id || '--';
             const vehicleType = (easy.vehicle_type || tess.vehicle_type || 'Vehicle').toUpperCase();
             const color = (easy.color || tess.color || '').toUpperCase();
-            const timestamp = easy.timestamp || tess.timestamp || '--';
+            const fileName = pair.file_name || easy.file_name || tess.file_name || '--';
             const matchedGt = easy.matched_gt || tess.matched_gt || '--';
 
-            document.getElementById('modal-track-id').textContent = `#${ trackId } `;
-            document.getElementById('modal-meta').textContent = `${ vehicleType } ${ color ? '• ' + color : '' } • Time: ${ timestamp } • Matched GT: ${ matchedGt } `;
+            document.getElementById('modal-track-id').textContent = `#${ trackId }`;
+            document.getElementById('modal-meta').textContent = `${ vehicleType } ${ color ? '• ' + color : '' } • File: ${ fileName } • Matched GT: ${ matchedGt }`;
 
-            const snapshotUrl = easy.snapshot_url || tess.snapshot_url;
+            let snapshotUrl = easy.snapshot_url || tess.snapshot_url || pair.snapshot_url;
+            if (snapshotUrl && !snapshotUrl.startsWith('/') && !snapshotUrl.startsWith('http')) {
+                snapshotUrl = '/' + snapshotUrl;
+            }
+
             const snapImg = document.getElementById('modal-snapshot-img');
             const snapPlaceholder = document.getElementById('modal-snapshot-placeholder');
             if (snapshotUrl) {
@@ -1011,11 +1015,15 @@ gridDiv.appendChild(col2);
             // EasyOCR Model Data
             document.getElementById('modal-easy-read').textContent = easy.plate_number || 'No Detection';
             document.getElementById('modal-easy-conf').textContent = easy.confidence ? `${ (easy.confidence * 100).toFixed(0) }% conf` : '0% conf';
-            document.getElementById('modal-easy-cer').textContent = easy.cer != null ? `${ (easy.cer * 100).toFixed(1) }% ` : '--';
+            document.getElementById('modal-easy-cer').textContent = easy.cer != null ? `${ (easy.cer * 100).toFixed(1) }%` : '--';
 
             const easyCropImg = document.getElementById('modal-easy-crop');
             const easyCropEmpty = document.getElementById('modal-easy-crop-empty');
-            const easyCropSrc = easy.plate_crop_url || sharedCropUrl;
+            let easyCropSrc = easy.plate_crop_url || sharedCropUrl;
+            if (easyCropSrc && !easyCropSrc.startsWith('/') && !easyCropSrc.startsWith('http')) {
+                easyCropSrc = '/' + easyCropSrc;
+            }
+
             if (easyCropSrc) {
                 easyCropImg.src = easyCropSrc;
                 easyCropImg.classList.remove('hidden');
@@ -1028,11 +1036,15 @@ gridDiv.appendChild(col2);
             // PyTesseract Model Data
             document.getElementById('modal-tess-read').textContent = tess.plate_number || 'No Detection';
             document.getElementById('modal-tess-conf').textContent = tess.confidence ? `${ (tess.confidence * 100).toFixed(0) }% conf` : '0% conf';
-            document.getElementById('modal-tess-cer').textContent = tess.cer != null ? `${ (tess.cer * 100).toFixed(1) }% ` : '--';
+            document.getElementById('modal-tess-cer').textContent = tess.cer != null ? `${ (tess.cer * 100).toFixed(1) }%` : '--';
 
             const tessCropImg = document.getElementById('modal-tess-crop');
             const tessCropEmpty = document.getElementById('modal-tess-crop-empty');
-            const tessCropSrc = tess.plate_crop_url || sharedCropUrl;
+            let tessCropSrc = tess.plate_crop_url || sharedCropUrl;
+            if (tessCropSrc && !tessCropSrc.startsWith('/') && !tessCropSrc.startsWith('http')) {
+                tessCropSrc = '/' + tessCropSrc;
+            }
+
             if (tessCropSrc) {
                 tessCropImg.src = tessCropSrc;
                 tessCropImg.classList.remove('hidden');

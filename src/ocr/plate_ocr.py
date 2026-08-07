@@ -51,21 +51,38 @@ def _add_white_padding(img, pad=15):
 
 
 def _preprocess_clean_2x(crop):
+    """EasyOCR Single Standard Preprocessor: 2x Bicubic Upscale + 10px White Margin Padding."""
     h, w = crop.shape[:2]
     up = cv2.resize(crop, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
     return _add_white_padding(up, pad=10)
 
 
-def _preprocess_tesseract_shaved_binarized(crop):
+def _preprocess_tesseract_single_pass(crop):
+    """
+    PyTesseract Single Standard Preprocessor (Grid 6 Optimized):
+    6% H / 6% V Margin Shaving + 3.5x Bicubic Upscale + Unsharp Mask Edge Sharpening +
+    Morphological TopHat/BlackHat Contrast Isolation + Otsu Binarization & Inversion.
+    """
     h, w = crop.shape[:2]
-    shave_h, shave_w = int(h * 0.08), int(w * 0.10)
-    if shave_h > 0 and shave_w > 0:
-        crop = crop[shave_h:h-shave_h, shave_w:w-shave_w]
+    sh_h, sh_w = int(h * 0.06), int(w * 0.06)
+    if sh_h > 0 and sh_w > 0:
+        crop = crop[sh_h:h-sh_h, sh_w:w-sh_w]
 
     h, w = crop.shape[:2]
-    up = cv2.resize(crop, (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
+    up = cv2.resize(crop, (int(w * 3.5), int(h * 3.5)), interpolation=cv2.INTER_CUBIC)
     gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY) if len(up.shape) == 3 else up
-    blur = cv2.GaussianBlur(gray, (3, 3), 0)
+    
+    # 1. Unsharp Mask Sharpening
+    sharpen_kernel = np.array([[0, -0.5, 0], [-0.5, 3.0, -0.5], [0, -0.5, 0]])
+    sharpened = cv2.filter2D(gray, -1, sharpen_kernel)
+
+    # 2. Morphological contrast isolation of character glyphs
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 5))
+    tophat = cv2.morphologyEx(sharpened, cv2.MORPH_TOPHAT, kernel)
+    blackhat = cv2.morphologyEx(sharpened, cv2.MORPH_BLACKHAT, kernel)
+    enhanced = cv2.subtract(cv2.add(sharpened, tophat), blackhat)
+
+    blur = cv2.GaussianBlur(enhanced, (3, 3), 0)
     _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     if np.mean(thresh) < 127:
         thresh = cv2.bitwise_not(thresh)
@@ -111,12 +128,16 @@ def _run_easyocr_raw(processed):
 
 
 def read_plate(cropped_plate_img, engine_name="EasyOCR"):
+    """
+    Standardized License Plate OCR Dispatcher.
+    Runs 1 single complete pass per engine for 100% fair academic benchmarking.
+    """
     if cropped_plate_img is None or cropped_plate_img.size == 0:
         return '', 0.0, engine_name, None
 
     try:
         if engine_name == "PyTesseract":
-            proc = _preprocess_tesseract_shaved_binarized(cropped_plate_img)
+            proc = _preprocess_tesseract_single_pass(cropped_plate_img)
             raw_text, conf = _run_pytesseract_raw(proc)
         else:
             proc = _preprocess_clean_2x(cropped_plate_img)
@@ -124,6 +145,7 @@ def read_plate(cropped_plate_img, engine_name="EasyOCR"):
 
         final_text, final_conf = _postprocess_ocr_text(raw_text, conf)
         return final_text, final_conf, engine_name, proc
+
     except Exception as e:
         print(f"[OCR WARN] {engine_name}: {e}")
         return '', 0.0, engine_name, None

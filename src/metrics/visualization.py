@@ -8,7 +8,7 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
     """
     Generates a 2x2 grid of Matplotlib benchmark charts displaying granular academic metrics:
     - Chart 1: Primary Accuracy (EMA %, HA %, CRR %)
-    - Chart 2: Character Error Rate (CER %) & Crop Latency (ms/crop)
+    - Chart 2: Inference Latency per Crop (ms/crop)
     - Chart 3: Levenshtein Error Breakdown (Substitutions, Insertions, Deletions)
     - Chart 4: Character-Level Precision, Recall, & Confidence
     Saves a dark-mode PNG image at output_path.
@@ -18,7 +18,7 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
     # Configure Dark Aesthetics
     plt.style.use('dark_background')
     fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), facecolor='#09090b')
-    fig.subplots_adjust(hspace=0.35, wspace=0.25)
+    fig.subplots_adjust(hspace=0.38, wspace=0.25)
     
     easy_color = '#38bdf8'   # Sky Blue
     tess_color = '#818cf8'   # Indigo
@@ -71,31 +71,28 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
         h = bar.get_height()
         ax1.text(bar.get_x() + bar.get_width()/2., h + 1, f"{h:.1f}%", ha='center', va='bottom', color='#818cf8', fontsize=7, fontweight='bold')
 
-    # ── Chart 2: CER Error Rate vs Latency Per Crop ─────────────────────────
+    # ── Chart 2: Inference Latency Per Crop (ms/crop) ───────────────────────
     ax2 = axes[0, 1]
-    style_ax(ax2, "Chart 2: Error Rate (CER %) vs Crop Latency (ms)")
+    style_ax(ax2, "Chart 2: Inference Latency Per Crop (ms)")
     
-    easy_cer = (easy_metrics.get("average_cer") or 0.0) * 100
-    tess_cer = (tess_metrics.get("average_cer") or 0.0) * 100
-    easy_lat = (easy_metrics.get("latency_per_plate_ms") or 0.0)
-    tess_lat = (tess_metrics.get("latency_per_plate_ms") or 0.0)
+    easy_lat = float(easy_metrics.get("latency_per_plate_ms") or 0.0)
+    tess_lat = float(tess_metrics.get("latency_per_plate_ms") or 0.0)
 
-    perf_labels = ['Error (CER %)', 'Latency (ms/crop)']
-    x2 = np.arange(len(perf_labels))
+    models = ['EasyOCR', 'PyTesseract']
+    x2 = np.arange(len(models))
+    lat_vals = [easy_lat, tess_lat]
 
-    b3 = ax2.bar(x2 - width/2, [easy_cer, easy_lat], width, label='EasyOCR', color=easy_color, alpha=0.85)
-    b4 = ax2.bar(x2 + width/2, [tess_cer, tess_lat], width, label='PyTesseract', color=tess_color, alpha=0.85)
-
+    bars2 = ax2.bar(x2, lat_vals, width=0.45, color=[easy_color, tess_color], alpha=0.85)
     ax2.set_xticks(x2)
-    ax2.set_xticklabels(perf_labels, fontsize=9, color='#a1a1aa')
-    ax2.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8, loc='upper right')
+    ax2.set_xticklabels(models, fontsize=9, color='#a1a1aa')
+    ax2.set_ylabel('Latency (ms / crop)', color='#a1a1aa', fontsize=9)
+    
+    max_lat = max(lat_vals) if max(lat_vals) > 0 else 100
+    ax2.set_ylim(0, max_lat * 1.25)
 
-    for bar in b3:
+    for bar in bars2:
         h = bar.get_height()
-        ax2.text(bar.get_x() + bar.get_width()/2., h + 1, f"{h:.1f}", ha='center', va='bottom', color='#38bdf8', fontsize=8, fontweight='bold')
-    for bar in b4:
-        h = bar.get_height()
-        ax2.text(bar.get_x() + bar.get_width()/2., h + 1, f"{h:.1f}", ha='center', va='bottom', color='#818cf8', fontsize=8, fontweight='bold')
+        ax2.text(bar.get_x() + bar.get_width()/2., h + (max_lat * 0.02), f"{h:.1f} ms", ha='center', va='bottom', color=text_color, fontsize=8, fontweight='bold')
 
     # ── Chart 3: Error Category Breakdown (Substitutions, Insertions, Deletions)
     ax3 = axes[1, 0]
@@ -148,7 +145,7 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
     ax4.bar(x4 + width/2, tess_macro, width, label='PyTesseract', color=tess_color, alpha=0.85)
 
     ax4.set_xticks(x4)
-    ax4.set_xticklabels(macro_metrics, rotation=10, ha='center', fontsize=8)
+    ax4.set_xticklabels(macro_metrics, rotation=5, ha='center', fontsize=8)
     ax4.set_ylim(0, 105)
     ax4.set_ylabel('Score (%)', color='#a1a1aa', fontsize=9)
     ax4.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8)
