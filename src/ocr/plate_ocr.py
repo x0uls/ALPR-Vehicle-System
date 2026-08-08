@@ -64,11 +64,13 @@ def _upscale_and_denoise_first(crop, target_h=140):
     h, w = crop.shape[:2]
     if h == 0 or w == 0:
         return crop
-    scale = max(2.5, target_h / float(h))
-    up = cv2.resize(crop, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+    scale = max(3.0, target_h / float(h))
+    # Lanczos4 high-order anti-aliasing resampling to prevent blocky pixelation
+    up = cv2.resize(crop, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_LANCZOS4)
     try:
-        denoised = cv2.fastNlMeansDenoisingColored(up, None, 4, 4, 7, 21) if len(up.shape) == 3 else cv2.fastNlMeansDenoising(up, None, 4, 7, 21)
-        return denoised
+        # Bilateral filter: smooths flat background noise/grain while keeping character edges crisp
+        smooth = cv2.bilateralFilter(up, d=7, sigmaColor=75, sigmaSpace=75)
+        return smooth
     except Exception:
         return up
 
