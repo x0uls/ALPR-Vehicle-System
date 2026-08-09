@@ -113,10 +113,10 @@ async def process_images_api(files: List[UploadFile] = File(...)):
             for det in res.get("detections", []):
                 e = det.get("easyocr", {})
                 if e.get("plate_text"):
-                    easy_dets.append({"track_id": det.get("det_id"), "plate_number": e.get("plate_text"), "confidence": e.get("conf", 0.0), "snapshot_path": e.get("snapshot_url"), "plate_crop_path": e.get("crop_url")})
+                    easy_dets.append({"track_id": det.get("det_id"), "plate_number": e.get("plate_text"), "confidence": e.get("conf", 0.0), "snapshot_path": e.get("snapshot_url"), "plate_crop_path": e.get("crop_url"), "matched_ground_truth": expected, "file_name": fname})
                 t = det.get("pytesseract", {})
                 if t.get("plate_text"):
-                    tess_dets.append({"track_id": det.get("det_id"), "plate_number": t.get("plate_text"), "confidence": t.get("conf", 0.0), "snapshot_path": t.get("snapshot_url"), "plate_crop_path": t.get("crop_url")})
+                    tess_dets.append({"track_id": det.get("det_id"), "plate_number": t.get("plate_text"), "confidence": t.get("conf", 0.0), "snapshot_path": t.get("snapshot_url"), "plate_crop_path": t.get("crop_url"), "matched_ground_truth": expected, "file_name": fname})
 
         metrics = compute_dual_model_comparison(easy_dets, tess_dets, gt_plates, easyocr_time=final_elapsed, pytesseract_time=final_elapsed)
 
