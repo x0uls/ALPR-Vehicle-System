@@ -6,16 +6,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ALPR Benchmarking Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Space Grotesk', 'sans-serif'],
+                        heading: ['Space Grotesk', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
     <style>
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: #09090b;
             color: #f4f4f5;
         }
 
-        .font-heading {
-            font-family: 'Outfit', sans-serif;
+        .font-heading, h1, h2, h3, h4, h5, h6 {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        .font-mono, code, pre {
+            font-family: 'JetBrains Mono', monospace;
         }
 
         ::-webkit-scrollbar {
@@ -60,25 +78,7 @@
     <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-6 py-3.5 sticky top-0 z-40">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="h-9 w-9 rounded-xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center shadow-inner">
-                    <svg class="w-5 h-5 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
-                    </svg>
-                </div>
-                <div>
-                    <div class="flex items-center gap-2.5">
-                        <h1 class="text-base font-bold font-heading text-zinc-100 tracking-tight">ALPR Benchmarking System</h1>
-                        <span class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/60">v2.5</span>
-                    </div>
-                    <p class="text-xs text-zinc-400">Automated Dual-Model Recognition & Ground Truth Evaluation</p>
-                </div>
-            </div>
-
-            <div class="flex items-center gap-2">
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    System Ready
-                </span>
+                <h1 class="text-base font-bold font-heading text-zinc-100 tracking-tight">ALPR Benchmarking System</h1>
             </div>
         </div>
     </header>
@@ -86,17 +86,25 @@
     <!-- Main Workspace Container -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-6 flex flex-col gap-6">
 
-        <!-- 1. Execution Controller Panel -->
-        <section class="w-full">
-            <div class="glass-card rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
-                <div class="flex items-center gap-4 w-full sm:w-auto">
-                    <div class="flex flex-col">
-                        <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Execution Pipeline</span>
-                        <span class="text-sm font-mono font-medium text-zinc-200 mt-0.5">Parallel Benchmarking Engine</span>
-                    </div>
-                    <span class="text-xs font-mono text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-1 rounded-lg">EasyOCR + PyTesseract</span>
+        <!-- 1. Live Pipeline Progress Tracker & Execution Controller -->
+        <section id="progress-box" class="glass-card rounded-2xl p-4 flex flex-col gap-3.5 transition-opacity">
+            <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Pipeline Status</span>
+                    <span id="progress-status" class="text-xs font-mono text-zinc-200">System Idle</span>
                 </div>
+                <div class="flex items-center gap-5 text-xs font-mono text-zinc-400">
+                    <div>Elapsed: <span id="stat-elapsed" class="text-zinc-100 font-bold">0s</span></div>
+                    <div>Batch: <span id="stat-images" class="text-zinc-100 font-bold">0 images</span></div>
+                    <span id="progress-percent" class="text-emerald-400 font-bold font-mono">0%</span>
+                </div>
+            </div>
 
+            <div class="w-full bg-zinc-950 rounded-full h-2 overflow-hidden border border-zinc-800">
+                <div id="progress-bar-fill" class="bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 h-full w-0 transition-all duration-200 rounded-full shadow-[0_0_12px_rgba(16,185,129,0.4)]"></div>
+            </div>
+
+            <div class="flex items-center justify-end pt-1">
                 <button id="process-btn" disabled
                     class="w-full sm:w-auto px-7 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800/80 disabled:text-zinc-500 text-white font-medium rounded-xl text-xs transition-all shadow-lg shadow-indigo-600/20 cursor-not-allowed disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2">
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -107,26 +115,7 @@
             </div>
         </section>
 
-        <!-- 2. Live Pipeline Progress Tracker -->
-        <section id="progress-box" class="glass-card rounded-2xl p-4 flex flex-col gap-3 opacity-60 transition-opacity">
-            <div class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-2.5">
-                    <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Pipeline Status</span>
-                    <span id="progress-status" class="text-xs font-mono text-zinc-200">System Idle</span>
-                </div>
-                <div class="flex items-center gap-5 text-xs font-mono text-zinc-400">
-                    <div>Elapsed: <span id="stat-elapsed" class="text-zinc-100 font-bold">0s</span></div>
-                    <div>Batch: <span id="stat-images" class="text-zinc-100 font-bold">0 images</span></div>
-                    <span id="progress-percent" class="text-indigo-400 font-bold font-mono">0%</span>
-                </div>
-            </div>
-
-            <div class="w-full bg-zinc-950 rounded-full h-2 overflow-hidden border border-zinc-800">
-                <div id="progress-bar-fill" class="bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 h-full w-0 transition-all duration-200 rounded-full"></div>
-            </div>
-        </section>
-
-        <!-- 3. Upload Zone & Dataset Drop -->
+        <!-- 2. Upload Zone & Dataset Drop -->
         <section class="glass-card rounded-2xl p-5 flex flex-col gap-4">
             <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
                 <div class="flex items-center gap-2">
@@ -136,48 +125,52 @@
             </div>
 
             <!-- Drop Zone Container -->
-            <div id="upload-zone"
+            <div id="upload-zone" onclick="if (!document.getElementById('upload-idle-state').classList.contains('hidden')) document.getElementById('image-file-input').click()"
                 class="w-full min-h-[190px] flex flex-col items-center justify-center p-6 border-2 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-950/40 hover:bg-zinc-950/70 transition-all rounded-xl cursor-pointer">
                 <input type="file" id="image-file-input" webkitdirectory directory multiple class="hidden">
                 <input type="file" id="single-file-input" accept="image/*,.csv" multiple class="hidden">
 
-                <div id="upload-idle-state" class="flex flex-col items-center justify-center" onclick="document.getElementById('image-file-input').click()">
-                    <div class="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 mb-3 shadow-inner">
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12.75M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" />
-                        </svg>
-                    </div>
+                <div id="upload-idle-state" class="flex flex-col items-center justify-center">
                     <span class="text-sm font-medium text-zinc-200">Drop dataset folder here, or <span class="text-indigo-400 hover:underline">browse dataset folder</span></span>
                     <p class="text-xs text-zinc-500 mt-1.5 text-center">
                         Folder must contain an <span class="font-mono text-zinc-400 font-semibold">images/</span> folder and a <span class="font-mono text-zinc-400 font-semibold">csv/</span> ground truth folder
                     </p>
                 </div>
 
-                <div id="upload-status-card" class="hidden w-full max-w-md flex flex-col gap-3">
-                    <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
-                        <span id="folder-name-display" class="text-xs font-semibold font-mono text-zinc-200 truncate">Dataset Folder</span>
-                        <button onclick="resetUploadZone(event)" class="text-xs text-zinc-400 hover:text-zinc-200 underline">Change folder</button>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3 text-xs font-mono">
-                        <div class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-1">
-                            <span class="text-[10px] text-zinc-400 uppercase tracking-wider font-sans">Detected Images</span>
-                            <div class="flex items-center gap-1.5 font-bold text-emerald-400">
-                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                <span id="text-images-count">0 images</span>
+                <div id="upload-status-card" class="hidden w-full max-w-xl bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl backdrop-blur-md">
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3.5 min-w-0 flex-1">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 shadow-inner">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.75A1.75 1.75 0 015.5 8h4.086c.464 0 .91.184 1.238.512l1.328 1.328a.25.25 0 00.177.073H18.5a1.75 1.75 0 011.75 1.75v6.5A1.75 1.75 0 0118.5 20h-13A1.75 1.75 0 013.75 18.25v-8.5z" />
+                                </svg>
+                            </div>
+                            <div class="flex flex-col min-w-0 flex-1">
+                                <span id="folder-name-display" class="text-sm font-semibold font-mono text-zinc-100 truncate">Dataset Folder</span>
+                                <div class="flex items-center gap-2 text-xs text-zinc-400 font-mono mt-0.5 flex-wrap sm:flex-nowrap">
+                                    <span id="text-images-count" class="whitespace-nowrap">0 images</span>
+                                    <span class="text-zinc-600">•</span>
+                                    <span id="text-csv-name" class="text-zinc-400 font-medium truncate">No CSV ground truth</span>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-1">
-                            <span class="text-[10px] text-zinc-400 uppercase tracking-wider font-sans">Ground Truth CSV</span>
-                            <div class="flex items-center gap-1.5 font-bold text-emerald-400">
-                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                <span id="text-csv-name">ground_truth.csv</span>
-                            </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button type="button" onclick="event.stopPropagation(); document.getElementById('image-file-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white rounded-lg text-xs font-medium transition-all border border-zinc-700/60 shadow-sm flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                </svg>
+                                <span>Replace</span>
+                            </button>
+                            <button type="button" onclick="resetUploadZone(event)" title="Remove dataset" class="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all border border-transparent hover:border-rose-500/20">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
 
-                    <div id="upload-error-banner" class="hidden bg-rose-950/40 border border-rose-800/60 rounded-xl p-3 text-xs text-rose-300 font-sans flex items-start gap-2">
+                    <div id="upload-error-banner" class="hidden bg-rose-950/40 border border-rose-800/60 rounded-xl p-3 text-xs text-rose-300 font-sans flex items-start gap-2 mt-1">
                         <svg class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                         <span id="upload-error-text">Upload folder must contain both an 'images/' folder and a 'csv/' folder.</span>
                     </div>
@@ -195,7 +188,6 @@
                     <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Discarded Images Summary</span>
                     <span id="discarded-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono border border-amber-500/20">0 Discarded</span>
                 </div>
-                <button id="toggle-discarded-btn" onclick="toggleDiscardedList()" class="hidden text-xs text-zinc-400 hover:text-zinc-200 underline font-mono">Show Details →</button>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
@@ -212,12 +204,6 @@
                     <span id="discarded-noplate-val" class="text-lg font-bold text-orange-400">0</span>
                 </div>
             </div>
-
-            <div id="discarded-list-container" class="hidden bg-zinc-950 border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-2 max-h-[250px] overflow-y-auto font-mono text-xs">
-                <div class="text-[10px] text-zinc-500 uppercase tracking-wider pb-1 border-b border-zinc-900">Discarded File Breakdown</div>
-                <div id="discarded-files-list" class="divide-y divide-zinc-900 flex flex-col">
-                </div>
-            </div>
         </section>
 
         <!-- 4. Core Benchmark Analytics Grid -->
@@ -232,65 +218,7 @@
                 </div>
 
                 <div class="flex items-center gap-5 text-zinc-400">
-                    <div>Total Vehicles: <span id="summary-vehicles-count" class="text-zinc-100 font-bold">0</span></div>
-                    <div>Discarded: <span id="summary-discarded-count" class="text-amber-400 font-bold">0</span></div>
-                    <div>Latency: <span id="summary-latency" class="text-zinc-100 font-bold">0ms</span></div>
                     <div>Total Time: <span id="summary-total-time" class="text-zinc-100 font-bold">0s</span></div>
-                </div>
-            </div>
-
-            <!-- Clean Core Benchmark Metrics Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <!-- EasyOCR Core Metrics Card -->
-                <div class="glass-card-sky rounded-2xl p-4 flex flex-col gap-3 font-mono shadow-lg">
-                    <div class="flex items-center justify-between border-b border-sky-500/20 pb-2">
-                        <span class="text-xs font-bold font-heading text-sky-400 tracking-wide">EasyOCR Core Metrics</span>
-                        <span id="easy-ema-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/30">EMA: --%</span>
-                    </div>
-                    <div class="grid grid-cols-4 gap-2.5 text-center text-xs">
-                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Exact Match</span>
-                            <span id="easy-ema-val" class="font-bold text-sky-400 text-base font-heading mt-0.5">--%</span>
-                        </div>
-                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-400 uppercase font-sans">High Accuracy</span>
-                            <span id="easy-ha-val" class="font-bold text-emerald-400 text-base font-heading mt-0.5">--%</span>
-                        </div>
-                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Char Recognition</span>
-                            <span id="easy-crr-val" class="font-bold text-teal-400 text-base font-heading mt-0.5">--%</span>
-                        </div>
-                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Speed</span>
-                            <span id="easy-lat-val" class="font-bold text-zinc-200 text-base font-heading mt-0.5">--ms</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PyTesseract Core Metrics Card -->
-                <div class="glass-card-indigo rounded-2xl p-4 flex flex-col gap-3 font-mono shadow-lg">
-                    <div class="flex items-center justify-between border-b border-indigo-500/20 pb-2">
-                        <span class="text-xs font-bold font-heading text-indigo-400 tracking-wide">PyTesseract Core Metrics</span>
-                        <span id="tess-ema-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">EMA: --%</span>
-                    </div>
-                    <div class="grid grid-cols-4 gap-2.5 text-center text-xs">
-                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Exact Match</span>
-                            <span id="tess-ema-val" class="font-bold text-indigo-400 text-base font-heading mt-0.5">--%</span>
-                        </div>
-                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-400 uppercase font-sans">High Accuracy</span>
-                            <span id="tess-ha-val" class="font-bold text-emerald-400 text-base font-heading mt-0.5">--%</span>
-                        </div>
-                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Char Recognition</span>
-                            <span id="tess-crr-val" class="font-bold text-teal-400 text-base font-heading mt-0.5">--%</span>
-                        </div>
-                        <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-2.5 flex flex-col">
-                            <span class="text-[9px] text-zinc-400 uppercase font-sans">Speed</span>
-                            <span id="tess-lat-val" class="font-bold text-zinc-200 text-base font-heading mt-0.5">--ms</span>
-                        </div>
-                    </div>
                 </div>
             </div>
 

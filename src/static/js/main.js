@@ -119,22 +119,49 @@ function handleFileSelect(files) {
     if (folderDisplay) folderDisplay.textContent = rootFolderName;
 
     const imgCountEl = document.getElementById('text-images-count');
-    if (imgCountEl) imgCountEl.textContent = `${detectedImagesCount} image file(s)`;
+    if (imgCountEl) imgCountEl.textContent = `${detectedImagesCount} image files`;
 
     const csvNameEl = document.getElementById('text-csv-name');
-    if (csvNameEl && csvFilesFound.length > 0) csvNameEl.textContent = csvFilesFound[0];
+    if (csvNameEl) {
+        if (csvFilesFound.length > 0) {
+            csvNameEl.textContent = csvFilesFound[0];
+            csvNameEl.className = 'text-emerald-400 font-medium truncate';
+        } else {
+            csvNameEl.textContent = 'No CSV ground truth';
+            csvNameEl.className = 'text-rose-400 font-medium truncate';
+        }
+    }
 
     const imageInfo = document.getElementById('image-info');
-    if (imageInfo) imageInfo.textContent = `${detectedImagesCount} image file(s) ready`;
+    if (imageInfo) imageInfo.textContent = `${detectedImagesCount} image files ready`;
 
     const statImages = document.getElementById('stat-images');
     if (statImages) statImages.textContent = `${detectedImagesCount} images`;
 
-    if (uploadErrorBanner) uploadErrorBanner.classList.add('hidden');
+    const uploadErrorText = document.getElementById('upload-error-text');
+    const isValid = detectedImagesCount > 0 && csvFilesFound.length > 0;
 
-    if (processBtn) {
-        processBtn.disabled = false;
-        processBtn.classList.remove('cursor-not-allowed');
+    if (!isValid) {
+        let errMessage = 'Invalid dataset structure.';
+        if (detectedImagesCount === 0 && csvFilesFound.length === 0) {
+            errMessage = 'No image files or CSV ground truth found in selected folder.';
+        } else if (detectedImagesCount === 0) {
+            errMessage = 'No image files found. Folder must contain an \'images/\' subfolder or image files.';
+        } else if (csvFilesFound.length === 0) {
+            errMessage = 'No CSV ground truth file found. Folder must contain a \'csv/\' subfolder or a .csv file.';
+        }
+        if (uploadErrorText) uploadErrorText.textContent = errMessage;
+        if (uploadErrorBanner) uploadErrorBanner.classList.remove('hidden');
+        if (processBtn) {
+            processBtn.disabled = true;
+            processBtn.classList.add('cursor-not-allowed');
+        }
+    } else {
+        if (uploadErrorBanner) uploadErrorBanner.classList.add('hidden');
+        if (processBtn) {
+            processBtn.disabled = false;
+            processBtn.classList.remove('cursor-not-allowed');
+        }
     }
 }
 
@@ -214,6 +241,12 @@ async function processImages() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Processing failed');
 
+        const totalWallMs = performance.now() - processStartTime;
+        const totalWallSec = Math.max(1, Math.round(totalWallMs / 1000));
+        const finalMinutes = Math.floor(totalWallSec / 60);
+        const finalSeconds = totalWallSec % 60;
+        const totalWallFormatted = finalMinutes > 0 ? `${finalMinutes}m ${finalSeconds}s` : `${finalSeconds}s`;
+
         if (window.liveTimerInterval) {
             clearInterval(window.liveTimerInterval);
             window.liveTimerInterval = null;
@@ -223,10 +256,8 @@ async function processImages() {
         if (progressPercent) progressPercent.textContent = '100%';
 
         document.getElementById('progress-status').textContent = 'Processing Finished';
-        if (data.elapsed) {
-            if (document.getElementById('stat-elapsed')) document.getElementById('stat-elapsed').textContent = data.elapsed;
-            if (document.getElementById('summary-total-time')) document.getElementById('summary-total-time').textContent = data.elapsed;
-        }
+        if (document.getElementById('stat-elapsed')) document.getElementById('stat-elapsed').textContent = totalWallFormatted;
+        if (document.getElementById('summary-total-time')) document.getElementById('summary-total-time').textContent = totalWallFormatted;
 
         let globalSeqId = 1;
         if (data.results) {
@@ -294,14 +325,6 @@ async function processImages() {
         if (data.discarded_stats) renderDiscardedStats(data.discarded_stats);
         if (data.metrics) updateMetricsCards(data.metrics);
 
-        try {
-            const cerRes = await fetch('/api/cer-summary');
-            if (cerRes.ok) {
-                const cerData = await cerRes.json();
-                if (cerData.easyocr || cerData.pytesseract) updateMetricsCards(cerData);
-            }
-        } catch(e) {}
-
         renderDualTable();
 
     } catch (err) {
@@ -317,21 +340,19 @@ async function processImages() {
     }
 }
 
-// ── Metric Cards & Comparison Table ───────────────────────────────
-function levenshteinDistance(a, b) {
-    if (a.length === 0) return b.length;
-    if (b.length === 0) return a.length;
-    const matrix = [];
-    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            matrix[i][j] = b.charAt(i - 1) === a.charAt(j - 1)
-                ? matrix[i - 1][j - 1]
-                : Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
-        }
+function updateMetricsCards(metrics) {
+    if (!metrics) return;
+
+    const winnerName = document.getElementById('stat-winner-name');
+    if (winnerName) winnerName.textContent = metrics.winner || 'Tie';
+
+    const matImg = document.getElementById('matplotlib-img');
+    const matPlaceholder = document.getElementById('matplotlib-placeholder');
+    if (metrics.chart_url && matImg) {
+        matImg.src = metrics.chart_url + '?t=' + Date.now();
+        matImg.classList.remove('hidden');
+        if (matPlaceholder) matPlaceholder.classList.add('hidden');
     }
-    return matrix[b.length][a.length];
 }
 
 function renderDualTable() {
@@ -376,22 +397,14 @@ function renderDualTable() {
             } else if (tMatch) {
                 badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50">PyTesseract</span>';
             } else {
-                const eDist = eNorm ? levenshteinDistance(eNorm, gtNorm) : 99;
-                const tDist = tNorm ? levenshteinDistance(tNorm, gtNorm) : 99;
-                if (eDist <= 2 && eDist <= tDist) {
-                    badgeHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400/80 border border-sky-900/40">EasyOCR (${eDist} diff)</span>`;
-                } else if (tDist <= 2 && tDist < eDist) {
-                    badgeHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400/80 border border-indigo-900/40">PyTesseract (${tDist} diff)</span>`;
-                } else {
-                    badgeHtml = '<span class="text-zinc-600 font-mono text-[10px]">Misread</span>';
-                }
+                badgeHtml = '<span class="text-zinc-600 font-mono text-[10px]">Misread</span>';
             }
         }
 
         tr.innerHTML = `
             <td class="py-2.5 px-2 font-mono text-zinc-400">#${pair.track_id}</td>
             <td class="py-2.5 px-2 font-mono text-zinc-300 truncate max-w-[150px]" title="${pair.file_name}">${pair.file_name}</td>
-            <td class="py-2.5 px-2 font-sans font-medium capitalize text-zinc-300">${easy.vehicle_type || 'Vehicle'} (${easy.color || ''})</td>
+            <td class="py-2.5 px-2 font-sans font-medium capitalize text-zinc-300">${easy.vehicle_type || 'Vehicle'}</td>
             <td class="py-2.5 px-2 font-semibold text-sky-400 group-hover:underline">${easyText}</td>
             <td class="py-2.5 px-2 font-semibold text-indigo-400 group-hover:underline">${tessText}</td>
             <td class="py-2.5 px-2 text-zinc-300 font-mono font-bold">${gtStr}</td>
@@ -399,6 +412,12 @@ function renderDualTable() {
         `;
         logTableBody.appendChild(tr);
     });
+}
+
+function _formatImgUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('data:') || url.startsWith('/') || url.startsWith('http')) return url;
+    return '/' + url;
 }
 
 // ── Detail Telemetry Modal ─────────────────────────────────────────
@@ -409,10 +428,9 @@ function openDetailModal(key) {
     const tess = pair.tess || {};
 
     document.getElementById('modal-track-id').textContent = `#${pair.track_id || '--'}`;
-    document.getElementById('modal-meta').textContent = `${(easy.vehicle_type || 'VEHICLE').toUpperCase()} ${(easy.color || '').toUpperCase()} • File: ${pair.file_name} • Matched GT: ${easy.matched_gt || '--'}`;
+    document.getElementById('modal-meta').textContent = `${(easy.vehicle_type || 'VEHICLE').toUpperCase()} • File: ${pair.file_name} • Matched GT: ${easy.matched_gt || '--'}`;
 
-    let snapUrl = easy.snapshot_url || tess.snapshot_url;
-    if (snapUrl && !snapUrl.startsWith('/') && !snapUrl.startsWith('http')) snapUrl = '/' + snapUrl;
+    const snapUrl = _formatImgUrl(easy.snapshot_url || tess.snapshot_url);
     const snapImg = document.getElementById('modal-snapshot-img');
     const snapPlaceholder = document.getElementById('modal-snapshot-placeholder');
     if (snapUrl && snapImg) {
@@ -420,7 +438,7 @@ function openDetailModal(key) {
         snapImg.classList.remove('hidden');
         if (snapPlaceholder) snapPlaceholder.classList.add('hidden');
     } else if (snapPlaceholder) {
-        snapImg.classList.add('hidden');
+        if (snapImg) snapImg.classList.add('hidden');
         snapPlaceholder.classList.remove('hidden');
     }
 
@@ -430,14 +448,13 @@ function openDetailModal(key) {
 
     const easyCropImg = document.getElementById('modal-easy-crop');
     const easyCropEmpty = document.getElementById('modal-easy-crop-empty');
-    let easyCropSrc = easy.plate_crop_url || tess.plate_crop_url;
-    if (easyCropSrc && !easyCropSrc.startsWith('/') && !easyCropSrc.startsWith('http')) easyCropSrc = '/' + easyCropSrc;
+    const easyCropSrc = _formatImgUrl(easy.plate_crop_url || tess.plate_crop_url);
     if (easyCropSrc && easyCropImg) {
         easyCropImg.src = easyCropSrc;
         easyCropImg.classList.remove('hidden');
         if (easyCropEmpty) easyCropEmpty.classList.add('hidden');
     } else if (easyCropEmpty) {
-        easyCropImg.classList.add('hidden');
+        if (easyCropImg) easyCropImg.classList.add('hidden');
         easyCropEmpty.classList.remove('hidden');
     }
 
@@ -447,14 +464,13 @@ function openDetailModal(key) {
 
     const tessCropImg = document.getElementById('modal-tess-crop');
     const tessCropEmpty = document.getElementById('modal-tess-crop-empty');
-    let tessCropSrc = tess.plate_crop_url || easy.plate_crop_url;
-    if (tessCropSrc && !tessCropSrc.startsWith('/') && !tessCropSrc.startsWith('http')) tessCropSrc = '/' + tessCropSrc;
+    const tessCropSrc = _formatImgUrl(tess.plate_crop_url || easy.plate_crop_url);
     if (tessCropSrc && tessCropImg) {
         tessCropImg.src = tessCropSrc;
         tessCropImg.classList.remove('hidden');
         if (tessCropEmpty) tessCropEmpty.classList.add('hidden');
     } else if (tessCropEmpty) {
-        tessCropImg.classList.add('hidden');
+        if (tessCropImg) tessCropImg.classList.add('hidden');
         tessCropEmpty.classList.remove('hidden');
     }
 
@@ -499,12 +515,10 @@ function updateMetricsCards(metrics) {
 
 function renderDiscardedStats(stats) {
     const sec = document.getElementById('discarded-section');
-    const toggleBtn = document.getElementById('toggle-discarded-btn');
     if (!sec) return;
 
     if (!stats || !stats.total_discarded || stats.total_discarded === 0) {
         sec.classList.add('hidden');
-        if (toggleBtn) toggleBtn.classList.add('hidden');
         return;
     }
 
@@ -513,14 +527,6 @@ function renderDiscardedStats(stats) {
     if (document.getElementById('discarded-nocar-val')) document.getElementById('discarded-nocar-val').textContent = stats.no_vehicle_count;
     if (document.getElementById('discarded-noplate-val')) document.getElementById('discarded-noplate-val').textContent = stats.no_plate_count;
     if (document.getElementById('discarded-badge')) document.getElementById('discarded-badge').textContent = `${stats.total_discarded} Discarded`;
-
-    if (toggleBtn) {
-        if (stats.discarded_files && stats.discarded_files.length > 0) {
-            toggleBtn.classList.remove('hidden');
-        } else {
-            toggleBtn.classList.add('hidden');
-        }
-    }
 }
 
 async function fetchCerSummary() {

@@ -1,14 +1,15 @@
 import os
+import base64
 os.environ["OMP_THREAD_LIMIT"] = "1"
 import cv2
+import numpy as np
 import torch
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
 
-from src.color.color_detector import detect_dominant_color
-from src.logging.logger import log_detection, flush_all_logs
 from src.ocr.plate_ocr import read_plate
 
+# COCO vehicle classes: Class 2 ("car") automatically detects sedans, hatchbacks, SUVs, MPVs, and vans
 VEHICLE_CLASSES = {2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
 MIN_VEHICLE_CONFIDENCE = 0.4
 
@@ -18,31 +19,33 @@ plate_model_path = "models/yolo_plate/best.pt"
 plate_model = YOLO(plate_model_path).to(device) if os.path.exists(plate_model_path) else None
 
 
-def _to_url(path):
-    return "/" + str(path).replace("\\", "/") if path else None
+def _to_base64_url(img):
+    if img is None or img.size == 0:
+        return ""
+    success, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not success:
+        return ""
+    b64_str = base64.b64encode(buffer).decode("utf-8")
+    return f"data:image/jpeg;base64,{b64_str}"
 
 
 def _ocr_worker(plate_crop, vehicle_crop, engine_name, img_id, det_id):
     plate_text, ocr_conf, engine, proc_crop, latency_ms = read_plate(plate_crop, engine_name)
-    
-    proc_path = f"outputs/plate_crops/Processed/img{img_id}_det{det_id}_{engine_name.lower()}.jpg"
-    cv2.imwrite(proc_path, proc_crop if proc_crop is not None and proc_crop.size > 0 else plate_crop)
-    
-    safe_text = (plate_text or "no_read").replace(' ', '_')
-    snap_path = f"outputs/snapshots/img{img_id}_det{det_id}_{safe_text}.jpg"
-    cv2.imwrite(snap_path, vehicle_crop)
+
+    proc_b64 = _to_base64_url(proc_crop if proc_crop is not None and proc_crop.size > 0 else plate_crop)
+    snap_b64 = _to_base64_url(vehicle_crop)
 
     return {
         "engine": engine_name, "det_id": det_id, "plate_text": plate_text,
         "conf": ocr_conf, "latency_ms": latency_ms,
-        "processed_crop_path": proc_path, "snapshot_path": snap_path
+        "processed_crop_path": proc_b64, "snapshot_path": snap_b64
     }
 
 
-def _draw_overlay(frame, bbox, v_type, color, text, conf, local_plate_bbox, theme):
+def _draw_overlay(frame, bbox, v_type, text, conf, local_plate_bbox, theme):
     color_rgb = (200, 0, 255) if theme == "PyTesseract" else (0, 200, 255)
     ann = Annotator(frame, line_width=2)
-    label = f"{v_type.capitalize()} {color.capitalize() if color else ''} • {text} ({int(conf * 100)}%)" if text else f"{v_type.capitalize()} {color.capitalize() if color else ''}"
+    label = f"{v_type.capitalize()} • {text} ({int(conf * 100)}%)" if text else f"{v_type.capitalize()}"
     ann.box_label(bbox, label, color=color_rgb)
     if local_plate_bbox:
         x1, y1, _, _ = bbox
@@ -50,28 +53,38 @@ def _draw_overlay(frame, bbox, v_type, color, text, conf, local_plate_bbox, them
         ann.box_label((x1 + lx1, y1 + ly1, x1 + lx2, y1 + ly2), label="Plate", color=(50, 50, 255))
 
 
-def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
-    frames, valid_indices = [], []
-    for idx, path in enumerate(image_paths):
-        img = cv2.imread(path)
-        if img is None: continue
+def _decode_image(item):
+    if isinstance(item, str):
+        return os.path.basename(item), cv2.imread(item)
+    elif isinstance(item, tuple):
+        fname, img_bytes = item
+        if isinstance(img_bytes, bytes):
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            return fname, cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    return None, None
+
+
+def process_bulk_images(images_input, easyocr_pool, pytesseract_pool):
+    frames, valid_filenames = [], []
+
+    for item in images_input:
+        fname, img = _decode_image(item)
+        if img is None:
+            continue
         if img.shape[1] > 1920:
             img = cv2.resize(img, (1920, int(img.shape[0] * (1920 / float(img.shape[1])))))
         frames.append(img)
-        valid_indices.append(idx)
+        valid_filenames.append(fname)
 
     if not frames:
         return {"results": [], "discarded_stats": {"total_discarded": 0, "no_vehicle_count": 0, "no_plate_count": 0, "discarded_files": []}}
-
-    for d in ["outputs/plate_crops/Processed", "outputs/snapshots", "outputs/annotated"]:
-        os.makedirs(d, exist_ok=True)
 
     batch_v_res = vehicle_model(frames, verbose=False, conf=MIN_VEHICLE_CONFIDENCE)
     futures, detections_by_image, discarded_files = [], {i: [] for i in range(len(frames))}, []
     det_counter = 1
 
     for img_id, (frame, v_res) in enumerate(zip(frames, batch_v_res)):
-        out_name = os.path.basename(image_paths[valid_indices[img_id]])
+        out_name = valid_filenames[img_id]
         candidates = []
         for box in v_res.boxes:
             cid = int(box.cls[0])
@@ -79,7 +92,7 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             v_crop = frame[max(0, y1):min(frame.shape[0], y2), max(0, x1):min(frame.shape[1], x2)]
             if v_crop.size > 0:
-                candidates.append({"bbox": (x1, y1, x2, y2), "area": (x2-x1)*(y2-y1), "v_type": VEHICLE_CLASSES[cid], "color": detect_dominant_color(v_crop), "v_crop": v_crop})
+                candidates.append({"bbox": (x1, y1, x2, y2), "area": (x2-x1)*(y2-y1), "v_type": VEHICLE_CLASSES[cid], "v_crop": v_crop})
 
         if not candidates:
             discarded_files.append({"filename": out_name, "reason": "No car detected"})
@@ -87,7 +100,7 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
 
         main_v = max(candidates, key=lambda c: c["area"])
         v_crop, (vh, vw) = main_v["v_crop"], main_v["v_crop"].shape[:2]
-        det_info = {"det_id": det_counter, "bbox": main_v["bbox"], "v_type": main_v["v_type"], "color": main_v["color"], "v_crop": v_crop, "local_plate_bbox": None}
+        det_info = {"det_id": det_counter, "bbox": main_v["bbox"], "v_type": main_v["v_type"], "v_crop": v_crop, "local_plate_bbox": None}
         padded_crop = None
 
         if plate_model:
@@ -130,26 +143,25 @@ def process_bulk_images(image_paths, easyocr_pool, pytesseract_pool):
             e_res = ocr_by_det.get(did, {}).get("EasyOCR", {})
             t_res = ocr_by_det.get(did, {}).get("PyTesseract", {})
 
-            _draw_overlay(frame_easy, d_info["bbox"], d_info["v_type"], d_info["color"], e_res.get("plate_text"), e_res.get("conf", 0.0), d_info["local_plate_bbox"], "EasyOCR")
-            _draw_overlay(frame_tess, d_info["bbox"], d_info["v_type"], d_info["color"], t_res.get("plate_text"), t_res.get("conf", 0.0), d_info["local_plate_bbox"], "PyTesseract")
-
-            for eng_res, log_file in [(e_res, "outputs/logs/detections_easyocr.csv"), (t_res, "outputs/logs/detections_pytesseract.csv")]:
-                if eng_res.get("plate_text"):
-                    log_detection(did, d_info["v_type"], d_info["color"], eng_res.get("plate_text"), eng_res.get("conf", 0.0), eng_res.get("snapshot_path"), eng_res.get("processed_crop_path"), log_path=log_file)
+            _draw_overlay(frame_easy, d_info["bbox"], d_info["v_type"], e_res.get("plate_text"), e_res.get("conf", 0.0), d_info["local_plate_bbox"], "EasyOCR")
+            _draw_overlay(frame_tess, d_info["bbox"], d_info["v_type"], t_res.get("plate_text"), t_res.get("conf", 0.0), d_info["local_plate_bbox"], "PyTesseract")
 
             img_detections.append({
-                "det_id": did, "vehicle_type": d_info["v_type"], "color": d_info["color"],
-                "easyocr": {"plate_text": e_res.get("plate_text"), "conf": e_res.get("conf", 0.0), "latency_ms": e_res.get("latency_ms", 0.0), "snapshot_url": _to_url(e_res.get("snapshot_path")), "crop_url": _to_url(e_res.get("processed_crop_path"))},
-                "pytesseract": {"plate_text": t_res.get("plate_text"), "conf": t_res.get("conf", 0.0), "latency_ms": t_res.get("latency_ms", 0.0), "snapshot_url": _to_url(t_res.get("snapshot_path")), "crop_url": _to_url(t_res.get("processed_crop_path"))}
+                "det_id": did, "vehicle_type": d_info["v_type"],
+                "easyocr": {"plate_text": e_res.get("plate_text"), "conf": e_res.get("conf", 0.0), "latency_ms": e_res.get("latency_ms", 0.0), "snapshot_url": e_res.get("snapshot_path"), "crop_url": e_res.get("processed_crop_path")},
+                "pytesseract": {"plate_text": t_res.get("plate_text"), "conf": t_res.get("conf", 0.0), "latency_ms": t_res.get("latency_ms", 0.0), "snapshot_url": t_res.get("snapshot_path"), "crop_url": t_res.get("processed_crop_path")}
             })
 
-        out_name = os.path.basename(image_paths[valid_indices[img_id]])
-        easy_path, tess_path = f"outputs/annotated/easy_{out_name}", f"outputs/annotated/tess_{out_name}"
-        cv2.imwrite(easy_path, frame_easy)
-        cv2.imwrite(tess_path, frame_tess)
-        final_output.append({"original_filename": out_name, "easyocr_annotated_url": "/" + easy_path, "pytesseract_annotated_url": "/" + tess_path, "detections": img_detections})
+        out_name = valid_filenames[img_id]
+        easy_b64 = _to_base64_url(frame_easy)
+        tess_b64 = _to_base64_url(frame_tess)
+        final_output.append({
+            "original_filename": out_name,
+            "easyocr_annotated_url": easy_b64,
+            "pytesseract_annotated_url": tess_b64,
+            "detections": img_detections
+        })
 
-    flush_all_logs()
     return {
         "results": final_output,
         "discarded_stats": {
