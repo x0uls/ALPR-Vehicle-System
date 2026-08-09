@@ -31,8 +31,8 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
     x1 = np.arange(len(acc_labels))
     b1 = ax1.bar(x1 - width/2, easy_acc, width, label='EasyOCR', color=easy_color, alpha=0.85)
     b2 = ax1.bar(x1 + width/2, tess_acc, width, label='PyTesseract', color=tess_color, alpha=0.85)
-    ax1.set_xticks(x1); ax1.set_xticklabels(acc_labels, fontsize=8, color='#a1a1aa'); ax1.set_ylim(0, 105); ax1.set_ylabel('Percentage (%)', color='#a1a1aa', fontsize=9)
-    ax1.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8, loc='upper left')
+    ax1.set_xticks(x1); ax1.set_xticklabels(acc_labels, fontsize=8, color='#a1a1aa'); ax1.set_ylim(0, 110); ax1.set_ylabel('Percentage (%)', color='#a1a1aa', fontsize=9)
+    ax1.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8, loc='upper right')
 
     for bar, col in [(b1, easy_color), (b2, tess_color)]:
         for b in bar:
@@ -64,10 +64,24 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
         return [subs, ins, dels]
 
     x3 = np.arange(3)
-    ax3.bar(x3 - width/2, calc_errors(easy_metrics.get("per_detection", [])), width, label='EasyOCR', color=easy_color, alpha=0.85)
-    ax3.bar(x3 + width/2, calc_errors(tess_metrics.get("per_detection", [])), width, label='PyTesseract', color=tess_color, alpha=0.85)
+    easy_errs = calc_errors(easy_metrics.get("per_detection", []))
+    tess_errs = calc_errors(tess_metrics.get("per_detection", []))
+    b3_1 = ax3.bar(x3 - width/2, easy_errs, width, label='EasyOCR', color=easy_color, alpha=0.85)
+    b3_2 = ax3.bar(x3 + width/2, tess_errs, width, label='PyTesseract', color=tess_color, alpha=0.85)
     ax3.set_xticks(x3); ax3.set_xticklabels(['Substitutions', 'Insertions', 'Deletions'], fontsize=9)
-    ax3.set_ylabel('Count', color='#a1a1aa', fontsize=9); ax3.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8)
+    ax3.set_ylabel('Count', color='#a1a1aa', fontsize=9); ax3.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8, loc='upper right')
+
+    tot_easy_errs = sum(easy_errs)
+    tot_tess_errs = sum(tess_errs)
+    all_err_vals = easy_errs + tess_errs
+    max_err = max(all_err_vals) if all_err_vals else 10
+    ax3.set_ylim(0, max_err * 1.25)
+
+    for bar, col, tot in [(b3_1, easy_color, tot_easy_errs), (b3_2, tess_color, tot_tess_errs)]:
+        for b in bar:
+            h = b.get_height()
+            pct = (h / tot * 100) if tot > 0 else 0.0
+            ax3.text(b.get_x() + b.get_width()/2., h + (max_err * 0.02), f"{int(h)} ({pct:.1f}%)", ha='center', va='bottom', color=col, fontsize=7, fontweight='bold')
 
     # Chart 4: Character Precision, Recall & Confidence
     ax4 = axes[1, 1]
@@ -75,10 +89,15 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
     easy_macro = [(easy_metrics.get("char_precision") or 0)*100, (easy_metrics.get("char_recall") or 0)*100, (easy_metrics.get("average_confidence") or 0)*100]
     tess_macro = [(tess_metrics.get("char_precision") or 0)*100, (tess_metrics.get("char_recall") or 0)*100, (tess_metrics.get("average_confidence") or 0)*100]
     x4 = np.arange(3)
-    ax4.bar(x4 - width/2, easy_macro, width, label='EasyOCR', color=easy_color, alpha=0.85)
-    ax4.bar(x4 + width/2, tess_macro, width, label='PyTesseract', color=tess_color, alpha=0.85)
+    b4_1 = ax4.bar(x4 - width/2, easy_macro, width, label='EasyOCR', color=easy_color, alpha=0.85)
+    b4_2 = ax4.bar(x4 + width/2, tess_macro, width, label='PyTesseract', color=tess_color, alpha=0.85)
     ax4.set_xticks(x4); ax4.set_xticklabels(['Char Precision %', 'Char Recall %', 'Avg Confidence %'], rotation=5, ha='center', fontsize=8)
-    ax4.set_ylim(0, 105); ax4.set_ylabel('Score (%)', color='#a1a1aa', fontsize=9); ax4.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8)
+    ax4.set_ylim(0, 110); ax4.set_ylabel('Score (%)', color='#a1a1aa', fontsize=9); ax4.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8, loc='upper right')
+
+    for bar, col in [(b4_1, easy_color), (b4_2, tess_color)]:
+        for b in bar:
+            h = b.get_height()
+            ax4.text(b.get_x() + b.get_width()/2., h + 1, f"{h:.1f}%", ha='center', va='bottom', color=col, fontsize=7, fontweight='bold')
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=200, facecolor=fig.get_facecolor(), edgecolor='none')
