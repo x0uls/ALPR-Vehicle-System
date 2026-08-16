@@ -25,7 +25,8 @@ for t_path in ["/usr/bin/tesseract", "/usr/local/bin/tesseract", r"C:\Program Fi
 # Why: loading the neural network weights is slow — doing it once and reusing the
 # same `reader` object for every image is much faster than reloading it every call.
 # gpu=torch.cuda.is_available() automatically uses your GPU if one is detected, else falls back to CPU.
-reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
+# quantize=False disables PyTorch dynamic CPU quantization, preventing `ChooseQuantizationParams` C++ errors/warnings on CPU-only setups.
+reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available(), quantize=False)
 
 # ── Regex and constants used for cleaning/validating OCR output ──────────────
 PLATE_CHAR_PATTERN = re.compile(r'[^A-Z0-9]')  # Matches anything that ISN'T A-Z or 0-9, so it can be stripped out

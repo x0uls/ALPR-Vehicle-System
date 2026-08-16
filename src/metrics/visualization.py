@@ -8,7 +8,7 @@ import numpy as np
 def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/charts/benchmark_dashboard.png"):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     plt.style.use('dark_background')
-    fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), facecolor='#09090b')
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), facecolor='#00040f')
     fig.subplots_adjust(hspace=0.38, wspace=0.25)
     
     easy_color, tess_color = '#38bdf8', '#818cf8'
