@@ -24,10 +24,10 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
 
     # Chart 1: Accuracy Benchmarks
     ax1 = axes[0, 0]
-    style_ax(ax1, "Chart 1: Accuracy Benchmarks (EMA, HA, CRR %)")
-    acc_labels = ['Exact Match (EMA)', 'High Acc (HA)', 'Char Recog (CRR)']
-    easy_acc = [(easy_metrics.get("exact_match_rate", 0) or 0)*100, (easy_metrics.get("high_accuracy_rate", 0) or 0)*100, easy_metrics.get("crr") or 0]
-    tess_acc = [(tess_metrics.get("exact_match_rate", 0) or 0)*100, (tess_metrics.get("high_accuracy_rate", 0) or 0)*100, tess_metrics.get("crr") or 0]
+    style_ax(ax1, "Chart 1: Accuracy Benchmarks (EMA, Precision, CRR %)")
+    acc_labels = ['Exact Match (EMA)', 'Char Precision', 'Char Recog (CRR)']
+    easy_acc = [(easy_metrics.get("exact_match_rate", 0) or 0)*100, (easy_metrics.get("char_precision", 0) or 0)*100, easy_metrics.get("crr", 0) or 0]
+    tess_acc = [(tess_metrics.get("exact_match_rate", 0) or 0)*100, (tess_metrics.get("char_precision", 0) or 0)*100, tess_metrics.get("crr", 0) or 0]
     x1 = np.arange(len(acc_labels))
     b1 = ax1.bar(x1 - width/2, easy_acc, width, label='EasyOCR', color=easy_color, alpha=0.85)
     b2 = ax1.bar(x1 + width/2, tess_acc, width, label='PyTesseract', color=tess_color, alpha=0.85)
@@ -55,17 +55,10 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
     # Chart 3: Levenshtein Edit Error Breakdown
     ax3 = axes[1, 0]
     style_ax(ax3, "Chart 3: Levenshtein Edit Error Breakdown")
-    def calc_errors(dets):
-        subs, ins, dels = 0, 0, 0
-        for d in dets:
-            dist = d.get("edit_distance", 0)
-            s = int(dist * 0.6); dl = int(dist * 0.25)
-            subs += s; dels += dl; ins += max(0, dist - s - dl)
-        return [subs, ins, dels]
+    easy_errs = [easy_metrics.get("substitutions", 0), easy_metrics.get("insertions", 0), easy_metrics.get("deletions", 0)]
+    tess_errs = [tess_metrics.get("substitutions", 0), tess_metrics.get("insertions", 0), tess_metrics.get("deletions", 0)]
 
     x3 = np.arange(3)
-    easy_errs = calc_errors(easy_metrics.get("per_detection", []))
-    tess_errs = calc_errors(tess_metrics.get("per_detection", []))
     b3_1 = ax3.bar(x3 - width/2, easy_errs, width, label='EasyOCR', color=easy_color, alpha=0.85)
     b3_2 = ax3.bar(x3 + width/2, tess_errs, width, label='PyTesseract', color=tess_color, alpha=0.85)
     ax3.set_xticks(x3); ax3.set_xticklabels(['Substitutions', 'Insertions', 'Deletions'], fontsize=9)
@@ -74,7 +67,7 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
     tot_easy_errs = sum(easy_errs)
     tot_tess_errs = sum(tess_errs)
     all_err_vals = easy_errs + tess_errs
-    max_err = max(all_err_vals) if all_err_vals else 10
+    max_err = max(all_err_vals) if all_err_vals and max(all_err_vals) > 0 else 10
     ax3.set_ylim(0, max_err * 1.25)
 
     for bar, col, tot in [(b3_1, easy_color, tot_easy_errs), (b3_2, tess_color, tot_tess_errs)]:

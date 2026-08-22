@@ -1,28 +1,23 @@
-# Force pip to prioritize the official PyTorch CUDA 12.4 repository directly
+# PyTorch Core Deep Learning Engines (CUDA 12.4 compatible)
 --index-url https://download.pytorch.org/whl/cu124
 --extra-index-url https://pypi.org/simple
-
-# Core Deep Learning Weights (Pulled securely from cu124)
 torch
 torchvision
 
-# Computer Vision Architecture & Tools
+# Computer Vision & Object Detection
 ultralytics
 opencv-python
 
-# Text Extraction Frameworks & Metrics
+# OCR Engines & Text Evaluation Metrics
 easyocr
 pytesseract
-deskew
-scikit-image
 jiwer
 
-# Data Analytics
+# Data Processing & Visualization
 numpy
-pandas
-scikit-learn
+matplotlib
 
-# Web Server
+# Web Framework & Server
 fastapi
 uvicorn
 python-multipart

@@ -76,8 +76,8 @@ def _empty_metrics(exec_time=0.0, total_dets=0, avg_conf=0.0):
     lat = (exec_time * 1000 / total_dets) if total_dets else 0.0
     return {
         "average_cer": None, "crr": None, "char_precision": None, "char_recall": None,
-        "exact_match_count": 0, "exact_match_rate": 0.0, "high_accuracy_count": 0,
-        "high_accuracy_rate": 0.0, "gt_recall": 0.0, "precision": 0.0,
+        "exact_match_count": 0, "exact_match_rate": 0.0,
+        "substitutions": 0, "deletions": 0, "insertions": 0,
         "total_edit_distance": 0, "average_confidence": round(avg_conf, 4),
         "correct_confidence": 0.0, "incorrect_confidence": 0.0,
         "total_detections": total_dets, "matched_count": 0,
@@ -102,12 +102,11 @@ def compute_comprehensive_metrics(detections, ground_truth_list, exec_time=0.0):
     if not ground_truth_list:
         return _empty_metrics(exec_time, len(detections), avg_conf)
 
-    per_det, matched_gt_set = [], set()
+    per_det = []
     total_cer, total_edit_dist, matched_cnt, exact_cnt = 0.0, 0, 0, 0
     corr_confs, incorr_confs = [], []
-    # tot_tp/fp/fn = running totals across ALL detections, used later for overall precision/recall
-    # tp = true positive (correct char), fp = false positive (wrong/extra char), fn = false negative (missed char)
     tot_tp, tot_fp, tot_fn = 0, 0, 0
+    tot_sub, tot_del, tot_ins = 0, 0, 0
 
     for i, det in enumerate(detections):
         plate_text = str(det.get("plate_number", ""))
@@ -116,8 +115,6 @@ def compute_comprehensive_metrics(detections, ground_truth_list, exec_time=0.0):
             continue  # skip empty/failed OCR reads
 
         # Figure out which ground truth entry this detection should be compared against.
-        # Tries several possible field names / lookup strategies depending on how the
-        # detection data was structured (dict keyed by filename, list in matching order, etc.)
         target_gt = det.get("matched_ground_truth") or det.get("ground_truth") or det.get("gt")
         if not target_gt and isinstance(ground_truth_list, dict):
             target_gt = ground_truth_list.get(det.get("file_name"))
@@ -134,29 +131,26 @@ def compute_comprehensive_metrics(detections, ground_truth_list, exec_time=0.0):
 
             # jiwer.process_characters does the actual character-by-character alignment
             # (Levenshtein) and tells us exactly what KIND of errors happened:
-            #   s = substitutions (wrong character in the right spot, e.g. "6" read as "G")
-            #   d = deletions     (a character that should be there but OCR missed it entirely)
-            #   i_cnt = insertions (an extra character OCR added that shouldn't be there)
             out = jiwer.process_characters(gt_n, pred_n) if jiwer else None
             s = out.substitutions if out else 0
             d = out.deletions if out else 0
             i_cnt = out.insertions if out else 0
+            tot_sub += s
+            tot_del += d
+            tot_ins += i_cnt
+
             edit_dist = s + d + i_cnt  # total number of character-level fixes needed
             total_edit_dist += edit_dist
 
-            # tp = correctly recognized characters = (length of truth) minus the characters
-            # that were wrong (substitutions) or missing (deletions)
             tp = max(0, len(gt_n) - s - d)
             tot_tp += tp
-            tot_fp += (s + i_cnt)  # "false positives" = wrong chars + extra chars OCR shouldn't have output
-            tot_fn += (s + d)      # "false negatives" = wrong chars + chars OCR failed to detect at all
+            tot_fp += (s + i_cnt)  # "false positives" = wrong chars + extra chars
+            tot_fn += (s + d)      # "false negatives" = wrong chars + missed chars
 
             # PRECISION (this detection only): of everything OCR said, how much was correct?
-            #   = correct / (correct + wrong + extra)
             prec = tp / (tp + s + i_cnt) if (tp + s + i_cnt) > 0 else 0.0
 
             # RECALL (this detection only): of everything that should be there, how much did OCR catch?
-            #   = correct / (correct + wrong + missed)
             rec = tp / (tp + s + d) if (tp + s + d) > 0 else 0.0
 
             is_exact = (best_cer == 0.0)  # perfect read, zero errors
@@ -164,38 +158,24 @@ def compute_comprehensive_metrics(detections, ground_truth_list, exec_time=0.0):
             if is_exact:
                 exact_cnt += 1
                 corr_confs.append(conf)       # track confidence scores of CORRECT reads
-                matched_gt_set.add(gt_n)
             else:
                 incorr_confs.append(conf)     # track confidence scores of INCORRECT reads
-                # Even if not a perfect match, count it as "close enough" if error rate is low (<=35%)
-                if best_cer <= 0.35:
-                    matched_gt_set.add(gt_n)
 
-            # Store a detailed record for this single detection (useful for the per-plate table in your dashboard)
             per_det.append({
                 "track_id": det.get("track_id"), "plate_number": plate_text, "matched_ground_truth": best_gt,
                 "cer": round(best_cer, 4), "crr": round(compute_crr(best_cer), 2),
                 "char_precision": round(prec, 4), "char_recall": round(rec, 4),
-                "edit_distance": edit_dist, "is_exact": is_exact, "confidence": round(conf, 4)
+                "edit_distance": edit_dist, "substitutions": s, "deletions": d, "insertions": i_cnt,
+                "is_exact": is_exact, "confidence": round(conf, 4)
             })
 
     if matched_cnt == 0:
         return _empty_metrics(exec_time, len(detections), avg_conf)
 
     # ---- Aggregate stats across ALL detections for this engine ----
-
     avg_cer = total_cer / matched_cnt  # average error rate across every matched plate
 
-    # gt_recall: of all the UNIQUE plates in the ground truth set, what fraction did we
-    # successfully detect at least once (exact or close match)? Different from character recall —
-    # this is asking "did we find this plate at all," not "how many characters were right."
-    gt_norm_set = set(_normalize(g) for g in ground_truth_list if g)
-    gt_rec = len(matched_gt_set) / len(gt_norm_set) if gt_norm_set else 0.0
-
-    # Count of detections considered "high accuracy" (CER <= 0.35, i.e. mostly correct even if not perfect)
-    ha_cnt = len([p for p in per_det if p["cer"] <= 0.35])
-
-    # Overall PRECISION and RECALL across the whole dataset (not per-detection — the totals)
+    # Overall PRECISION and RECALL across the whole dataset
     c_prec = tot_tp / (tot_tp + tot_fp) if (tot_tp + tot_fp) > 0 else None
     c_rec = tot_tp / (tot_tp + tot_fn) if (tot_tp + tot_fn) > 0 else None
 
@@ -210,10 +190,9 @@ def compute_comprehensive_metrics(detections, ground_truth_list, exec_time=0.0):
         "char_recall": round(c_rec, 4) if c_rec is not None else None,
         "exact_match_count": exact_cnt,                              # how many plates were read PERFECTLY
         "exact_match_rate": round(exact_cnt / matched_cnt, 4),       # % of plates read perfectly
-        "high_accuracy_count": ha_cnt,                                # how many plates were "close enough" (CER<=0.35)
-        "high_accuracy_rate": round(ha_cnt / matched_cnt, 4),
-        "gt_recall": round(gt_rec, 4),                                # % of unique ground truth plates found at all
-        "precision": round(ha_cnt / len(per_det), 4) if per_det else 0.0,  # simplified "plate-level" precision
+        "substitutions": tot_sub,                                    # total character substitutions across dataset
+        "deletions": tot_del,                                        # total character deletions across dataset
+        "insertions": tot_ins,                                       # total character insertions across dataset
         "total_edit_distance": total_edit_dist,
         "average_confidence": round(avg_conf, 4),
         "correct_confidence": round(float(np.mean(corr_confs)), 4) if corr_confs else 0.0,   # avg confidence when RIGHT
@@ -228,13 +207,8 @@ def compute_comprehensive_metrics(detections, ground_truth_list, exec_time=0.0):
 
 def _determine_model_winner(easy, tess):
     """
-    Decides which OCR engine performed better overall using a WEIGHTED SCORE:
-        score = (1 - CER) * 0.4  +  exact_match_rate * 0.4  +  precision * 0.2
-
-    Why weighted instead of a plain average: CER-accuracy and exact-match rate are
-    considered the most important signals (40% weight each), while precision is
-    treated as a secondary/supporting signal (only 20% weight).
-    The weights sum to 1.0 so the final score stays in a clean 0-1 range.
+    Decides which OCR engine performed better overall using standard metrics:
+        score = 0.5 * exact_match_rate + 0.5 * (crr / 100)
 
     If the two scores are within 0.02 of each other, it's called a "Tie" rather than
     picking a winner based on a negligible difference.
@@ -244,11 +218,13 @@ def _determine_model_winner(easy, tess):
     if t_cnt == 0 and e_cnt > 0: return "EasyOCR"
     if e_cnt == 0 and t_cnt == 0: return "Tie"
 
-    e_cer = easy["average_cer"] if easy["average_cer"] is not None else 1.0
-    t_cer = tess["average_cer"] if tess["average_cer"] is not None else 1.0
+    e_ema = easy.get("exact_match_rate") or 0.0
+    t_ema = tess.get("exact_match_rate") or 0.0
+    e_crr = (easy.get("crr") or 0.0) / 100.0
+    t_crr = (tess.get("crr") or 0.0) / 100.0
 
-    e_score = (1.0 - e_cer) * 0.4 + easy["exact_match_rate"] * 0.4 + easy["precision"] * 0.2
-    t_score = (1.0 - t_cer) * 0.4 + tess["exact_match_rate"] * 0.4 + tess["precision"] * 0.2
+    e_score = 0.5 * e_ema + 0.5 * e_crr
+    t_score = 0.5 * t_ema + 0.5 * t_crr
 
     if abs(e_score - t_score) < 0.02: return "Tie"
     return "EasyOCR" if e_score > t_score else "PyTesseract"

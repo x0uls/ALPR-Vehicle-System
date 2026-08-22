@@ -3,6 +3,12 @@ let selectedFiles = [];
 let dualLogsMap = {};
 let lastMetrics = null;
 
+// Table Pagination & Filtering State
+let currentPage = 1;
+const pageSize = 20;
+let currentFilter = 'all';
+let currentSort = 'easy_conf_desc';
+
 // ── DOM Initialization ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     const uploadZone = document.getElementById('upload-zone');
@@ -12,6 +18,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadIdleState = document.getElementById('upload-idle-state');
     const uploadStatusCard = document.getElementById('upload-status-card');
     const uploadErrorBanner = document.getElementById('upload-error-banner');
+
+    const filterSelect = document.getElementById('table-filter');
+    const sortSelect = document.getElementById('table-sort');
+    const prevBtn = document.getElementById('btn-prev-page');
+    const nextBtn = document.getElementById('btn-next-page');
 
     if (uploadZone) {
         uploadZone.addEventListener('dragover', (e) => {
@@ -33,6 +44,53 @@ document.addEventListener('DOMContentLoaded', () => {
     if (singleFileInput) singleFileInput.addEventListener('change', (e) => handleFileSelect(Array.from(e.target.files)));
 
     if (processBtn) processBtn.addEventListener('click', processImages);
+
+    if (filterSelect) {
+        filterSelect.addEventListener('change', (e) => {
+            currentFilter = e.target.value;
+            currentPage = 1;
+            renderDualTable();
+        });
+    }
+
+    if (sortSelect) {
+        sortSelect.addEventListener('change', (e) => {
+            currentSort = e.target.value;
+            currentPage = 1;
+            renderDualTable();
+        });
+    }
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderDualTable();
+            }
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            currentPage++;
+            renderDualTable();
+        });
+    }
+
+    const pageInput = document.getElementById('page-input');
+    if (pageInput) {
+        const handlePageChange = (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (!isNaN(val)) {
+                currentPage = val;
+                renderDualTable();
+            }
+        };
+        pageInput.addEventListener('change', handlePageChange);
+        pageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handlePageChange(e);
+        });
+    }
 
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeDetailModal();
@@ -191,6 +249,7 @@ async function processImages() {
     if (selectedFiles.length === 0 || processBtn.disabled) return;
 
     dualLogsMap = {};
+    currentPage = 1;
     const logTableBody = document.getElementById('log-table-body');
     const uploadZone = document.getElementById('upload-zone');
     const imageResultsContainer = document.getElementById('image-results-container');
@@ -358,57 +417,143 @@ function updateMetricsCards(metrics) {
 function renderDualTable() {
     const logTableBody = document.getElementById('log-table-body');
     const logCountEl = document.getElementById('log-count');
+    const paginationInfoEl = document.getElementById('pagination-info');
+    const pageInput = document.getElementById('page-input');
+    const pageTotalEl = document.getElementById('page-total');
+    const prevBtn = document.getElementById('btn-prev-page');
+    const nextBtn = document.getElementById('btn-next-page');
+
     if (!logTableBody) return;
     logTableBody.innerHTML = '';
+
     const keys = Object.keys(dualLogsMap);
     if (logCountEl) logCountEl.textContent = `${keys.length} Total`;
 
     if (keys.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td colspan="7" class="py-8 text-center text-zinc-600 font-mono text-xs">No vehicle detections found in dataset.</td>`;
+        tr.className = "h-12";
+        tr.innerHTML = `<td colspan="7" class="py-4 text-center text-zinc-600 font-mono text-xs align-middle">No vehicle detections found in dataset.</td>`;
         logTableBody.appendChild(tr);
+        if (paginationInfoEl) paginationInfoEl.textContent = 'Showing 0 of 0 records';
+        if (pageInput) { pageInput.value = 1; pageInput.max = 1; }
+        if (pageTotalEl) pageTotalEl.textContent = '1';
+        if (prevBtn) prevBtn.disabled = true;
+        if (nextBtn) nextBtn.disabled = true;
         return;
     }
 
-    keys.forEach(key => {
-        const pair = dualLogsMap[key];
+    let records = keys.map(key => ({ key, ...dualLogsMap[key] }));
+
+    function getStatus(pair) {
         const easy = pair.easy || {};
         const tess = pair.tess || {};
-        const tr = document.createElement('tr');
-        tr.className = "border-b border-zinc-800/30 hover:bg-zinc-900/70 cursor-pointer transition-colors group";
-        tr.onclick = () => openDetailModal(key);
-
         const gtStr = easy.matched_gt || tess.matched_gt || '--';
-        const easyText = easy.plate_number ? `${easy.plate_number} (${Math.round(easy.confidence * 100)}%)` : '--';
-        const tessText = tess.plate_number ? `${tess.plate_number} (${Math.round(tess.confidence * 100)}%)` : '--';
-
         const eNorm = (easy.plate_number || '').replace(/\s+/g, '').toUpperCase();
         const tNorm = (tess.plate_number || '').replace(/\s+/g, '').toUpperCase();
         const gtNorm = (gtStr || '').replace(/\s+/g, '').toUpperCase();
 
-        let badgeHtml = '<span class="text-zinc-600 font-mono text-[10px]">--</span>';
-        if (gtNorm && gtNorm !== '--') {
-            const eMatch = eNorm === gtNorm;
-            const tMatch = tNorm === gtNorm;
-            if (eMatch && tMatch) {
-                badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50">Match</span>';
-            } else if (eMatch) {
-                badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50">EasyOCR</span>';
-            } else if (tMatch) {
-                badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50">PyTesseract</span>';
-            } else {
-                badgeHtml = '<span class="text-zinc-600 font-mono text-[10px]">Misread</span>';
-            }
+        if (!gtNorm || gtNorm === '--') return 'unknown';
+
+        const eMatch = eNorm === gtNorm;
+        const tMatch = tNorm === gtNorm;
+
+        if (eMatch && tMatch) return 'both_match';
+        if (eMatch) return 'easy_match';
+        if (tMatch) return 'tess_match';
+        return 'misread';
+    }
+
+    // 1. Filtering
+    if (currentFilter === 'hide_misreads') {
+        records = records.filter(r => ['both_match', 'easy_match', 'tess_match'].includes(getStatus(r)));
+    } else if (currentFilter === 'misreads_only') {
+        records = records.filter(r => getStatus(r) === 'misread');
+    } else if (currentFilter === 'easy_match') {
+        records = records.filter(r => ['both_match', 'easy_match'].includes(getStatus(r)));
+    } else if (currentFilter === 'tess_match') {
+        records = records.filter(r => ['both_match', 'tess_match'].includes(getStatus(r)));
+    }
+
+    // 2. Sorting (by OCR Confidence)
+    records.sort((a, b) => {
+        if (currentSort === 'tess_conf_desc') {
+            return (b.tess?.confidence || 0) - (a.tess?.confidence || 0);
+        }
+        // Default: EasyOCR Confidence (High -> Low)
+        return (b.easy?.confidence || 0) - (a.easy?.confidence || 0);
+    });
+
+    const totalFiltered = records.length;
+    const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+
+    const startIdx = (currentPage - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, totalFiltered);
+    const pageRecords = records.slice(startIdx, endIdx);
+
+    // Update Pagination Controls UI
+    if (paginationInfoEl) {
+        paginationInfoEl.textContent = totalFiltered > 0
+            ? `Showing ${startIdx + 1}-${endIdx} of ${totalFiltered} records`
+            : `Showing 0 of 0 records`;
+    }
+    if (pageInput) {
+        pageInput.value = currentPage;
+        pageInput.max = totalPages;
+    }
+    if (pageTotalEl) {
+        pageTotalEl.textContent = totalPages;
+    }
+    if (prevBtn) prevBtn.disabled = currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+
+    if (pageRecords.length === 0) {
+        const tr = document.createElement('tr');
+        tr.className = "h-12";
+        tr.innerHTML = `<td colspan="7" class="py-4 text-center text-zinc-600 font-mono text-xs align-middle">No records match the selected filter.</td>`;
+        logTableBody.appendChild(tr);
+        return;
+    }
+
+    pageRecords.forEach(pair => {
+        const key = pair.key;
+        const easy = pair.easy || {};
+        const tess = pair.tess || {};
+        const tr = document.createElement('tr');
+        tr.className = "border-b border-zinc-800/30 hover:bg-zinc-900/70 cursor-pointer transition-colors group h-11";
+        tr.onclick = () => openDetailModal(key);
+
+        const gtStr = easy.matched_gt || tess.matched_gt || '--';
+        const easyText = easy.plate_number ? `${easy.plate_number} (${Math.round((easy.confidence || 0) * 100)}%)` : '--';
+        const tessText = tess.plate_number ? `${tess.plate_number} (${Math.round((tess.confidence || 0) * 100)}%)` : '--';
+
+        const status = getStatus(pair);
+        let badgeHtml = '<span class="text-zinc-600 font-mono text-[10px] inline-block">--</span>';
+        if (status === 'both_match') {
+            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50 inline-block leading-none">Match</span>';
+        } else if (status === 'easy_match') {
+            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50 inline-block leading-none">EasyOCR</span>';
+        } else if (status === 'tess_match') {
+            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50 inline-block leading-none">PyTesseract</span>';
+        } else if (status === 'misread') {
+            badgeHtml = '<span class="text-zinc-600 font-mono text-[10px] inline-block">Misread</span>';
         }
 
         tr.innerHTML = `
-            <td class="py-2.5 px-2 font-mono text-zinc-400">#${pair.track_id}</td>
-            <td class="py-2.5 px-2 font-mono text-zinc-300 truncate max-w-[150px]" title="${pair.file_name}">${pair.file_name}</td>
-            <td class="py-2.5 px-2 font-sans font-medium capitalize text-zinc-300">${easy.vehicle_type || 'Vehicle'}</td>
-            <td class="py-2.5 px-2 font-semibold text-sky-400 group-hover:underline">${easyText}</td>
-            <td class="py-2.5 px-2 font-semibold text-indigo-400 group-hover:underline">${tessText}</td>
-            <td class="py-2.5 px-2 text-zinc-300 font-mono font-bold">${gtStr}</td>
-            <td class="py-2.5 px-2 flex items-center gap-2">${badgeHtml}<span class="text-[10px] text-zinc-500 group-hover:text-zinc-300 underline font-sans ml-auto">Details →</span></td>
+            <td class="py-2 px-2.5 font-mono text-zinc-400 align-middle whitespace-nowrap">#${pair.track_id}</td>
+            <td class="py-2 px-2.5 font-mono text-zinc-300 truncate max-w-[150px] align-middle whitespace-nowrap" title="${pair.file_name}">${pair.file_name}</td>
+            <td class="py-2 px-2.5 font-sans font-medium capitalize text-zinc-300 align-middle whitespace-nowrap">${easy.vehicle_type || 'Vehicle'}</td>
+            <td class="py-2 px-2.5 font-semibold text-sky-400 group-hover:underline align-middle whitespace-nowrap">${easyText}</td>
+            <td class="py-2 px-2.5 font-semibold text-indigo-400 group-hover:underline align-middle whitespace-nowrap">${tessText}</td>
+            <td class="py-2 px-2.5 text-zinc-300 font-mono font-bold align-middle whitespace-nowrap">${gtStr}</td>
+            <td class="py-2 px-2.5 align-middle whitespace-nowrap">
+                <div class="flex items-center gap-2 h-6">
+                    ${badgeHtml}
+                    <span class="text-[10px] text-zinc-500 group-hover:text-zinc-300 underline font-sans ml-auto">Details →</span>
+                </div>
+            </td>
         `;
         logTableBody.appendChild(tr);
     });
@@ -489,13 +634,11 @@ function updateMetricsCards(metrics) {
     const tess = metrics.pytesseract || {};
 
     if (document.getElementById('easy-ema-val')) document.getElementById('easy-ema-val').textContent = (easy.exact_match_rate != null ? (easy.exact_match_rate * 100).toFixed(1) : '--') + '%';
-    if (document.getElementById('easy-ha-val')) document.getElementById('easy-ha-val').textContent = (easy.high_accuracy_rate != null ? (easy.high_accuracy_rate * 100).toFixed(1) : '--') + '%';
     if (document.getElementById('easy-crr-val')) document.getElementById('easy-crr-val').textContent = (easy.crr != null ? easy.crr.toFixed(1) : '--') + '%';
     if (document.getElementById('easy-lat-val')) document.getElementById('easy-lat-val').textContent = (easy.latency_per_plate_ms != null ? easy.latency_per_plate_ms.toFixed(0) : '--') + 'ms';
     if (document.getElementById('easy-ema-badge')) document.getElementById('easy-ema-badge').textContent = 'EMA: ' + (easy.exact_match_rate != null ? (easy.exact_match_rate * 100).toFixed(1) : '--') + '%';
 
     if (document.getElementById('tess-ema-val')) document.getElementById('tess-ema-val').textContent = (tess.exact_match_rate != null ? (tess.exact_match_rate * 100).toFixed(1) : '--') + '%';
-    if (document.getElementById('tess-ha-val')) document.getElementById('tess-ha-val').textContent = (tess.high_accuracy_rate != null ? (tess.high_accuracy_rate * 100).toFixed(1) : '--') + '%';
     if (document.getElementById('tess-crr-val')) document.getElementById('tess-crr-val').textContent = (tess.crr != null ? tess.crr.toFixed(1) : '--') + '%';
     if (document.getElementById('tess-lat-val')) document.getElementById('tess-lat-val').textContent = (tess.latency_per_plate_ms != null ? tess.latency_per_plate_ms.toFixed(0) : '--') + 'ms';
     if (document.getElementById('tess-ema-badge')) document.getElementById('tess-ema-badge').textContent = 'EMA: ' + (tess.exact_match_rate != null ? (tess.exact_match_rate * 100).toFixed(1) : '--') + '%';
