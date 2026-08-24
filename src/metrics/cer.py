@@ -162,7 +162,7 @@ def compute_comprehensive_metrics(detections, ground_truth_list, exec_time=0.0):
                 incorr_confs.append(conf)     # track confidence scores of INCORRECT reads
 
             per_det.append({
-                "track_id": det.get("track_id"), "plate_number": plate_text, "matched_ground_truth": best_gt,
+                "track_id": det.get("track_id"), "file_name": det.get("file_name"), "plate_number": plate_text, "matched_ground_truth": best_gt,
                 "cer": round(best_cer, 4), "crr": round(compute_crr(best_cer), 2),
                 "char_precision": round(prec, 4), "char_recall": round(rec, 4),
                 "edit_distance": edit_dist, "substitutions": s, "deletions": d, "insertions": i_cnt,

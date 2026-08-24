@@ -149,8 +149,8 @@ def _clean_and_format_plate(raw_text, avg_conf):
             digits, letters = m.group(1), m.group(2)
             compact = letters + digits
 
-    d2l = str.maketrans('01258', 'OIZSB')
-    l2d = str.maketrans('OIZSB', '01258')
+    d2l = str.maketrans('012578', 'OIZSJB')
+    l2d = str.maketrans('OIZSJB', '012578')
 
     chars = list(compact)
     if chars[0].isdigit():
@@ -160,12 +160,10 @@ def _clean_and_format_plate(raw_text, avg_conf):
     if first_dig is not None:
         last_dig = max(i for i, c in enumerate(chars) if c.isdigit())
         for i in range(len(chars)):
-            if i < first_dig:
+            if i < first_dig or i > last_dig:
                 if chars[i].isdigit(): chars[i] = chars[i].translate(d2l)
-            elif i <= last_dig:
-                if chars[i].isalpha(): chars[i] = '7' if chars[i] == 'J' else chars[i].translate(l2d)
             else:
-                if chars[i].isdigit(): chars[i] = chars[i].translate(d2l)
+                if chars[i].isalpha(): chars[i] = chars[i].translate(l2d)
 
     formatted = "".join(chars)
     for i in range(1, len(formatted)):
