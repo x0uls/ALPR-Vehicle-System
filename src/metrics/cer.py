@@ -237,20 +237,20 @@ def compute_dual_model_comparison(easyocr_dets, pytesseract_dets, ground_truth_l
     and (if the visualization module is available) generates the comparison charts
     shown on your dashboard.
     """
-    easy_m = compute_comprehensive_metrics(easyocr_dets, ground_truth_list, easyocr_time)
-    tess_m = compute_comprehensive_metrics(pytesseract_dets, ground_truth_list, pytesseract_time)
+    easy_metrics = compute_comprehensive_metrics(easyocr_dets, ground_truth_list, easyocr_time)
+    tess_metrics = compute_comprehensive_metrics(pytesseract_dets, ground_truth_list, pytesseract_time)
 
     chart_url = None
     try:
         from src.metrics.visualization import generate_benchmark_charts
-        chart_url = generate_benchmark_charts(easy_m, tess_m)
+        chart_url = generate_benchmark_charts(easy_metrics, tess_metrics)
     except Exception as e:
         print(f"[MATPLOTLIB CHART ERROR] {e}")
 
     return {
-        "winner": _determine_model_winner(easy_m, tess_m),
+        "winner": _determine_model_winner(easy_metrics, tess_metrics),
         "ground_truth_count": len(ground_truth_list) if ground_truth_list else 0,
-        "easyocr": easy_m,
-        "pytesseract": tess_m,
+        "easyocr": easy_metrics,
+        "pytesseract": tess_metrics,
         "chart_url": chart_url
     }

@@ -6,6 +6,13 @@ import numpy as np
 
 
 def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/charts/benchmark_dashboard.png"):
+    """
+    Generates a 2x2 grid of dark-themed Matplotlib benchmark analytics charts:
+    - Chart 1: Accuracy Benchmarks (Exact Match %, Character Precision %, Character Recognition Rate %)
+    - Chart 2: Inference Latency per crop (ms)
+    - Chart 3: Levenshtein Edit Error Breakdown (Substitutions, Insertions, Deletions count & %)
+    - Chart 4: Macro Metrics (Character Precision %, Character Recall %, Average OCR Confidence %)
+    """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     plt.style.use('dark_background')
     fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), facecolor='#00040f')
@@ -22,16 +29,25 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
         for s in ['left', 'bottom']: ax.spines[s].set_color('#3f3f46')
         ax.grid(True, linestyle='--', alpha=0.3, color='#27272a')
 
-    # Chart 1: Accuracy Benchmarks
+    # ── Chart 1: Accuracy Benchmarks (EMA % & CRR %) ─────────────────────────
+    # Formulas used:
+    # 1. Exact Match Rate (EMA %): (Number of plates read 100% perfectly / Total matched plates) * 100
+    # 2. Char Recognition Rate (CRR %): (1 - CER) * 100 = (1 - (Substitutions + Deletions + Insertions) / GT Length) * 100
     ax1 = axes[0, 0]
-    style_ax(ax1, "Chart 1: Accuracy Benchmarks (EMA, Precision, CRR %)")
-    acc_labels = ['Exact Match (EMA)', 'Char Precision', 'Char Recog (CRR)']
-    easy_acc = [(easy_metrics.get("exact_match_rate", 0) or 0)*100, (easy_metrics.get("char_precision", 0) or 0)*100, easy_metrics.get("crr", 0) or 0]
-    tess_acc = [(tess_metrics.get("exact_match_rate", 0) or 0)*100, (tess_metrics.get("char_precision", 0) or 0)*100, tess_metrics.get("crr", 0) or 0]
+    style_ax(ax1, "Chart 1: Accuracy Benchmarks (EMA % & CRR %)")
+    acc_labels = ['Exact Match (EMA)', 'Char Recog (CRR)']
+    easy_acc = [
+        (easy_metrics.get("exact_match_rate", 0) or 0) * 100,
+        easy_metrics.get("crr", 0) or 0
+    ]
+    tess_acc = [
+        (tess_metrics.get("exact_match_rate", 0) or 0) * 100,
+        tess_metrics.get("crr", 0) or 0
+    ]
     x1 = np.arange(len(acc_labels))
     b1 = ax1.bar(x1 - width/2, easy_acc, width, label='EasyOCR', color=easy_color, alpha=0.85)
     b2 = ax1.bar(x1 + width/2, tess_acc, width, label='PyTesseract', color=tess_color, alpha=0.85)
-    ax1.set_xticks(x1); ax1.set_xticklabels(acc_labels, fontsize=8, color='#a1a1aa'); ax1.set_ylim(0, 110); ax1.set_ylabel('Percentage (%)', color='#a1a1aa', fontsize=9)
+    ax1.set_xticks(x1); ax1.set_xticklabels(acc_labels, fontsize=9, color='#a1a1aa'); ax1.set_ylim(0, 110); ax1.set_ylabel('Percentage (%)', color='#a1a1aa', fontsize=9)
     ax1.legend(facecolor='#18181b', edgecolor='#3f3f46', fontsize=8, loc='upper right')
 
     for bar, col in [(b1, easy_color), (b2, tess_color)]:
@@ -39,7 +55,9 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
             h = b.get_height()
             ax1.text(b.get_x() + b.get_width()/2., h + 1, f"{h:.1f}%", ha='center', va='bottom', color=col, fontsize=7, fontweight='bold')
 
-    # Chart 2: Inference Latency
+    # ── Chart 2: Inference Latency Per Crop (ms) ─────────────────────────────
+    # Formula: Total processing time in milliseconds / Total plate crops processed
+    # -> Measures speed per crop (lower is faster).
     ax2 = axes[0, 1]
     style_ax(ax2, "Chart 2: Inference Latency Per Crop (ms)")
     lat_vals = [float(easy_metrics.get("latency_per_plate_ms") or 0.0), float(tess_metrics.get("latency_per_plate_ms") or 0.0)]
@@ -52,7 +70,12 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
         h = b.get_height()
         ax2.text(b.get_x() + b.get_width()/2., h + (max_lat * 0.02), f"{h:.1f} ms", ha='center', va='bottom', color='#e4e4e7', fontsize=8, fontweight='bold')
 
-    # Chart 3: Levenshtein Edit Error Breakdown
+    # ── Chart 3: Levenshtein Edit Error Breakdown ─────────────────────────────
+    # Formulas used:
+    # 1. Substitutions (S): Count of characters where OCR outputted a wrong letter/digit (e.g., '0' instead of 'O')
+    # 2. Insertions (I): Count of extra noise characters hallucinated by OCR (e.g., extra 'X' at end)
+    # 3. Deletions (D): Count of missing characters OCR failed to detect
+    # Error % per bar = (Error Category Count / Total Errors for engine) * 100
     ax3 = axes[1, 0]
     style_ax(ax3, "Chart 3: Levenshtein Edit Error Breakdown")
     easy_errs = [easy_metrics.get("substitutions", 0), easy_metrics.get("insertions", 0), easy_metrics.get("deletions", 0)]
@@ -76,11 +99,24 @@ def generate_benchmark_charts(easy_metrics, tess_metrics, output_path="outputs/c
             pct = (h / tot * 100) if tot > 0 else 0.0
             ax3.text(b.get_x() + b.get_width()/2., h + (max_err * 0.02), f"{int(h)} ({pct:.1f}%)", ha='center', va='bottom', color=col, fontsize=7, fontweight='bold')
 
-    # Chart 4: Character Precision, Recall & Confidence
+    # ── Chart 4: Character Precision, Recall & Confidence ─────────────────────
+    # Formulas used:
+    # 1. Char Precision (%): (True Positives / (True Positives + Substitutions + Insertions)) * 100
+    # 2. Char Recall (%): (True Positives / (True Positives + Substitutions + Deletions)) * 100
+    #    -> Out of all real plate letters in Ground Truth, what % did OCR successfully catch?
+    # 3. Avg Confidence (%): Mean OCR confidence score outputted by the model across all detections * 100
     ax4 = axes[1, 1]
     style_ax(ax4, "Chart 4: Character Precision, Recall & Confidence")
-    easy_macro = [(easy_metrics.get("char_precision") or 0)*100, (easy_metrics.get("char_recall") or 0)*100, (easy_metrics.get("average_confidence") or 0)*100]
-    tess_macro = [(tess_metrics.get("char_precision") or 0)*100, (tess_metrics.get("char_recall") or 0)*100, (tess_metrics.get("average_confidence") or 0)*100]
+    easy_macro = [
+        (easy_metrics.get("char_precision") or 0) * 100,
+        (easy_metrics.get("char_recall") or 0) * 100,
+        (easy_metrics.get("average_confidence") or 0) * 100
+    ]
+    tess_macro = [
+        (tess_metrics.get("char_precision") or 0) * 100,
+        (tess_metrics.get("char_recall") or 0) * 100,
+        (tess_metrics.get("average_confidence") or 0) * 100
+    ]
     x4 = np.arange(3)
     b4_1 = ax4.bar(x4 - width/2, easy_macro, width, label='EasyOCR', color=easy_color, alpha=0.85)
     b4_2 = ax4.bar(x4 + width/2, tess_macro, width, label='PyTesseract', color=tess_color, alpha=0.85)
