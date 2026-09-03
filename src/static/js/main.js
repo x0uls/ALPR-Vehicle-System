@@ -96,8 +96,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') closeDetailModal();
     });
 
+    initThemeToggle();
     loadGroundTruth();
 });
+
+// ── Dark / Light Mode Theme Controller ─────────────────────────────
+function initThemeToggle() {
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    const themeToggleText = document.getElementById('theme-toggle-text');
+
+    function updateThemeUI(isDark) {
+        if (themeToggleText) {
+            themeToggleText.textContent = isDark ? 'Dark Mode' : 'Light Mode';
+        }
+    }
+
+    const isInitialDark = document.documentElement.classList.contains('dark');
+    updateThemeUI(isInitialDark);
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            // Apply synchronized smooth transition to all elements across the entire page
+            document.documentElement.classList.add('theme-transition');
+
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeUI(isDark);
+
+            // Clean up transition class after transition completes (350ms)
+            setTimeout(() => {
+                document.documentElement.classList.remove('theme-transition');
+            }, 350);
+        });
+    }
+}
 
 // ── File Selection & Traversal ─────────────────────────────────────
 async function getAllFilesFromDataTransfer(dataTransfer) {
@@ -327,19 +359,19 @@ async function processImages() {
 
                 // Render side-by-side card
                 const card = document.createElement('div');
-                card.className = 'bg-zinc-950 rounded border border-zinc-800 p-3 flex flex-col gap-2 transition-colors';
+                card.className = 'bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3.5 flex flex-col gap-2 transition-colors shadow-sm';
                 card.innerHTML = `
-                    <div class="flex items-center justify-between px-2.5 py-1 bg-zinc-900/80 rounded border border-zinc-800 text-xs">
-                        <span class="font-medium text-zinc-300">${fname}</span>
+                    <div class="flex items-center justify-between px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900/80 rounded-lg border border-zinc-200 dark:border-zinc-800 text-xs">
+                        <span class="font-medium text-zinc-800 dark:text-zinc-200 font-mono">${fname}</span>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div class="flex flex-col items-center gap-1.5">
-                            <span class="text-[10px] font-mono text-sky-400 font-semibold">EasyOCR</span>
-                            <img src="${res.easyocr_annotated_url}" class="max-h-[300px] object-contain rounded border border-zinc-900">
+                            <span class="text-[10px] font-mono text-sky-600 dark:text-sky-400 font-semibold">EasyOCR</span>
+                            <img src="${res.easyocr_annotated_url}" class="max-h-[300px] object-contain rounded-lg border border-zinc-200 dark:border-zinc-900 shadow-sm">
                         </div>
                         <div class="flex flex-col items-center gap-1.5">
-                            <span class="text-[10px] font-mono text-indigo-400 font-semibold">PyTesseract</span>
-                            <img src="${res.pytesseract_annotated_url}" class="max-h-[300px] object-contain rounded border border-zinc-900">
+                            <span class="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-semibold">PyTesseract</span>
+                            <img src="${res.pytesseract_annotated_url}" class="max-h-[300px] object-contain rounded-lg border border-zinc-200 dark:border-zinc-900 shadow-sm">
                         </div>
                     </div>
                 `;
@@ -432,7 +464,7 @@ function renderDualTable() {
     if (keys.length === 0) {
         const tr = document.createElement('tr');
         tr.className = "h-12";
-        tr.innerHTML = `<td colspan="7" class="py-4 text-center text-zinc-600 font-mono text-xs align-middle">No vehicle detections found in dataset.</td>`;
+        tr.innerHTML = `<td colspan="7" class="py-4 text-center text-zinc-400 dark:text-zinc-600 font-mono text-xs align-middle">No vehicle detections found in dataset.</td>`;
         logTableBody.appendChild(tr);
         if (paginationInfoEl) paginationInfoEl.textContent = 'Showing 0 of 0 records';
         if (pageInput) { pageInput.value = 1; pageInput.max = 1; }
@@ -512,7 +544,7 @@ function renderDualTable() {
     if (pageRecords.length === 0) {
         const tr = document.createElement('tr');
         tr.className = "h-12";
-        tr.innerHTML = `<td colspan="7" class="py-4 text-center text-zinc-600 font-mono text-xs align-middle">No records match the selected filter.</td>`;
+        tr.innerHTML = `<td colspan="7" class="py-4 text-center text-zinc-400 dark:text-zinc-600 font-mono text-xs align-middle">No records match the selected filter.</td>`;
         logTableBody.appendChild(tr);
         return;
     }
@@ -522,7 +554,7 @@ function renderDualTable() {
         const easy = pair.easy || {};
         const tess = pair.tess || {};
         const tr = document.createElement('tr');
-        tr.className = "border-b border-zinc-800/30 hover:bg-zinc-900/70 cursor-pointer transition-colors group h-11";
+        tr.className = "border-b border-zinc-200 dark:border-zinc-800/30 hover:bg-zinc-50 dark:hover:bg-zinc-900/70 cursor-pointer transition-colors group h-11";
         tr.onclick = () => openDetailModal(key);
 
         const gtStr = easy.matched_gt || tess.matched_gt || '--';
@@ -530,28 +562,28 @@ function renderDualTable() {
         const tessText = tess.plate_number ? `${tess.plate_number} (${Math.round((tess.confidence || 0) * 100)}%)` : '--';
 
         const status = getStatus(pair);
-        let badgeHtml = '<span class="text-zinc-600 font-mono text-[10px] inline-block">--</span>';
+        let badgeHtml = '<span class="text-zinc-400 dark:text-zinc-600 font-mono text-[10px] inline-block">--</span>';
         if (status === 'both_match') {
-            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/50 inline-block leading-none">Match</span>';
+            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 inline-block leading-none">Match</span>';
         } else if (status === 'easy_match') {
-            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-sky-950/40 text-sky-400 border border-sky-800/50 inline-block leading-none">EasyOCR</span>';
+            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800/50 inline-block leading-none">EasyOCR</span>';
         } else if (status === 'tess_match') {
-            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-950/40 text-indigo-400 border border-indigo-800/50 inline-block leading-none">PyTesseract</span>';
+            badgeHtml = '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50 inline-block leading-none">PyTesseract</span>';
         } else if (status === 'misread') {
-            badgeHtml = '<span class="text-zinc-600 font-mono text-[10px] inline-block">Misread</span>';
+            badgeHtml = '<span class="text-zinc-400 dark:text-zinc-600 font-mono text-[10px] inline-block">Misread</span>';
         }
 
         tr.innerHTML = `
-            <td class="py-2 px-2.5 font-mono text-zinc-400 align-middle whitespace-nowrap">#${pair.track_id}</td>
-            <td class="py-2 px-2.5 font-mono text-zinc-300 truncate max-w-[150px] align-middle whitespace-nowrap" title="${pair.file_name}">${pair.file_name}</td>
-            <td class="py-2 px-2.5 font-sans font-medium capitalize text-zinc-300 align-middle whitespace-nowrap">${easy.vehicle_type || 'Vehicle'}</td>
-            <td class="py-2 px-2.5 font-semibold text-sky-400 group-hover:underline align-middle whitespace-nowrap">${easyText}</td>
-            <td class="py-2 px-2.5 font-semibold text-indigo-400 group-hover:underline align-middle whitespace-nowrap">${tessText}</td>
-            <td class="py-2 px-2.5 text-zinc-300 font-mono font-bold align-middle whitespace-nowrap">${gtStr}</td>
+            <td class="py-2 px-2.5 font-mono text-zinc-500 dark:text-zinc-400 align-middle whitespace-nowrap">#${pair.track_id}</td>
+            <td class="py-2 px-2.5 font-mono text-zinc-800 dark:text-zinc-300 truncate max-w-[150px] align-middle whitespace-nowrap font-medium" title="${pair.file_name}">${pair.file_name}</td>
+            <td class="py-2 px-2.5 font-sans font-medium capitalize text-zinc-700 dark:text-zinc-300 align-middle whitespace-nowrap">${easy.vehicle_type || 'Vehicle'}</td>
+            <td class="py-2 px-2.5 font-semibold text-sky-600 dark:text-sky-400 group-hover:underline align-middle whitespace-nowrap">${easyText}</td>
+            <td class="py-2 px-2.5 font-semibold text-indigo-600 dark:text-indigo-400 group-hover:underline align-middle whitespace-nowrap">${tessText}</td>
+            <td class="py-2 px-2.5 text-zinc-900 dark:text-zinc-300 font-mono font-bold align-middle whitespace-nowrap">${gtStr}</td>
             <td class="py-2 px-2.5 align-middle whitespace-nowrap">
                 <div class="flex items-center gap-2 h-6">
                     ${badgeHtml}
-                    <span class="text-[10px] text-zinc-500 group-hover:text-zinc-300 underline font-sans ml-auto">Details →</span>
+                    <span class="text-[10px] text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-800 dark:group-hover:text-zinc-300 underline font-sans ml-auto">Details →</span>
                 </div>
             </td>
         `;
